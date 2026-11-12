@@ -5,6 +5,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   android:
     name: Android (APK)
@@ -26,3 +29,11 @@ jobs:
         with:
           name: K9-Coach-Android
           path: build/app/outputs/flutter-apk/app-release.apk
+      - run: cp build/app/outputs/flutter-apk/app-release.apk K9-Coach.apk
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: najnowsza
+          name: K9 Coach – najnowsza wersja
+          make_latest: true
+          body: Plik K9-Coach.apk do zainstalowania na telefonie z Androidem.
+          files: K9-Coach.apk
