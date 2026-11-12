@@ -176,6 +176,7 @@ enum Discipline {
   bikejoring('Bikejoring', Icons.directions_bike_rounded, Color(0xFF5E8BFF), true),
   obedience('Obedience', Icons.pets_rounded, Color(0xFF34C759), false),
   nosework('Nosework', Icons.travel_explore_rounded, Color(0xFFBF5AF2), false),
+  walk('Spacer', Icons.directions_walk_rounded, Color(0xFFC49A6C), true),
   condition('Kondycja', Icons.fitness_center_rounded, Color(0xFF30B0C7), true),
   recovery('Regeneracja', Icons.self_improvement_rounded, Color(0xFF8E8E93), true);
 
@@ -184,6 +185,19 @@ enum Discipline {
   final Color color;
   final bool hasDistance;
   const Discipline(this.label, this.icon, this.color, this.hasDistance);
+
+  /// Krótkie wyjaśnienie, co wpisywać pod daną dyscypliną.
+  String get description => switch (this) {
+        igp => 'Sport użytkowy: tropienie, posłuszeństwo i obrona.',
+        bhvt => 'Przygotowanie do egzaminu psa towarzyszącego.',
+        canicross => 'Bieg z psem w pasie i szelkach.',
+        bikejoring => 'Rower lub hulajnoga, pies ciągnie w szelkach.',
+        obedience => 'Precyzyjne posłuszeństwo sportowe.',
+        nosework => 'Praca węchowa i szukanie zapachów.',
+        walk => 'Zwykły spacer z psem, bez treningu.',
+        condition => 'Budowanie siły i sprawności: podbiegi, pływanie, ćwiczenia na niestabilnym podłożu, równy kłus przy rowerze.',
+        recovery => 'Lekki dzień po wysiłku: rozciąganie, masaż, bardzo spokojne rozluźnienie.',
+      };
 }
 
 class TrainingSession {

@@ -95,7 +95,7 @@ class _DisciplineCard extends StatelessWidget {
       onTap: () => Navigator.of(context)
           .push(MaterialPageRoute(builder: (_) => DisciplineScreen(discipline: d))),
       child: SizedBox(
-        height: 78,
+        height: 86,
         child: Stack(children: [
           Positioned(
             right: -10,
@@ -114,11 +114,15 @@ class _DisciplineCard extends StatelessWidget {
                     children: [
                       Text(d.label, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
                       const SizedBox(height: 2),
+                      Text(d.description,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: Color(0xFFCFCFD4), fontSize: 12.5)),
                       Text(
                           last == null
                               ? 'Brak treningów'
                               : '${list.length} treningów · ostatni ${relDays(last.date)}',
-                          style: const TextStyle(color: K9.muted, fontSize: 12.5)),
+                          style: const TextStyle(color: K9.muted, fontSize: 11.5)),
                     ]),
               ),
               const Icon(Icons.chevron_right_rounded, color: K9.orange),
@@ -239,6 +243,12 @@ class _DayRow extends StatelessWidget {
                             style: const TextStyle(color: K9.muted, fontSize: 12)),
                       ]),
                     ),
+                    if (!t.done && !dayOnly(t.date).isBefore(dayOnly(DateTime.now())))
+                      IconButton(
+                        tooltip: 'Rozpocznij trening',
+                        onPressed: () => openGps(context, plan: t),
+                        icon: const Icon(Icons.play_circle_fill_rounded, color: K9.orange, size: 30),
+                      ),
                     Checkbox(
                       value: t.done,
                       activeColor: K9.orange,

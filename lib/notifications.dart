@@ -70,11 +70,90 @@ class Notifications {
     iOS: DarwinNotificationDetails(),
   );
 
+  // --- Trening na żywo -------------------------------------------------------
+  /// To samo id co powiadomienie usługi GPS, więc zastępujemy je czytelną wersją
+  /// (widoczną też na ekranie blokady).
+  static const liveId = 75415;
+  static const goalId = 75416;
+
+  static const _liveChannel = AndroidNotificationDetails(
+    'k9_training_live',
+    'Trening na żywo',
+    channelDescription: 'Czas i dystans trwającego treningu',
+    importance: Importance.defaultImportance,
+    priority: Priority.defaultPriority,
+    playSound: false,
+    enableVibration: false,
+    onlyAlertOnce: true,
+    color: Color(0xFFF5821F),
+  );
+
+  /// Pokazuje lub odświeża stałe powiadomienie o trwającym treningu.
+  Future<void> showLive({required String title, required String body, DateTime? chronoBase}) async {
+    if (!_ready) return;
+    try {
+      await _plugin.show(
+        id: liveId,
+        title: title,
+        body: body,
+        notificationDetails: NotificationDetails(
+          android: AndroidNotificationDetails(
+            _liveChannel.channelId,
+            _liveChannel.channelName,
+            channelDescription: _liveChannel.channelDescription,
+            importance: _liveChannel.importance,
+            priority: _liveChannel.priority,
+            playSound: false,
+            enableVibration: false,
+            onlyAlertOnce: true,
+            ongoing: true,
+            autoCancel: false,
+            visibility: NotificationVisibility.public,
+            category: AndroidNotificationCategory.workout,
+            showWhen: chronoBase != null,
+            usesChronometer: chronoBase != null,
+            when: chronoBase?.millisecondsSinceEpoch,
+            color: const Color(0xFFF5821F),
+            colorized: true,
+          ),
+        ),
+      );
+    } catch (e) {
+      debugPrint('Powiadomienie treningu: $e');
+    }
+  }
+
+  /// Przypomnienie o osiągnięciu celu czasu (działa też, gdy aplikacja śpi).
+  Future<void> scheduleGoal(DateTime at, String title, String body) async {
+    if (!_ready) return;
+    try {
+      await _plugin.zonedSchedule(
+        id: goalId,
+        title: title,
+        body: body,
+        scheduledDate: tz.TZDateTime.from(at, tz.local),
+        notificationDetails: _details,
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      );
+    } catch (e) {
+      debugPrint('Cel treningu: $e');
+    }
+  }
+
+  Future<void> cancel(int id) async {
+    if (!_ready) return;
+    try {
+      await _plugin.cancel(id: id);
+    } catch (_) {}
+  }
+
   /// Planuje wszystkie przypomnienia od nowa na podstawie danych.
   Future<void> reschedule(AppStore s) async {
     if (!_ready) return;
     try {
-      await _plugin.cancelAll();
+      for (final p in await _plugin.pendingNotificationRequests()) {
+        if (p.id != goalId) await _plugin.cancel(id: p.id);
+      }
       final now = DateTime.now();
       final name = s.dog?.name ?? 'Pies';
       final plan = <(DateTime, String, String)>[];

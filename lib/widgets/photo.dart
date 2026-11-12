@@ -9,20 +9,29 @@ import 'common.dart';
 Future<String?> pickPhoto(BuildContext context) async {
   final source = await showModalBottomSheet<ImageSource>(
     context: context,
-    builder: (c) => Padding(
-      padding: EdgeInsets.fromLTRB(20, 0, 20, 24 + MediaQuery.viewPaddingOf(c).bottom),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        ListRow(
-            icon: Icons.photo_camera_rounded,
-            color: K9.orange,
-            title: 'Zrób zdjęcie',
-            onTap: () => Navigator.pop(c, ImageSource.camera)),
-        ListRow(
-            icon: Icons.photo_library_rounded,
-            color: K9.blue,
-            title: 'Wybierz z galerii',
-            onTap: () => Navigator.pop(c, ImageSource.gallery)),
-      ]),
+    isScrollControlled: true,
+    useSafeArea: true,
+    builder: (c) => SingleChildScrollView(
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(20, 0, 20, 24 + MediaQuery.viewPaddingOf(c).bottom),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListRow(
+              icon: Icons.photo_camera_rounded,
+              color: K9.orange,
+              title: 'Zrób zdjęcie',
+              onTap: () => Navigator.pop(c, ImageSource.camera),
+            ),
+            ListRow(
+              icon: Icons.photo_library_rounded,
+              color: K9.blue,
+              title: 'Wybierz z galerii',
+              onTap: () => Navigator.pop(c, ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
     ),
   );
   if (source == null) return null;
@@ -37,12 +46,14 @@ Future<String?> pickPhoto(BuildContext context) async {
 }
 
 void openPhotoViewer(BuildContext context, List<String> refs, int index) {
-  Navigator.of(context).push(PageRouteBuilder(
-    opaque: false,
-    barrierColor: Colors.black,
-    pageBuilder: (_, _, _) => _Viewer(refs: refs, index: index),
-    transitionsBuilder: (_, a, _, child) => FadeTransition(opacity: a, child: child),
-  ));
+  Navigator.of(context).push(
+    PageRouteBuilder(
+      opaque: false,
+      barrierColor: Colors.black,
+      pageBuilder: (_, _, _) => _Viewer(refs: refs, index: index),
+      transitionsBuilder: (_, a, _, child) => FadeTransition(opacity: a, child: child),
+    ),
+  );
 }
 
 class _Viewer extends StatelessWidget {
@@ -59,7 +70,10 @@ class _Viewer extends StatelessWidget {
         controller: PageController(initialPage: index),
         children: [
           for (final r in refs)
-            InteractiveViewer(maxScale: 6, child: Center(child: FileStore.image(r, fit: BoxFit.contain))),
+            InteractiveViewer(
+              maxScale: 6,
+              child: Center(child: FileStore.image(r, fit: BoxFit.contain)),
+            ),
         ],
       ),
     );

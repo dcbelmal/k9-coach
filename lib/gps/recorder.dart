@@ -7,6 +7,8 @@ import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../models.dart';
+import '../notifications.dart';
+import '../theme.dart' show fmtKm;
 import 'track.dart';
 
 enum RecState { idle, running, paused }
@@ -20,6 +22,19 @@ class TrackRecorder extends ChangeNotifier {
   Discipline discipline = Discipline.canicross;
   bool voice = true;
   int waterEveryMin = 0;
+
+  /// Gdy false – liczymy tylko czas (dyscypliny bez dystansu, np. IGP).
+  bool useGps = true;
+
+  /// Cel czasu w minutach (0 = bez celu) i opcjonalny cel dystansu.
+  int targetMin = 0;
+  double? targetKm;
+
+  /// Trening z planu, który właśnie wykonujemy.
+  TrainingSession? plan;
+  bool targetTimeDone = false;
+  bool targetKmDone = false;
+  int _lastNotif = -100;
 
   final _watch = Stopwatch();
   DateTime? startedAt;
@@ -98,6 +113,9 @@ class TrackRecorder extends ChangeNotifier {
     _lastLapT = 0;
     _lastLapM = 0;
     _waterCount = 0;
+    targetTimeDone = false;
+    targetKmDone = false;
+    _lastNotif = -100;
     currentSpeedKmh = null;
     startedAt = DateTime.now();
     _watch
@@ -108,10 +126,15 @@ class TrackRecorder extends ChangeNotifier {
       await _tts.setLanguage('pl-PL');
       await _tts.setSpeechRate(0.5);
     } catch (_) {}
-    _listen();
+    await Notifications.instance.requestPermission();
+    if (useGps) _listen();
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
+    _scheduleGoal();
+    _updateNotification();
     notifyListeners();
-    if (voice) _say('Start. Trening ${discipline.label}.');
+    if (voice) {
+      _say('Start. Trening ${discipline.label}.${targetMin > 0 ? ' Cel: $targetMin ${_minWord(targetMin)}.' : ''}');
+    }
   }
 
   void _listen() {
@@ -154,10 +177,21 @@ class TrackRecorder extends ChangeNotifier {
         _say('Kilometr $km. Czas ${_spoken(seconds)}. Tempo ostatniego kilometra ${_spoken(kmTime)}.');
       }
     }
+    if (targetKm != null && targetKm! > 0 && !targetKmDone && meters >= targetKm! * 1000) {
+      targetKmDone = true;
+      HapticFeedback.heavyImpact();
+      _say('Cel dystansu osiągnięty. ${fmtKm(targetKm!)} kilometra. Brawo!');
+    }
   }
 
   void _tick() {
     if (state != RecState.running) return;
+    if (targetMin > 0 && !targetTimeDone && seconds >= targetMin * 60) {
+      targetTimeDone = true;
+      HapticFeedback.heavyImpact();
+      _say('Cel osiągnięty. $targetMin ${_minWord(targetMin)} treningu. Brawo!');
+    }
+    if (seconds - _lastNotif >= 10) _updateNotification();
     if (waterEveryMin > 0) {
       final n = seconds ~/ (waterEveryMin * 60);
       if (n > _waterCount) {
@@ -174,6 +208,8 @@ class TrackRecorder extends ChangeNotifier {
     _watch.stop();
     state = RecState.paused;
     currentSpeedKmh = null;
+    Notifications.instance.cancel(Notifications.goalId);
+    _updateNotification();
     if (voice) _say('Pauza.');
     notifyListeners();
   }
@@ -183,6 +219,8 @@ class TrackRecorder extends ChangeNotifier {
     _watch.start();
     segments.add([]);
     state = RecState.running;
+    _scheduleGoal();
+    _updateNotification();
     if (voice) _say('Wznawiam.');
     notifyListeners();
   }
@@ -208,6 +246,8 @@ class TrackRecorder extends ChangeNotifier {
     _sub = null;
     _ticker?.cancel();
     state = RecState.idle;
+    await Notifications.instance.cancel(Notifications.goalId);
+    await Notifications.instance.cancel(Notifications.liveId);
     final t = Track([for (final s in segments) if (s.length > 1) s], laps);
     notifyListeners();
     return t;
@@ -218,6 +258,39 @@ class TrackRecorder extends ChangeNotifier {
     segments = [];
     meters = 0;
     notifyListeners();
+  }
+
+  void _scheduleGoal() {
+    if (targetMin <= 0 || targetTimeDone) return;
+    final left = targetMin * 60 - seconds;
+    if (left <= 0) return;
+    Notifications.instance.scheduleGoal(
+      DateTime.now().add(Duration(milliseconds: (left * 1000).round())),
+      'Cel osiągnięty! $targetMin min',
+      'Trening ${discipline.label}: wykonaliście założony czas. Możesz kończyć albo trenować dalej.',
+    );
+  }
+
+  /// Stałe powiadomienie: widać je na ekranie blokady i w pasku.
+  void _updateNotification() {
+    _lastNotif = seconds.floor();
+    final paused = state == RecState.paused;
+    final parts = <String>[
+      if (useGps) '${fmtKm(meters / 1000)} km',
+      if (useGps && meters >= 20) 'tempo ${_paceText(avgPace)}/km',
+      if (targetMin > 0) targetTimeDone ? 'cel $targetMin min ✓' : 'cel $targetMin min',
+    ];
+    Notifications.instance.showLive(
+      title: paused ? 'Pauza – ${discipline.label}' : 'Trening trwa – ${discipline.label}',
+      body: parts.isEmpty ? 'Stuknij, aby wrócić do treningu' : parts.join(' · '),
+      chronoBase: paused ? null : DateTime.now().subtract(Duration(milliseconds: _watch.elapsedMilliseconds)),
+    );
+  }
+
+  String _paceText(double secPerKm) {
+    if (secPerKm <= 0 || secPerKm > 3600) return '–';
+    final m = secPerKm ~/ 60, s = (secPerKm % 60).round();
+    return s == 60 ? '${m + 1}:00' : '$m:${s.toString().padLeft(2, '0')}';
   }
 
   String _spoken(double sec) {
