@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:image_picker/image_picker.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../champ_rules.dart';
 import '../models.dart';
 import '../notifications.dart';
 import '../store.dart';
@@ -135,6 +136,7 @@ class _DataTab extends StatelessWidget {
       (Icons.shield_outlined, 'BCS (kondycja)', dog.bcs == null ? '—' : '${dog.bcs}/9${_bcsLabel(dog.bcs!)}'),
       (Icons.memory_rounded, 'Nr chipa', dog.chip.isEmpty ? '—' : dog.chip),
       (Icons.badge_outlined, 'Nr rodowodu', dog.pedigree.isEmpty ? '—' : dog.pedigree),
+      (Icons.category_outlined, 'Grupa FCI', dog.fciGroup == null ? '—' : 'Grupa ${romanNumerals[dog.fciGroup! - 1]}'),
       (Icons.route_outlined, 'Cel tygodniowy', '${fmtKm(dog.weeklyKmGoal)} km'),
     ];
     return K9Card(
@@ -267,7 +269,7 @@ class _Settings extends StatelessWidget {
         ),
         const Padding(
           padding: EdgeInsets.symmetric(vertical: 10),
-          child: Text('K9 Coach · wersja 0.2 · dane zapisane tylko na tym telefonie',
+          child: Text('K9 Coach · wersja 0.3 · dane zapisane tylko na tym telefonie',
               textAlign: TextAlign.center, style: TextStyle(color: K9.faint, fontSize: 11.5)),
         ),
       ]),
@@ -323,8 +325,36 @@ class _DogEditScreenState extends State<DogEditScreen> {
         const SizedBox(height: 20),
         TextField(controller: name, decoration: const InputDecoration(labelText: 'Imię psa *')),
         gap12,
-        TextField(controller: breed, decoration: const InputDecoration(labelText: 'Rasa')),
+        TextField(
+          controller: breed,
+          decoration: const InputDecoration(labelText: 'Rasa'),
+          onChanged: (v) {
+            final g = guessFciGroup(v);
+            if (g != null && g != d.fciGroup) setState(() => d.fciGroup = g);
+          },
+        ),
         gap12,
+        DropdownButtonFormField<int?>(
+          key: ValueKey(d.fciGroup),
+          initialValue: d.fciGroup,
+          isExpanded: true,
+          dropdownColor: K9.cardHi,
+          decoration: const InputDecoration(labelText: 'Grupa FCI (do filtrowania wystaw)'),
+          items: [
+            const DropdownMenuItem(value: null, child: Text('—')),
+            for (var g = 1; g <= 10; g++)
+              DropdownMenuItem(value: g, child: Text(fciGroupLabel(g), overflow: TextOverflow.ellipsis)),
+          ],
+          onChanged: (v) => setState(() => d.fciGroup = v),
+        ),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Rasa podlega próbom pracy'),
+          subtitle: const Text('Wpływa na wymagania do Championa Międzynarodowego',
+              style: TextStyle(color: K9.muted, fontSize: 12.5)),
+          value: isWorkingTrialBreed(d),
+          onChanged: (v) => setState(() => d.workingTrial = v),
+        ),
         Segmented(items: const ['Suka', 'Pies'], index: d.female ? 0 : 1, onChanged: (i) => setState(() => d.female = i == 0)),
         gap12,
         DateField(

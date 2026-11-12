@@ -46,11 +46,14 @@ enum ShowStatus {
 }
 
 enum ShowTitle {
-  jcwc('Młodzieżowe CWC', 'mCWC', Color(0xFF5E8BFF)),
+  jcwc('Młodzieżowe CWC', 'mCWC', Color(0xFF5E8BFF)), // dawny wpis, nie służy do championatów
   cwc('CWC / CAC', 'CWC', Color(0xFFF5821F)),
   cacib('CACIB', 'CACIB', Color(0xFFFFC53D)),
   resCacib('Res. CACIB', 'rCACIB', Color(0xFFC0C0C8)),
   zm('Zwycięzca Młodzieży', 'ZM', Color(0xFF30B0C7)),
+  zw('Zwycięzca Weteran', 'ZW', Color(0xFF8E8E93)),
+  zp('Zwycięzca Polski', 'ZwP', Color(0xFFFF453A)),
+  zk('Zwycięzca Klubu', 'ZK', Color(0xFF34C759)),
   boj('Najlepszy Junior (BOJ)', 'BOJ', Color(0xFF30B0C7)),
   bob('Zwycięzca Rasy (BOB)', 'BOB', Color(0xFFFFB020)),
   bos('Najlepszy Przeciwnej Płci (BOS)', 'BOS', Color(0xFFBF5AF2)),
@@ -76,6 +79,7 @@ class ShowEntry {
   DateTime? entryDeadline;
   double? fee;
   String judge;
+  String country;
   String? grade;
   int? placement;
   Set<ShowTitle> titles;
@@ -92,6 +96,7 @@ class ShowEntry {
     this.entryDeadline,
     this.fee,
     this.judge = '',
+    this.country = 'Polska',
     this.grade,
     this.placement,
     Set<ShowTitle>? titles,
@@ -111,6 +116,7 @@ class ShowEntry {
         'deadline': entryDeadline?.toIso8601String(),
         'fee': fee,
         'judge': judge,
+        'country': country,
         'grade': grade,
         'placement': placement,
         'titles': titles.map((e) => e.name).toList(),
@@ -128,6 +134,7 @@ class ShowEntry {
         entryDeadline: _d(j['deadline']),
         fee: _n(j['fee']),
         judge: j['judge'] ?? '',
+        country: j['country'] ?? 'Polska',
         grade: j['grade'],
         placement: j['placement'],
         titles: {for (final t in (j['titles'] as List? ?? [])) ShowTitle.values.byName(t)},
@@ -135,16 +142,16 @@ class ShowEntry {
       );
 }
 
-/// Uproszczone wymagania championatów (do weryfikacji z regulaminem ZKwP / FCI).
+/// Championaty – zasady w lib/champ_rules.dart (wg ZKwP i FCI).
 enum Championship {
-  juniorPl('Młodzieżowy Champion Polski', ShowTitle.jcwc, 3),
-  pl('Champion Polski', ShowTitle.cwc, 3),
-  inter('Champion Międzynarodowy (C.I.B.)', ShowTitle.cacib, 4);
+  juniorPl('Champion Polski Młodzieży'),
+  pl('Champion Polski'),
+  grand('Grand Champion Polski'),
+  veteran('Champion Polski Weteranów'),
+  inter('Champion Międzynarodowy (C.I.B.)');
 
   final String label;
-  final ShowTitle title;
-  final int required;
-  const Championship(this.label, this.title, this.required);
+  const Championship(this.label);
 }
 
 // ---------------------------------------------------------------------------

@@ -1,10 +1,12 @@
 import 'package:material_ui/material_ui.dart';
 
 import '../models.dart';
+import '../champ_rules.dart';
 import '../models_ext.dart';
 import '../store.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import 'zkwp_calendar.dart';
 
 final _s = AppStore.instance;
 
@@ -37,7 +39,7 @@ class _ShowsScreenState extends State<ShowsScreen> {
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
           child: Segmented(
-              items: const ['Wystawy', 'Wyniki', 'Tytuły'], index: tab, onChanged: (i) => setState(() => tab = i)),
+              items: const ['Terminarz', 'Moje', 'Wyniki', 'Tytuły'], index: tab, onChanged: (i) => setState(() => tab = i)),
         ),
         Expanded(
           child: ListenableBuilder(
@@ -45,9 +47,10 @@ class _ShowsScreenState extends State<ShowsScreen> {
             builder: (context, _) => AnimatedSwitcher(
               duration: const Duration(milliseconds: 250),
               child: switch (tab) {
-                0 => const _ShowList(key: ValueKey(0)),
-                1 => const _Results(key: ValueKey(1)),
-                _ => const _Titles(key: ValueKey(2)),
+                0 => const ZkwpCalendar(key: ValueKey(0)),
+                1 => const _ShowList(key: ValueKey(1)),
+                2 => const _Results(key: ValueKey(2)),
+                _ => const _Titles(key: ValueKey(3)),
               },
             ),
           ),
@@ -219,11 +222,11 @@ class _Titles extends StatelessWidget {
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           const SectionTitle('Championaty', icon: Icons.workspace_premium_outlined),
           for (final c in Championship.values) ...[
-            _ChampRow(c: c, count: _s.titleCount(c.title)),
+            _ChampRow(st: _s.champStatus(c)),
             const SizedBox(height: 14),
           ],
           const Text(
-              'Wymagania uproszczone. Szczegóły (np. różni sędziowie, odstęp czasu, kraje) sprawdź w regulaminie ZKwP / FCI.',
+              'Zasady wg regulaminów ZKwP (zkwp.pl/championaty) i FCI. Stuknij championat, aby zobaczyć warunki. Tytuł zatwierdza ZKwP na wniosek właściciela.',
               style: TextStyle(color: K9.faint, fontSize: 11.5)),
         ]),
       ),
@@ -267,42 +270,83 @@ class _Titles extends StatelessWidget {
 }
 
 class _ChampRow extends StatelessWidget {
-  final Championship c;
-  final int count;
-  const _ChampRow({required this.c, required this.count});
+  final ChampStatus st;
+  const _ChampRow({required this.st});
 
   @override
   Widget build(BuildContext context) {
-    final done = count >= c.required;
-    final p = (count / c.required).clamp(0.0, 1.0);
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(children: [
-        Icon(done ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
-            color: done ? K9.green : K9.faint, size: 20),
-        const SizedBox(width: 10),
-        Expanded(child: Text(c.label, style: const TextStyle(fontWeight: FontWeight.w600))),
-        Text('$count / ${c.required} ${c.title.short}', style: const TextStyle(color: K9.muted, fontSize: 12.5)),
-      ]),
-      const SizedBox(height: 8),
-      Padding(
-        padding: const EdgeInsets.only(left: 30),
-        child: TweenAnimationBuilder<double>(
-          tween: Tween(begin: 0, end: p),
-          duration: const Duration(milliseconds: 900),
-          curve: Curves.easeOutCubic,
-          builder: (_, v, _) => ClipRRect(
-            borderRadius: BorderRadius.circular(6),
-            child: LinearProgressIndicator(
-              value: v,
-              minHeight: 7,
-              backgroundColor: K9.cardHi,
-              valueColor: AlwaysStoppedAnimation(done ? K9.green : K9.orange),
+    final done = st.achieved;
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () => _showRules(context, st),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Icon(done ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+              color: done ? K9.green : K9.faint, size: 20),
+          const SizedBox(width: 10),
+          Expanded(child: Text(st.champ.label, style: const TextStyle(fontWeight: FontWeight.w600))),
+          Text(st.summary, style: const TextStyle(color: K9.muted, fontSize: 12.5)),
+          const Icon(Icons.chevron_right_rounded, color: K9.faint, size: 18),
+        ]),
+        const SizedBox(height: 8),
+        Padding(
+          padding: const EdgeInsets.only(left: 30),
+          child: TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0, end: done ? 1 : st.progress),
+            duration: const Duration(milliseconds: 900),
+            curve: Curves.easeOutCubic,
+            builder: (_, v, _) => ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: LinearProgressIndicator(
+                value: v,
+                minHeight: 7,
+                backgroundColor: K9.cardHi,
+                valueColor: AlwaysStoppedAnimation(done ? K9.green : K9.orange),
+              ),
             ),
           ),
         ),
-      ),
-    ]);
+      ]),
+    );
   }
+}
+
+void _showRules(BuildContext context, ChampStatus st) {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    builder: (c) => SingleChildScrollView(
+      padding: EdgeInsets.fromLTRB(20, 0, 20, 28 + MediaQuery.viewPaddingOf(c).bottom),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        SheetTitle(st.champ.label),
+        for (final r in st.reqs)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Icon(r.ok ? Icons.check_circle_rounded : Icons.cancel_outlined,
+                  color: r.ok ? K9.green : K9.faint, size: 20),
+              const SizedBox(width: 10),
+              Expanded(child: Text(r.text, style: const TextStyle(fontSize: 14.5))),
+            ]),
+          ),
+        gap16,
+        K9Card(
+          color: K9.cardHi,
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Zasada', style: TextStyle(fontWeight: FontWeight.w700)),
+            const SizedBox(height: 6),
+            Text(st.rule, style: const TextStyle(color: Color(0xFFCFCFD4), fontSize: 13.5, height: 1.4)),
+          ]),
+        ),
+        if (st.champ == Championship.inter) ...[
+          gap12,
+          const Text(
+              'Rasy z grup I–III domyślnie traktuję jako podlegające próbom pracy. Możesz to zmienić w profilu psa. Zdaną próbę zaznacz w Celach (np. IGP 1 – zaliczone).',
+              style: TextStyle(color: K9.faint, fontSize: 12)),
+        ],
+      ]),
+    ),
+  );
 }
 
 class _Medal extends StatelessWidget {
@@ -347,6 +391,7 @@ class _ShowFormState extends State<_ShowForm> {
   late final fee = TextEditingController(text: e.fee == null ? '' : fmtNum(e.fee!, 0));
   late final placement = TextEditingController(text: e.placement?.toString() ?? '');
   late final notes = TextEditingController(text: e.notes);
+  late final country = TextEditingController(text: e.country);
 
   Widget _chips<T>(List<T> values, T selected, String Function(T) label, ValueChanged<T> on) => Wrap(
         spacing: 8,
@@ -389,6 +434,10 @@ class _ShowFormState extends State<_ShowForm> {
       ]),
       gap12,
       DateField(label: 'Data wystawy', value: e.date, withTime: true, onChanged: (d) => setState(() => e.date = d!)),
+      if (e.type == ShowType.international) ...[
+        gap12,
+        TextField(controller: country, decoration: const InputDecoration(labelText: 'Kraj (ważne dla C.I.B.)')),
+      ],
       gap16,
       const Text('Rodzaj', style: TextStyle(fontWeight: FontWeight.w600)),
       const SizedBox(height: 8),
@@ -451,7 +500,7 @@ class _ShowFormState extends State<_ShowForm> {
         const Text('Zdobyte tytuły', style: TextStyle(fontWeight: FontWeight.w600)),
         const SizedBox(height: 8),
         Wrap(spacing: 8, runSpacing: 8, children: [
-          for (final t in ShowTitle.values)
+          for (final t in ShowTitle.values.where((t) => t != ShowTitle.jcwc || e.titles.contains(t)))
             FilterChip(
               label: Text(t.label),
               selected: e.titles.contains(t),
@@ -479,6 +528,7 @@ class _ShowFormState extends State<_ShowForm> {
             ..name = name.text.trim()
             ..place = place.text.trim()
             ..judge = judge.text.trim()
+            ..country = country.text.trim().isEmpty ? 'Polska' : country.text.trim()
             ..fee = parseNum(fee.text)
             ..placement = int.tryParse(placement.text.trim())
             ..notes = notes.text.trim();

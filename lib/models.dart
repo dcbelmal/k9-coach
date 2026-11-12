@@ -25,6 +25,8 @@ class Dog {
   String? photoBase64;
   double? targetWeightKg;
   double weeklyKmGoal;
+  int? fciGroup; // 1-10
+  bool? workingTrial; // rasa podlega próbom pracy (C.I.B.)
 
   Dog({
     required this.name,
@@ -40,6 +42,8 @@ class Dog {
     this.photoBase64,
     this.targetWeightKg,
     this.weeklyKmGoal = 30,
+    this.fciGroup,
+    this.workingTrial,
   });
 
   String get ageLabel {
@@ -68,6 +72,8 @@ class Dog {
         'photo': photoBase64,
         'targetWeightKg': targetWeightKg,
         'weeklyKmGoal': weeklyKmGoal,
+        'fciGroup': fciGroup,
+        'workingTrial': workingTrial,
       };
 
   factory Dog.fromJson(Map<String, dynamic> j) => Dog(
@@ -84,6 +90,8 @@ class Dog {
         photoBase64: j['photo'] as String?,
         targetWeightKg: (j['targetWeightKg'] as num?)?.toDouble(),
         weeklyKmGoal: (j['weeklyKmGoal'] as num?)?.toDouble() ?? 30,
+        fciGroup: j['fciGroup'] as int?,
+        workingTrial: j['workingTrial'] as bool?,
       );
 }
 
@@ -297,3 +305,43 @@ class AgendaItem {
 
 String encodeList(List<dynamic> items) =>
     jsonEncode(items.map((e) => e.toJson()).toList());
+
+const romanNumerals = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
+
+/// Grupy FCI (nazwy skrócone).
+const fciGroupNames = [
+  'Owczarki i psy pasterskie',
+  'Pinczery, sznaucery, molosy, psy do bydła',
+  'Teriery',
+  'Jamniki',
+  'Szpice i psy w typie pierwotnym',
+  'Psy gończe i posokowce',
+  'Wyżły',
+  'Aportery, płochacze, psy dowodne',
+  'Psy ozdobne i do towarzystwa',
+  'Charty',
+];
+
+String fciGroupLabel(int g) => 'Grupa ${romanNumerals[g - 1]} – ${fciGroupNames[g - 1]}';
+
+/// Podpowiedź grupy FCI na podstawie nazwy rasy.
+int? guessFciGroup(String breed) {
+  final b = breed.toLowerCase();
+  const map = <String, int>{
+    'owczar': 1, 'malinois': 1, 'collie': 1, 'border': 1, 'australijsk': 1, 'corgi': 1, 'komondor': 1, 'puli': 1,
+    'rottweil': 2, 'doberman': 2, 'bokser': 2, 'sznaucer': 2, 'pinczer': 2, 'dog niem': 2, 'mastif': 2, 'nowofundland': 2,
+    'berneński': 2, 'cane corso': 2, 'leonberg': 2, 'buldog angielski': 2, 'bernardyn': 2, 'shar': 2,
+    'terier': 3, 'yorkshire': 3, 'bull terier': 3,
+    'jamnik': 4,
+    'husky': 5, 'malamut': 5, 'akita': 5, 'szpic': 5, 'shiba': 5, 'samoyed': 5, 'basenji': 5, 'chow': 5,
+    'gończ': 6, 'beagle': 6, 'posokow': 6, 'dalmaty': 6, 'basset': 6, 'rhodesian': 6,
+    'wyżeł': 7, 'wyżel': 7, 'seter': 7, 'pointer': 7, 'weimar': 7,
+    'retriever': 8, 'labrador': 8, 'golden': 8, 'spaniel': 8, 'cocker': 8,
+    'pudel': 9, 'chihuahua': 9, 'maltańczyk': 9, 'shih': 9, 'buldog francuski': 9, 'mops': 9, 'cavalier': 9, 'papillon': 9, 'havanese': 9, 'bichon': 9,
+    'chart': 10, 'greyhound': 10, 'whippet': 10, 'saluki': 10, 'borzoj': 10, 'afgań': 10,
+  };
+  for (final e in map.entries) {
+    if (b.contains(e.key)) return e.value;
+  }
+  return null;
+}

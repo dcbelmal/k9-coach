@@ -6,6 +6,7 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:material_ui/material_ui.dart' show Icons, Color;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'champ_rules.dart';
 import 'files/file_store.dart';
 import 'models.dart';
 import 'models_ext.dart';
@@ -391,6 +392,19 @@ class AppStore extends ChangeNotifier {
     await _save();
   }
 
+  bool get workingTrialPassed => goals.any((g) =>
+      g.type == GoalType.exam && g.done && RegExp(r'IGP|IPO|FH|HWT', caseSensitive: false).hasMatch(g.title));
+
+  ChampStatus champStatus(Championship c) {
+    bool? pl;
+    if (c == Championship.grand) {
+      pl = champStatus(Championship.pl).achieved ||
+          goals.any((g) => g.championship == Championship.pl && g.done);
+    }
+    return evaluate(c, shows,
+        workingTrialBreed: isWorkingTrialBreed(dog), workingTrialPassed: workingTrialPassed, plChampion: pl);
+  }
+
   /// Liczba zdobytych tytułów danego typu.
   int titleCount(ShowTitle t) => shows.where((s) => s.titles.contains(t)).length;
 
@@ -443,8 +457,8 @@ class AppStore extends ChangeNotifier {
       case GoalType.title:
         final c = g.championship;
         if (c == null) return (g.done ? 1 : g.manualProgress, g.done ? 'Zdobyty' : 'W trakcie');
-        final n = titleCount(c.title);
-        return (g.done ? 1 : n / c.required, '$n / ${c.required} × ${c.title.short}');
+        final st = champStatus(c);
+        return (g.done || st.achieved ? 1 : st.progress, g.done || st.achieved ? 'Spełnione wymagania · ${st.summary}' : st.summary);
       case GoalType.exam:
       case GoalType.custom:
         if (g.done) {
@@ -472,6 +486,7 @@ class AppStore extends ChangeNotifier {
       pedigree: 'ZKwP-12345',
       targetWeightKg: 22,
       weeklyKmGoal: 35,
+      fciGroup: 1,
     );
     try {
       final bytes = await rootBundle.load('assets/demo_gamora.jpg');
@@ -601,7 +616,7 @@ class AppStore extends ChangeNotifier {
           judge: 'A. Nowak',
           grade: 'Doskonała',
           placement: 1,
-          titles: {ShowTitle.jcwc, ShowTitle.zm}),
+          titles: {ShowTitle.zm}),
       ShowEntry(
           id: 's2',
           name: 'Międzynarodowa Wystawa Psów',
@@ -613,7 +628,7 @@ class AppStore extends ChangeNotifier {
           judge: 'J. Kowalski',
           grade: 'Doskonała',
           placement: 1,
-          titles: {ShowTitle.jcwc, ShowTitle.zm, ShowTitle.boj}),
+          titles: {ShowTitle.zm, ShowTitle.boj}),
       ShowEntry(
           id: 's3',
           name: 'Krajowa Wystawa Psów Rasowych',
