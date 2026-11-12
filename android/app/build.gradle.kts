@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace = "pl.k9coach.app"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 37
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
