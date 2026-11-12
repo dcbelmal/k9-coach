@@ -1,0 +1,16 @@
+name: Sprawdz terminarz ZKwP
+on: workflow_dispatch
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          curl -sS -A "Mozilla/5.0" -D headers.txt "https://zkwp.pl/wystawy.php?l=&rok=2027" -o page.html
+          cat headers.txt
+          wc -c page.html
+          grep -o -i 'charset=[a-z0-9-]*' page.html | head -3
+          n=$(grep -n -i "Terminarz wystaw" page.html | head -1 | cut -d: -f1); echo "start line $n"
+          sed -n "$((n-5)),$((n+60))p" page.html
+          echo ======== TAIL
+          grep -n -i "grudzie" page.html | head -3
+          m=$(grep -n -i "grudzie" page.html | tail -1 | cut -d: -f1); sed -n "${m},$((m+40))p" page.html
