@@ -13,3 +13,7 @@ Widget image(String ref, BoxFit fit) {
   if (ref.startsWith('b64:')) return Image.memory(base64Decode(ref.substring(4)), fit: fit);
   return const Center(child: Icon(Icons.broken_image_outlined));
 }
+
+Future<String> saveText(String text) async => 'txt:$text';
+
+Future<String?> readText(String ref) async => ref.startsWith('txt:') ? ref.substring(4) : null;

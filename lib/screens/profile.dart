@@ -269,7 +269,7 @@ class _Settings extends StatelessWidget {
         ),
         const Padding(
           padding: EdgeInsets.symmetric(vertical: 10),
-          child: Text('K9 Coach · wersja 0.3 · dane zapisane tylko na tym telefonie',
+          child: Text('K9 Coach · wersja 0.4 · dane zapisane tylko na tym telefonie',
               textAlign: TextAlign.center, style: TextStyle(color: K9.faint, fontSize: 11.5)),
         ),
       ]),

@@ -195,6 +195,12 @@ class TrainingSession {
   int rpe; // intensywność 1-10
   String notes;
   bool done;
+  String? trackRef; // trasa GPS zapisana w pliku
+  int? movingSec; // czas ruchu bez pauz
+  double? maxSpeedKmh;
+  int? bestKmSec; // najszybszy kilometr
+
+  bool get hasTrack => trackRef != null;
 
   TrainingSession({
     required this.id,
@@ -205,6 +211,10 @@ class TrainingSession {
     this.rpe = 5,
     this.notes = '',
     this.done = true,
+    this.trackRef,
+    this.movingSec,
+    this.maxSpeedKmh,
+    this.bestKmSec,
   });
 
   /// Obciążenie treningowe (sesyjne RPE).
@@ -219,6 +229,10 @@ class TrainingSession {
         'rpe': rpe,
         'notes': notes,
         'done': done,
+        'track': trackRef,
+        'movingSec': movingSec,
+        'maxSpeed': maxSpeedKmh,
+        'bestKm': bestKmSec,
       };
 
   factory TrainingSession.fromJson(Map<String, dynamic> j) => TrainingSession(
@@ -230,6 +244,10 @@ class TrainingSession {
         rpe: j['rpe'] ?? 5,
         notes: j['notes'] ?? '',
         done: j['done'] ?? true,
+        trackRef: j['track'],
+        movingSec: j['movingSec'],
+        maxSpeedKmh: (j['maxSpeed'] as num?)?.toDouble(),
+        bestKmSec: j['bestKm'],
       );
 }
 

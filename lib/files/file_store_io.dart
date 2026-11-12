@@ -31,3 +31,15 @@ Widget image(String ref, BoxFit fit) {
   }
   return const Center(child: Icon(Icons.broken_image_outlined));
 }
+
+Future<String> saveText(String text) async {
+  final name = 'trk_${DateTime.now().microsecondsSinceEpoch}.json';
+  await File('${_dir.path}/$name').writeAsString(text);
+  return 'file:$name';
+}
+
+Future<String?> readText(String ref) async {
+  if (!ref.startsWith('file:')) return null;
+  final f = File('${_dir.path}/${ref.substring(5)}');
+  return f.existsSync() ? f.readAsString() : null;
+}

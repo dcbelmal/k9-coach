@@ -4,7 +4,10 @@ import '../models.dart';
 import '../store.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import '../gps/records.dart';
 import 'forms.dart';
+import 'gps_screen.dart';
+import 'track_detail.dart';
 
 class TrainingScreen extends StatefulWidget {
   final int initialTab;
@@ -61,6 +64,8 @@ class _Disciplines extends StatelessWidget {
       builder: (context, _) => ListView(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
         children: [
+          FadeSlideIn(index: 0, child: const GpsStartCard()),
+          const SizedBox(height: 10),
           for (final (i, d) in Discipline.values.indexed) ...[
             FadeSlideIn(index: i, child: _DisciplineCard(d: d, s: s)),
             const SizedBox(height: 10),
@@ -214,7 +219,7 @@ class _DayRow extends StatelessWidget {
                 padding: const EdgeInsets.only(bottom: 6),
                 child: K9Card(
                   padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
-                  onTap: () => openTrainingForm(context, existing: t),
+                  onTap: () => openTraining(context, t),
                   child: Row(children: [
                     IconBadge(t.discipline.icon, t.discipline.color, size: 36),
                     const SizedBox(width: 10),
@@ -301,11 +306,12 @@ class TrainingHistoryList extends StatelessWidget {
           index: i < 10 ? i : 0,
           child: K9Card(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-            onTap: () => openTrainingForm(context, existing: t),
+            onTap: () => openTraining(context, t),
             child: ListRow(
               icon: t.discipline.icon,
               color: t.discipline.color,
               title: t.notes.isEmpty ? t.discipline.label : '${t.discipline.label} – ${t.notes}',
+              trailing: t.hasTrack ? const Icon(Icons.route_rounded, color: K9.orange, size: 20) : null,
               subtitle: [
                 '${fmtDateShort(t.date)}, ${fmtTime(t.date)}',
                 fmtDuration(t.durationMin),
@@ -338,9 +344,12 @@ class DisciplineScreen extends StatelessWidget {
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: K9.orange,
         foregroundColor: Colors.black,
-        onPressed: () => openTrainingForm(context, discipline: discipline),
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('Trening', style: TextStyle(fontWeight: FontWeight.w700)),
+        onPressed: () => discipline.hasDistance
+            ? openGps(context, discipline: discipline)
+            : openTrainingForm(context, discipline: discipline),
+        icon: Icon(discipline.hasDistance ? Icons.play_arrow_rounded : Icons.add_rounded),
+        label: Text(discipline.hasDistance ? 'Start GPS' : 'Trening',
+            style: const TextStyle(fontWeight: FontWeight.w700)),
       ),
       body: ListenableBuilder(
         listenable: s,
@@ -353,7 +362,18 @@ class DisciplineScreen extends StatelessWidget {
             items: list,
             header: Padding(
               padding: const EdgeInsets.only(bottom: 4),
-              child: K9Card(
+              child: Column(children: [
+                if (discipline.hasDistance) ...[
+                  Row(children: [
+                    const Spacer(),
+                    TextButton.icon(
+                      onPressed: () => openTrainingForm(context, discipline: discipline),
+                      icon: const Icon(Icons.edit_note_rounded, size: 18),
+                      label: const Text('Dodaj ręcznie'),
+                    ),
+                  ]),
+                ],
+                K9Card(
                 child: Row(children: [
                   Expanded(child: StatValue(label: 'Treningi', value: '${list.length}')),
                   Expanded(child: StatValue(label: 'Czas', value: fmtDurationShort(minutes))),
@@ -363,10 +383,42 @@ class DisciplineScreen extends StatelessWidget {
                     Expanded(child: StatValue(label: 'Śr. RPE', value: fmtNum(avgRpe))),
                 ]),
               ),
+                if (discipline.hasDistance && !Records.of(list, discipline).isEmpty) ...[
+                  gap12,
+                  RecordsCard(records: Records.of(list, discipline)),
+                ],
+              ]),
             ),
           );
         },
       ),
+    );
+  }
+}
+
+/// Duża karta "Trening z GPS" na liście dyscyplin.
+class GpsStartCard extends StatelessWidget {
+  const GpsStartCard({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return K9Card(
+      gradient: K9.orangeGradient,
+      onTap: () => openGps(context),
+      child: const Row(children: [
+        Icon(Icons.route_rounded, color: Colors.black, size: 32),
+        SizedBox(width: 14),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Trening z GPS',
+                style: TextStyle(color: Colors.black, fontSize: 17, fontWeight: FontWeight.w800)),
+            SizedBox(height: 2),
+            Text('Mapa, tempo, kilometry i rekordy',
+                style: TextStyle(color: Colors.black87, fontSize: 12.5)),
+          ]),
+        ),
+        Icon(Icons.play_circle_fill_rounded, color: Colors.black, size: 36),
+      ]),
     );
   }
 }

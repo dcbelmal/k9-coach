@@ -13,6 +13,7 @@ import 'forms.dart';
 import 'health.dart';
 import 'shell.dart';
 import 'training.dart';
+import 'track_detail.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -260,7 +261,7 @@ class _Upcoming extends StatelessWidget {
 
 void openAgendaItem(BuildContext context, AgendaItem i) {
   final src = i.source;
-  if (src is TrainingSession) openTrainingForm(context, existing: src);
+  if (src is TrainingSession) openTraining(context, src);
   if (src is HealthRecord) openHealthForm(context, existing: src);
   if (src is CalendarEvent) openEventForm(context, existing: src);
   if (src is ShowEntry) openShowForm(context, existing: src);

@@ -6,6 +6,7 @@ import '../theme.dart';
 import '../widgets/common.dart';
 import 'documents.dart';
 import 'gear.dart';
+import 'gps_screen.dart';
 import 'shows.dart';
 
 final _store = AppStore.instance;
@@ -153,6 +154,10 @@ class _TrainingFormState extends State<_TrainingForm> {
             rpe: rpe.round(),
             notes: notes.text.trim(),
             done: done,
+            trackRef: widget.existing?.trackRef,
+            movingSec: widget.existing?.movingSec,
+            maxSpeedKmh: widget.existing?.maxSpeedKmh,
+            bestKmSec: widget.existing?.bestKmSec,
           );
           await _store.upsertTraining(t);
           if (context.mounted) {
@@ -504,6 +509,11 @@ Future<void> openQuickAdd(BuildContext context) {
       child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         const SheetTitle('Dodaj'),
         Row(children: [
+          tile(Icons.route_rounded, K9.orange, 'Trening GPS', () {
+            Navigator.pop(c);
+            openGps(context);
+          }),
+          const SizedBox(width: 12),
           tile(Icons.directions_run_rounded, K9.orange, 'Trening', () {
             Navigator.pop(c);
             openTrainingForm(context);

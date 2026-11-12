@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'champ_rules.dart';
 import 'files/file_store.dart';
+import 'gps/demo_track.dart';
 import 'models.dart';
 import 'models_ext.dart';
 import 'notifications.dart';
@@ -191,6 +192,7 @@ class AppStore extends ChangeNotifier {
   }
 
   Future<void> deleteTraining(TrainingSession t) async {
+    if (t.trackRef != null) await FileStore.delete(t.trackRef!);
     trainings.removeWhere((e) => e.id == t.id);
     await _save();
   }
@@ -571,6 +573,23 @@ class AppStore extends ChangeNotifier {
           durationMin: 25 + rnd.nextInt(50),
           distanceKm: km,
           rpe: disc == Discipline.recovery ? 2 : 4 + rnd.nextInt(5)));
+    }
+    // Trasy GPS dla ostatnich biegów (canicross / bikejoring).
+    var withTrack = 0;
+    for (final t in trainings.reversed) {
+      if (withTrack >= 4) break;
+      if (t.discipline != Discipline.canicross && t.discipline != Discipline.bikejoring) continue;
+      final bike = t.discipline == Discipline.bikejoring;
+      final tr = demoTrack(t.distanceKm!, bike ? 150 + rnd.nextDouble() * 30 : 250 + rnd.nextDouble() * 40, rnd);
+      final splits = tr.splits().where((e) => e.meters >= 1000).map((e) => e.seconds);
+      final secs = tr.points.last.t;
+      t.distanceKm = double.parse((tr.meters / 1000).toStringAsFixed(2));
+      t.movingSec = secs.round();
+      t.durationMin = (secs / 60).round();
+      t.maxSpeedKmh = double.parse(tr.maxSpeedKmh().toStringAsFixed(1));
+      t.bestKmSec = splits.isEmpty ? null : splits.reduce(min).round();
+      t.trackRef = await FileStore.saveText(tr.encode());
+      withTrack++;
     }
     trainings.addAll([
       TrainingSession(
