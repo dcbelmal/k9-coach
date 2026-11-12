@@ -191,7 +191,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
     showModalBottomSheet(
       context: context,
       builder: (c) => Padding(
-        padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
+        padding: EdgeInsets.fromLTRB(20, 0, 20, 28 + MediaQuery.viewPaddingOf(c).bottom),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           ListRow(
               icon: Icons.directions_run_rounded,

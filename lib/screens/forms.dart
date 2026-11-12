@@ -497,7 +497,7 @@ Future<void> openQuickAdd(BuildContext context) {
   return showModalBottomSheet(
     context: context,
     builder: (c) => Padding(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
+      padding: EdgeInsets.fromLTRB(20, 0, 20, 28 + MediaQuery.viewPaddingOf(c).bottom),
       child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         const SheetTitle('Dodaj'),
         Row(children: [

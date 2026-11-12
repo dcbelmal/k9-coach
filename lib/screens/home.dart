@@ -302,7 +302,7 @@ void showReminders(BuildContext context) {
     isScrollControlled: true,
     builder: (c) => ConstrainedBox(
       constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.7),
-      child: ListView(shrinkWrap: true, padding: const EdgeInsets.fromLTRB(20, 0, 20, 28), children: [
+      child: ListView(shrinkWrap: true, padding: EdgeInsets.fromLTRB(20, 0, 20, 28 + MediaQuery.viewPaddingOf(c).bottom), children: [
         const SheetTitle('Przypomnienia'),
         if (items.isEmpty)
           const Text('Nic nie czeka w najbliższych 45 dniach.', style: TextStyle(color: K9.muted)),

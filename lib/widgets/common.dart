@@ -488,7 +488,7 @@ Future<T?> showFormSheet<T>(BuildContext context, Widget child) {
     builder: (context) => Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+        padding: EdgeInsets.fromLTRB(20, 0, 20, 24 + MediaQuery.viewPaddingOf(context).bottom),
         child: child,
       ),
     ),
