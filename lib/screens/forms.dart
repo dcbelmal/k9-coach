@@ -4,6 +4,9 @@ import '../models.dart';
 import '../store.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import 'documents.dart';
+import 'gear.dart';
+import 'shows.dart';
 
 final _store = AppStore.instance;
 
@@ -527,6 +530,23 @@ Future<void> openQuickAdd(BuildContext context) {
           tile(Icons.monitor_weight_rounded, const Color(0xFFBF5AF2), 'Waga', () {
             Navigator.pop(c);
             openWeightForm(context);
+          }),
+        ]),
+        gap12,
+        Row(children: [
+          tile(Icons.emoji_events_rounded, const Color(0xFFFFB020), 'Wystawa', () {
+            Navigator.pop(c);
+            openShowForm(context);
+          }),
+          const SizedBox(width: 12),
+          tile(Icons.description_rounded, K9.red, 'Dokument', () {
+            Navigator.pop(c);
+            openDocumentForm(context);
+          }),
+          const SizedBox(width: 12),
+          tile(Icons.backpack_rounded, const Color(0xFF30B0C7), 'Sprzęt', () {
+            Navigator.pop(c);
+            openGearForm(context);
           }),
         ]),
       ]),

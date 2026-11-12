@@ -1,11 +1,13 @@
 import 'package:material_ui/material_ui.dart';
 
 import '../models.dart';
+import '../models_ext.dart';
 import '../store.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import 'forms.dart';
 import 'home.dart';
+import 'shows.dart';
 
 class CalendarScreen extends StatefulWidget {
   const CalendarScreen({super.key});
@@ -212,6 +214,14 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 openEventForm(context, date: selected);
               }),
           ListRow(
+              icon: Icons.emoji_events_rounded,
+              color: K9.yellow,
+              title: 'Wystawa',
+              onTap: () {
+                Navigator.pop(c);
+                openShowForm(context, date: DateTime(selected.year, selected.month, selected.day, 9));
+              }),
+          ListRow(
               icon: Icons.vaccines_rounded,
               color: K9.green,
               title: 'Wpis zdrowotny',
@@ -233,5 +243,8 @@ Color dotColor(AgendaItem i) => switch (i.source) {
           EventType.vet => K9.red,
           _ => K9.blue,
         },
+      ShowEntry e => e.entryDeadline != null && sameDay(e.entryDeadline!, i.date) && !sameDay(e.date, i.date) ? K9.blue : K9.yellow,
+      DogDocument _ => K9.red,
+      GearItem _ => K9.blue,
       _ => K9.muted,
     };

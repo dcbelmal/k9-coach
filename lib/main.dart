@@ -2,6 +2,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:material_ui/material_ui.dart';
 
+import 'files/file_store.dart';
 import 'notifications.dart';
 import 'screens/onboarding.dart';
 import 'screens/shell.dart';
@@ -16,6 +17,7 @@ Future<void> main() async {
     systemNavigationBarColor: K9.bg,
   ));
   await initializeDateFormatting('pl');
+  await FileStore.init();
   await Notifications.instance.init();
   await AppStore.instance.load();
   runApp(const K9CoachApp());

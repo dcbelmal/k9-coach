@@ -6,6 +6,7 @@ import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
+import 'models_ext.dart';
 import 'store.dart';
 
 /// Lokalne przypomnienia (szczepienia, odrobaczanie, wydarzenia, treningi).
@@ -109,6 +110,28 @@ class Notifications {
           'Za godzinę trening ${t.discipline.label}',
           '$name${t.notes.isEmpty ? '' : ' – ${t.notes}'}'
         ));
+      }
+
+      for (final sh in s.shows) {
+        if (sh.status == ShowStatus.cancelled || sh.status == ShowStatus.done) continue;
+        final d = sh.date.subtract(const Duration(days: 1));
+        plan.add((DateTime(d.year, d.month, d.day, 18), 'Jutro wystawa', sh.name));
+        if (sh.entryDeadline != null && sh.status == ShowStatus.planned) {
+          final dl = sh.entryDeadline!.subtract(const Duration(days: 3));
+          plan.add((DateTime(dl.year, dl.month, dl.day, 10), 'Za 3 dni mija termin zgłoszeń', sh.name));
+        }
+      }
+      for (final doc in s.documents) {
+        if (!doc.remind || doc.expires == null) continue;
+        final e = doc.expires!;
+        final before = e.subtract(const Duration(days: 30));
+        plan.add((DateTime(before.year, before.month, before.day, 9), 'Za 30 dni wygasa dokument', '$name – ${doc.title}'));
+        plan.add((DateTime(e.year, e.month, e.day, 9), 'Dziś wygasa dokument', '$name – ${doc.title}'));
+      }
+      for (final g in s.gear) {
+        final r = g.replaceDate;
+        if (g.retired || !g.remind || r == null) continue;
+        plan.add((DateTime(r.year, r.month, r.day, 10), 'Czas wymienić sprzęt', g.name));
       }
 
       plan.sort((a, b) => a.$1.compareTo(b.$1));

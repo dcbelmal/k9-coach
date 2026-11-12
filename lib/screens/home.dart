@@ -4,7 +4,11 @@ import '../models.dart';
 import '../store.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
-import 'coming_soon.dart';
+import '../models_ext.dart';
+import 'documents.dart';
+import 'gear.dart';
+import 'goals.dart';
+import 'shows.dart';
 import 'forms.dart';
 import 'health.dart';
 import 'shell.dart';
@@ -181,12 +185,12 @@ class _Shortcuts extends StatelessWidget {
     final items = <(IconData, String, VoidCallback, bool)>[
       (Icons.directions_run_rounded, 'Trening', () => push(const TrainingScreen()), false),
       (Icons.add_circle_outline_rounded, 'Zdrowie', () => push(const HealthScreen()), false),
-      (Icons.emoji_events_outlined, 'Wystawy', () => push(const ComingSoonScreen(module: Module.shows)), true),
+      (Icons.emoji_events_outlined, 'Wystawy', () => push(const ShowsScreen()), false),
       (Icons.calendar_month_rounded, 'Kalendarz', () => goToTab(1), false),
-      (Icons.description_outlined, 'Dokumenty', () => push(const ComingSoonScreen(module: Module.documents)), true),
-      (Icons.backpack_outlined, 'Sprzęt', () => push(const ComingSoonScreen(module: Module.gear)), true),
+      (Icons.description_outlined, 'Dokumenty', () => push(const DocumentsScreen()), false),
+      (Icons.backpack_outlined, 'Sprzęt', () => push(const GearScreen()), false),
       (Icons.bar_chart_rounded, 'Statystyki', () => goToTab(2), false),
-      (Icons.track_changes_rounded, 'Cele', () => push(const ComingSoonScreen(module: Module.goals)), true),
+      (Icons.track_changes_rounded, 'Cele', () => push(const GoalsScreen()), false),
     ];
     return GridView.count(
       crossAxisCount: 4,
@@ -259,6 +263,11 @@ void openAgendaItem(BuildContext context, AgendaItem i) {
   if (src is TrainingSession) openTrainingForm(context, existing: src);
   if (src is HealthRecord) openHealthForm(context, existing: src);
   if (src is CalendarEvent) openEventForm(context, existing: src);
+  if (src is ShowEntry) openShowForm(context, existing: src);
+  if (src is GearItem) openGearForm(context, existing: src);
+  if (src is DogDocument) {
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => DocumentScreen(id: src.id)));
+  }
 }
 
 class _WeekSummary extends StatelessWidget {

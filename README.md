@@ -3,7 +3,7 @@
 Aplikacja mobilna (Android i iPhone) dla właścicieli psów sportowych i wystawowych.
 Napisana we Flutterze: jeden kod działa na obu systemach.
 
-## Wersja 0.1 (MVP) zawiera
+## Wersja 0.2 zawiera
 
 - **Start**: zdjęcie i dane psa, wskaźnik kondycji (forma i ryzyko przetrenowania), skróty, najbliższe wydarzenia, podsumowanie tygodnia.
 - **Zdrowie**: szczepienia, odrobaczanie, kleszcze, badania (HD/ED, DNA, oczy), wizyty, suplementacja. Terminy z przypomnieniami (7 dni przed i w dniu terminu).
@@ -11,9 +11,13 @@ Napisana we Flutterze: jeden kod działa na obu systemach.
 - **Kalendarz**: treningi, terminy zdrowotne, zawody, wystawy, wizyty i przypomnienia.
 - **Statystyki**: dystans i czas (tydzień, miesiąc, rok), typy treningów, obciążenie, wykres wagi, postęp do celów.
 - **Profil psa**: dane, pomiary wagi, notatki, zdjęcie.
+- **Wystawy**: kalendarz wystaw, zgłoszenia z terminami, wyniki, tytuły (CWC/CAC, CACIB, BOB…), postęp do championatów, galeria medali.
+- **Dokumenty**: rodowód, książeczka zdrowia, paszport, wyniki badań, licencje, ubezpieczenie. Zdjęcia stron i przypomnienie o dacie ważności.
+- **Sprzęt**: szelki, smycze, amortyzatory, rower. Data zakupu, kilometry liczone z treningów, przypomnienia o wymianie.
+- **Cele**: egzaminy (BH-VT, IGP 1–3), championaty, kilometry, waga docelowa, z automatycznym postępem.
 
 Dane zapisują się tylko na telefonie (bez konta i internetu).
-Moduły Wystawy, Dokumenty, Sprzęt, Cele, GPS i Asystent AI są zaplanowane na kolejne wersje.
+GPS i Asystent AI są zaplanowane na kolejne wersje.
 
 ## Jak uruchomić
 
