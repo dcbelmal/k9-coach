@@ -1,0 +1,323 @@
+import 'package:material_ui/material_ui.dart';
+
+import '../models.dart';
+import '../store.dart';
+import '../theme.dart';
+import '../widgets/common.dart';
+import 'coming_soon.dart';
+import 'forms.dart';
+import 'health.dart';
+import 'shell.dart';
+import 'training.dart';
+
+class HomeScreen extends StatelessWidget {
+  const HomeScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppStore.instance;
+    return ListenableBuilder(
+      listenable: s,
+      builder: (context, _) {
+        final dog = s.dog!;
+        return CustomScrollView(
+          slivers: [
+            SliverToBoxAdapter(child: _Hero(dog: dog)),
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),
+              sliver: SliverList.list(children: [
+                FadeSlideIn(index: 1, child: _ReadinessCard(r: s.readiness)),
+                gap12,
+                const FadeSlideIn(index: 2, child: _Shortcuts()),
+                gap12,
+                FadeSlideIn(index: 3, child: _Upcoming(items: s.upcoming())),
+                gap12,
+                FadeSlideIn(index: 4, child: _WeekSummary(s: s)),
+              ]),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _Hero extends StatelessWidget {
+  final Dog dog;
+  const _Hero({required this.dog});
+
+  @override
+  Widget build(BuildContext context) {
+    final top = MediaQuery.of(context).padding.top;
+    return SizedBox(
+      height: 430 + top,
+      child: Stack(fit: StackFit.expand, children: [
+        Hero(tag: 'dog-photo', child: DogPhoto(dog: dog)),
+        const DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              stops: [0, 0.25, 0.6, 1],
+              colors: [Color(0xAA000000), Color(0x00000000), Color(0x55000000), K9.bg],
+            ),
+          ),
+        ),
+        Positioned(
+          top: top + 12,
+          left: 20,
+          right: 12,
+          child: Row(children: [
+            const _Logo(),
+            const Spacer(),
+            IconButton(
+              onPressed: () => showReminders(context),
+              icon: const Icon(Icons.notifications_none_rounded, size: 26),
+              tooltip: 'Przypomnienia',
+            ),
+          ]),
+        ),
+        Positioned(
+          left: 20,
+          right: 20,
+          bottom: 16,
+          child: GestureDetector(
+            onTap: () => goToTab(3),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Flexible(
+                  child: Text(dog.name,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 38, fontWeight: FontWeight.w800, height: 1)),
+                ),
+                const SizedBox(width: 8),
+                Icon(dog.female ? Icons.female_rounded : Icons.male_rounded, color: K9.orange, size: 30),
+              ]),
+              const SizedBox(height: 6),
+              Row(children: [
+                Expanded(
+                  child: Text(
+                    [dog.breed, dog.ageLabel].where((e) => e.isNotEmpty).join(' • '),
+                    style: const TextStyle(fontSize: 16, color: Color(0xFFD7D7DC)),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const Icon(Icons.chevron_right_rounded, color: K9.orange, size: 28),
+              ]),
+              const SizedBox(height: 14),
+              Wrap(spacing: 8, runSpacing: 8, children: [
+                if (dog.weightKg != null) Pill(icon: Icons.monitor_weight_outlined, text: '${fmtNum(dog.weightKg!)} kg'),
+                if (dog.heightCm != null) Pill(icon: Icons.height_rounded, text: '${dog.heightCm!.round()} cm'),
+                if (dog.bcs != null) Pill(icon: Icons.shield_outlined, text: 'BCS ${dog.bcs}/9'),
+              ]),
+            ]),
+          ),
+        ),
+      ]),
+    );
+  }
+}
+
+class _Logo extends StatelessWidget {
+  const _Logo();
+  @override
+  Widget build(BuildContext context) {
+    return const Row(children: [
+      Text('K9', style: TextStyle(color: K9.orange, fontSize: 26, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
+      SizedBox(width: 5),
+      Text('Coach', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
+    ]);
+  }
+}
+
+Color readinessColor(int level) => switch (level) {
+      1 => K9.green,
+      2 => K9.yellow,
+      3 => K9.red,
+      _ => K9.blue,
+    };
+
+class _ReadinessCard extends StatelessWidget {
+  final Readiness r;
+  const _ReadinessCard({required this.r});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = readinessColor(r.level);
+    return K9Card(
+      onTap: () => goToTab(2),
+      child: Row(children: [
+        RingGauge(
+          value: r.score / 100,
+          size: 84,
+          stroke: 9,
+          color: c,
+          center: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text('${r.score}', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, height: 1)),
+            const Text('forma', style: TextStyle(color: K9.muted, fontSize: 11)),
+          ]),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Wskaźnik kondycji', style: TextStyle(color: K9.muted, fontSize: 12.5)),
+            const SizedBox(height: 2),
+            Text(r.label, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: c)),
+            const SizedBox(height: 4),
+            Text(r.advice, style: const TextStyle(color: Color(0xFFCFCFD4), fontSize: 13, height: 1.3)),
+          ]),
+        ),
+      ]),
+    );
+  }
+}
+
+class _Shortcuts extends StatelessWidget {
+  const _Shortcuts();
+
+  @override
+  Widget build(BuildContext context) {
+    void push(Widget w) => Navigator.of(context).push(MaterialPageRoute(builder: (_) => w));
+    final items = <(IconData, String, VoidCallback, bool)>[
+      (Icons.directions_run_rounded, 'Trening', () => push(const TrainingScreen()), false),
+      (Icons.add_circle_outline_rounded, 'Zdrowie', () => push(const HealthScreen()), false),
+      (Icons.emoji_events_outlined, 'Wystawy', () => push(const ComingSoonScreen(module: Module.shows)), true),
+      (Icons.calendar_month_rounded, 'Kalendarz', () => goToTab(1), false),
+      (Icons.description_outlined, 'Dokumenty', () => push(const ComingSoonScreen(module: Module.documents)), true),
+      (Icons.backpack_outlined, 'Sprzęt', () => push(const ComingSoonScreen(module: Module.gear)), true),
+      (Icons.bar_chart_rounded, 'Statystyki', () => goToTab(2), false),
+      (Icons.track_changes_rounded, 'Cele', () => push(const ComingSoonScreen(module: Module.goals)), true),
+    ];
+    return GridView.count(
+      crossAxisCount: 4,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      mainAxisSpacing: 10,
+      crossAxisSpacing: 10,
+      childAspectRatio: 0.92,
+      padding: EdgeInsets.zero,
+      children: [
+        for (final it in items)
+          K9Card(
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+            onTap: it.$3,
+            child: Stack(children: [
+              Center(
+                child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  Icon(it.$1, color: it.$4 ? K9.orange.withValues(alpha: 0.55) : K9.orange, size: 30),
+                  const SizedBox(height: 8),
+                  FittedBox(
+                    child: Text(it.$2,
+                        style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                            color: it.$4 ? K9.muted : K9.text)),
+                  ),
+                ]),
+              ),
+              if (it.$4)
+                const Positioned(
+                    top: 0, right: 2, child: Icon(Icons.lock_clock_outlined, size: 13, color: K9.faint)),
+            ]),
+          ),
+      ],
+    );
+  }
+}
+
+class _Upcoming extends StatelessWidget {
+  final List<AgendaItem> items;
+  const _Upcoming({required this.items});
+
+  @override
+  Widget build(BuildContext context) {
+    return K9Card(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        SectionTitle('Najbliższe wydarzenia',
+            icon: Icons.event_note_rounded, action: 'Kalendarz', onAction: () => goToTab(1)),
+        if (items.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8),
+            child: Text('Brak zaplanowanych wydarzeń. Dodaj je przyciskiem „+”.',
+                style: TextStyle(color: K9.muted)),
+          ),
+        for (final i in items)
+          ListRow(
+            icon: i.icon,
+            color: i.color,
+            title: i.title,
+            subtitle: '${fmtDate(i.date)} (${relDays(i.date)})',
+            onTap: () => openAgendaItem(context, i),
+          ),
+      ]),
+    );
+  }
+}
+
+void openAgendaItem(BuildContext context, AgendaItem i) {
+  final src = i.source;
+  if (src is TrainingSession) openTrainingForm(context, existing: src);
+  if (src is HealthRecord) openHealthForm(context, existing: src);
+  if (src is CalendarEvent) openEventForm(context, existing: src);
+}
+
+class _WeekSummary extends StatelessWidget {
+  final AppStore s;
+  const _WeekSummary({required this.s});
+
+  @override
+  Widget build(BuildContext context) {
+    final w = s.thisWeek;
+    final goal = s.dog?.weeklyKmGoal ?? 30;
+    final progress = goal <= 0 ? 0.0 : w.km / goal;
+    return K9Card(
+      onTap: () => goToTab(2),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const SectionTitle('Podsumowanie tygodnia', icon: Icons.insights_rounded),
+        Row(children: [
+          Expanded(child: StatValue(label: 'Treningi', value: '${w.count}')),
+          Expanded(child: StatValue(label: 'Dystans', value: fmtKm(w.km), unit: 'km')),
+          Expanded(child: StatValue(label: 'Czas', value: fmtDurationShort(w.minutes))),
+          RingGauge(
+            value: progress,
+            size: 64,
+            stroke: 7,
+            gradient: const LinearGradient(colors: [K9.orange, K9.yellow, K9.green, K9.orange]),
+            center: Text('${(progress * 100).clamp(0, 999).round()}%',
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
+          ),
+        ]),
+        const SizedBox(height: 10),
+        Text('Cel tygodniowy: ${fmtKm(goal)} km',
+            style: const TextStyle(color: K9.muted, fontSize: 12.5)),
+      ]),
+    );
+  }
+}
+
+void showReminders(BuildContext context) {
+  final items = AppStore.instance.upcoming(days: 45, limit: 12);
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    builder: (c) => ConstrainedBox(
+      constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.7),
+      child: ListView(shrinkWrap: true, padding: const EdgeInsets.fromLTRB(20, 0, 20, 28), children: [
+        const SheetTitle('Przypomnienia'),
+        if (items.isEmpty)
+          const Text('Nic nie czeka w najbliższych 45 dniach.', style: TextStyle(color: K9.muted)),
+        for (final i in items)
+          ListRow(
+            icon: i.icon,
+            color: i.color,
+            title: i.title,
+            subtitle: '${fmtDate(i.date)} · ${relDays(i.date)}',
+            onTap: () {
+              Navigator.pop(c);
+              openAgendaItem(context, i);
+            },
+          ),
+      ]),
+    ),
+  );
+}
