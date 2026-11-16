@@ -30,11 +30,26 @@ android {
         versionName = flutter.versionName
     }
 
+    // Stały klucz podpisu: każda nowa wersja instaluje się na poprzednią bez utraty danych.
+    // Hasło jest w sekrecie GitHub KEYSTORE_PASSWORD (zmienna środowiskowa przy budowie).
+    val keystorePassword = System.getenv("KEYSTORE_PASSWORD")
+    signingConfigs {
+        if (!keystorePassword.isNullOrEmpty()) {
+            create("valkor") {
+                storeFile = file("valkor-release.p12")
+                storeType = "PKCS12"
+                storePassword = keystorePassword
+                keyAlias = "valkor"
+                keyPassword = keystorePassword
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // Bez hasła (np. lokalnie) podpisujemy kluczem debug, jak wcześniej.
+            signingConfig = if (!keystorePassword.isNullOrEmpty()) signingConfigs.getByName("valkor")
+                else signingConfigs.getByName("debug")
         }
     }
 }
