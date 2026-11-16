@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:material_ui/material_ui.dart';
 
-/// Paleta K9 Coach: ciemne tło, karty grafitowe, akcent pomarańczowy.
+/// Paleta Valkor Coach: ciemne tło, karty grafitowe, akcent pomarańczowy.
 class K9 {
   static const bg = Color(0xFF0B0B0C);
   static const card = Color(0xFF161618);
@@ -18,6 +18,13 @@ class K9 {
   static const yellow = Color(0xFFFFC53D);
   static const red = Color(0xFFFF453A);
   static const blue = Color(0xFF5E8BFF);
+
+  // Marka Valkor (logo Valkor Canis): różowe złoto na czarnym tle.
+  static const brandBg = Color(0xFF0A0908);
+  static const gold = Color(0xFFDDB59A);
+  static const goldLight = Color(0xFFE8C6AE);
+  static const goldSoft = Color(0xFFCDB3A1);
+  static const goldDeep = Color(0xFF9E6E55);
 
   static const radius = 22.0;
 

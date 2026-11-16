@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ikonka powiadomień jest wskazywana tylko z kodu Dart, więc chronimy ją przed usunięciem przy budowie. -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/ic_stat_valkor,@drawable/launch_logo" />

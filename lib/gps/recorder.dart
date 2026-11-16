@@ -69,7 +69,7 @@ class TrackRecorder extends ChangeNotifier {
     if (p == LocationPermission.denied) p = await Geolocator.requestPermission();
     if (p == LocationPermission.denied) return 'Bez dostępu do lokalizacji nie da się nagrać trasy.';
     if (p == LocationPermission.deniedForever) {
-      return 'Dostęp do lokalizacji jest zablokowany. Włącz go w ustawieniach telefonu dla K9 Coach.';
+      return 'Dostęp do lokalizacji jest zablokowany. Włącz go w ustawieniach telefonu dla Valkor Coach.';
     }
     return null;
   }
@@ -81,11 +81,12 @@ class TrackRecorder extends ChangeNotifier {
         distanceFilter: 3,
         intervalDuration: const Duration(seconds: 1),
         foregroundNotificationConfig: ForegroundNotificationConfig(
-          notificationTitle: 'K9 Coach – trening ${discipline.label}',
+          notificationTitle: 'Valkor Coach – trening ${discipline.label}',
           notificationText: 'Nagrywam trasę. Możesz wyłączyć ekran.',
           notificationChannelName: 'Trening GPS',
           enableWakeLock: true,
           setOngoing: true,
+          notificationIcon: AndroidResource(name: 'ic_stat_valkor', defType: 'drawable'),
         ),
       );
     }

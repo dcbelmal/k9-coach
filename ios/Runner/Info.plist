@@ -7,20 +7,20 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>K9 Coach potrzebuje dostępu do zdjęć, aby ustawić zdjęcie psa.</string>
+	<string> Valkor Coach potrzebuje dostępu do zdjęć, aby ustawić zdjęcie psa.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>K9 Coach używa GPS, aby nagrać trasę treningu z psem.</string>
+	<string> Valkor Coach używa GPS, aby nagrać trasę treningu z psem.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>K9 Coach nagrywa trasę treningu także przy wyłączonym ekranie.</string>
+	<string> Valkor Coach nagrywa trasę treningu także przy wyłączonym ekranie.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>location</string>
 		<string>audio</string>
 	</array>
 	<key>NSCameraUsageDescription</key>
-	<string>K9 Coach potrzebuje aparatu, aby zrobić zdjęcie psa.</string>
+	<string> Valkor Coach potrzebuje aparatu, aby zrobić zdjęcie psa.</string>
 	<key>CFBundleDisplayName</key>
-	<string>K9 Coach</string>
+	<string>Valkor Coach</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>

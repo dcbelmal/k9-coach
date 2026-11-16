@@ -127,10 +127,18 @@ class _Logo extends StatelessWidget {
   const _Logo();
   @override
   Widget build(BuildContext context) {
-    return const Row(children: [
-      Text('K9', style: TextStyle(color: K9.orange, fontSize: 26, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
-      SizedBox(width: 5),
-      Text('Coach', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
+    return Row(mainAxisSize: MainAxisSize.min, children: [
+      Image.asset('assets/brand/valkor_mark.png', width: 40, filterQuality: FilterQuality.medium),
+      const SizedBox(width: 10),
+      const Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+        Text('VALKOR',
+            style: TextStyle(
+                fontFamily: 'Cinzel', color: K9.goldLight, fontSize: 18, fontWeight: FontWeight.w700, letterSpacing: 3, height: 1)),
+        SizedBox(height: 2),
+        Text('COACH',
+            style: TextStyle(
+                fontFamily: 'Cinzel', color: K9.goldSoft, fontSize: 10.5, fontWeight: FontWeight.w400, letterSpacing: 4.5, height: 1.1)),
+      ]),
     ]);
   }
 }
