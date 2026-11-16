@@ -5,6 +5,7 @@ import '../store.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import '../models_ext.dart';
+import '../nutrition/screens/nutrition_home_card.dart';
 import 'documents.dart';
 import 'gear.dart';
 import 'goals.dart';
@@ -35,9 +36,11 @@ class HomeScreen extends StatelessWidget {
                 gap12,
                 const FadeSlideIn(index: 2, child: _Shortcuts()),
                 gap12,
-                FadeSlideIn(index: 3, child: _Upcoming(items: s.upcoming())),
+                const FadeSlideIn(index: 3, child: NutritionHomeCard()),
                 gap12,
-                FadeSlideIn(index: 4, child: _WeekSummary(s: s)),
+                FadeSlideIn(index: 4, child: _Upcoming(items: s.upcoming())),
+                gap12,
+                FadeSlideIn(index: 5, child: _WeekSummary(s: s)),
               ]),
             ),
           ],

@@ -4,6 +4,7 @@ import 'package:material_ui/material_ui.dart';
 
 import 'files/file_store.dart';
 import 'notifications.dart';
+import 'nutrition/nutrition_store.dart';
 import 'screens/onboarding.dart';
 import 'screens/shell.dart';
 import 'screens/splash.dart';
@@ -21,6 +22,7 @@ Future<void> main() async {
   await FileStore.init();
   await Notifications.instance.init();
   await AppStore.instance.load();
+  await NutritionStore.instance.load();
   runApp(const K9CoachApp());
 }
 
