@@ -51,7 +51,7 @@ class ComingSoonScreen extends StatelessWidget {
         const SizedBox(height: 20),
         Center(child: IconBadge(module.icon, K9.orange, size: 88)),
         const SizedBox(height: 20),
-        const Text('Wkrótce w K9 Coach',
+        const Text('Wkrótce w Valkor Coach',
             textAlign: TextAlign.center, style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
         const SizedBox(height: 8),
         const Text('Ten moduł pojawi się w kolejnej wersji aplikacji.',
