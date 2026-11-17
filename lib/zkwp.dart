@@ -249,7 +249,7 @@ class ZkwpService {
     final fresh = cachedAt != null && DateTime.now().difference(cachedAt).inHours < 12;
     if (cached != null && fresh && !refresh) return (cached, cachedAt, null);
     try {
-      final r = await http.get(url(year), headers: {'User-Agent': 'Mozilla/5.0 (K9 Coach)'}).timeout(const Duration(seconds: 20));
+      final r = await http.get(url(year), headers: {'User-Agent': 'Mozilla/5.0 (Valkor Coach)'}).timeout(const Duration(seconds: 20));
       if (r.statusCode != 200) throw Exception('HTTP ${r.statusCode}');
       final shows = parseZkwp(_decode(r.bodyBytes), year);
       if (shows.isEmpty && cached != null) return (cached, cachedAt, 'Nie udało się odczytać terminarza.');
