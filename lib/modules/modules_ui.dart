@@ -4,6 +4,7 @@ import '../models.dart';
 import '../store.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import '../screens/shell.dart';
 import 'module_routes.dart';
 import 'module_store.dart';
 import 'modules.dart';
@@ -47,6 +48,132 @@ class ModulesGrid extends StatelessWidget {
           ));
         }
         return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children);
+      },
+    );
+  }
+}
+
+/// Moduły, które mają własną zakładkę na dolnym pasku, więc nie dublujemy ich w listach.
+const _inBottomBar = {AppModule.profile, AppModule.training, AppModule.healthCalendar, AppModule.stats};
+
+/// Kolejność, w jakiej moduły trafiają do skrótów na ekranie Start.
+const _shortcutOrder = [
+  AppModule.walks,
+  AppModule.documents,
+  AppModule.goals,
+  AppModule.gear,
+  AppModule.shows,
+  AppModule.gallery,
+  AppModule.notes,
+  AppModule.foodStock,
+];
+
+/// Ekran Start: 4 najważniejsze skróty i przycisk „Wszystkie” (prowadzi do zakładki Pies).
+class ShortcutsRow extends StatelessWidget {
+  const ShortcutsRow({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: modulesListenable,
+      builder: (context, _) {
+        final ms = ModuleStore.instance;
+        final list = _shortcutOrder.where((m) => ms.isEnabled(m)).take(4).toList();
+        return Row(children: [
+          for (final m in list) ...[
+            Expanded(child: AspectRatio(aspectRatio: 0.9, child: ModuleTile(module: m))),
+            const SizedBox(width: 10),
+          ],
+          Expanded(
+            child: AspectRatio(
+              aspectRatio: 0.9,
+              child: K9Card(
+                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+                onTap: () => goToTab(3),
+                child: const Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  Icon(Icons.apps_rounded, color: K9.orange, size: 28),
+                  SizedBox(height: 8),
+                  FittedBox(fit: BoxFit.scaleDown, child: Text('Wszystkie', maxLines: 1, style: _tileText)),
+                ]),
+              ),
+            ),
+          ),
+        ]);
+      },
+    );
+  }
+}
+
+/// Zakładka Pies: wszystkie włączone funkcje, zwinięte w sekcje.
+class AllModulesCard extends StatefulWidget {
+  const AllModulesCard({super.key});
+
+  @override
+  State<AllModulesCard> createState() => _AllModulesCardState();
+}
+
+class _AllModulesCardState extends State<AllModulesCard> {
+  final _open = <ModuleSection>{};
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: modulesListenable,
+      builder: (context, _) {
+        final dog = AppStore.instance.dog!;
+        final on = ModuleStore.instance.enabled(dog).where((m) => !_inBottomBar.contains(m)).toList();
+        final rows = <Widget>[];
+        for (final sec in ModuleSection.values) {
+          final list = on.where((m) => m.section == sec).toList();
+          if (list.isEmpty) continue;
+          final open = _open.contains(sec);
+          final title = sec == ModuleSection.training && dog.purpose != null
+              ? 'Trening · ${dog.purpose!.label}'
+              : sec.label;
+          if (rows.isNotEmpty) rows.add(const Divider(height: 1, color: K9.border));
+          rows.add(InkWell(
+            onTap: () => setState(() => open ? _open.remove(sec) : _open.add(sec)),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              child: Row(children: [
+                Expanded(
+                    child: Text(title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15.5))),
+                Text('${list.length}', style: const TextStyle(color: K9.muted)),
+                const SizedBox(width: 6),
+                AnimatedRotation(
+                  turns: open ? 0.5 : 0,
+                  duration: const Duration(milliseconds: 200),
+                  child: const Icon(Icons.expand_more_rounded, color: K9.muted),
+                ),
+              ]),
+            ),
+          ));
+          rows.add(AnimatedSize(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+            alignment: Alignment.topCenter,
+            child: open
+                ? Column(children: [
+                    for (final m in list)
+                      ListRow(
+                        icon: m.icon,
+                        color: K9.orange,
+                        title: m.label,
+                        trailing: const Icon(Icons.chevron_right_rounded, color: K9.faint),
+                        onTap: () => openModule(context, m),
+                      ),
+                    const SizedBox(height: 6),
+                  ])
+                : const SizedBox(width: double.infinity),
+          ));
+        }
+        return K9Card(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            const SectionTitle('Wszystkie funkcje', icon: Icons.apps_rounded),
+            ...rows,
+          ]),
+        );
       },
     );
   }

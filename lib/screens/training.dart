@@ -5,38 +5,81 @@ import '../store.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import '../gps/records.dart';
+import 'calendar.dart';
 import 'forms.dart';
+import 'stats.dart';
 import 'gps_screen.dart';
 import 'track_detail.dart';
 
+/// Który segment zakładki Trening jest otwarty (0 dyscypliny … 3 statystyki).
+final trainingTab = ValueNotifier<int>(0);
+
 class TrainingScreen extends StatefulWidget {
   final int initialTab;
-  const TrainingScreen({super.key, this.initialTab = 0});
+
+  /// Pokazywany jako zakładka dolnego paska (bez przycisku wstecz i bez własnego „+”).
+  final bool inTab;
+  const TrainingScreen({super.key, this.initialTab = 0, this.inTab = false});
 
   @override
   State<TrainingScreen> createState() => _TrainingScreenState();
 }
 
 class _TrainingScreenState extends State<TrainingScreen> {
-  late int tab = widget.initialTab;
+  late int tab = widget.inTab ? trainingTab.value : widget.initialTab;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.inTab) trainingTab.addListener(_sync);
+  }
+
+  @override
+  void dispose() {
+    trainingTab.removeListener(_sync);
+    super.dispose();
+  }
+
+  void _sync() => setState(() => tab = trainingTab.value);
+
+  void _select(int i) {
+    if (widget.inTab) {
+      trainingTab.value = i;
+    } else {
+      setState(() => tab = i);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Trening')),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: K9.orange,
-        foregroundColor: Colors.black,
-        onPressed: () => openTrainingForm(context, planned: tab == 1),
-        child: const Icon(Icons.add_rounded, size: 30),
+      appBar: AppBar(
+        title: const Text('Trening'),
+        automaticallyImplyLeading: !widget.inTab,
+        actions: [
+          IconButton(
+            tooltip: 'Kalendarz',
+            onPressed: () => openCalendar(context),
+            icon: const Icon(Icons.calendar_month_outlined, color: K9.orange),
+          ),
+          const SizedBox(width: 4),
+        ],
       ),
+      floatingActionButton: widget.inTab || tab == 3
+          ? null
+          : FloatingActionButton(
+              backgroundColor: K9.orange,
+              foregroundColor: Colors.black,
+              onPressed: () => openTrainingForm(context, planned: tab == 1),
+              child: const Icon(Icons.add_rounded, size: 30),
+            ),
       body: Column(children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
           child: Segmented(
-              items: const ['Dyscypliny', 'Plan', 'Historia'],
+              items: const ['Dyscypliny', 'Plan', 'Historia', 'Statystyki'],
               index: tab,
-              onChanged: (i) => setState(() => tab = i)),
+              onChanged: _select),
         ),
         Expanded(
           child: AnimatedSwitcher(
@@ -44,7 +87,8 @@ class _TrainingScreenState extends State<TrainingScreen> {
             child: switch (tab) {
               0 => const _Disciplines(key: ValueKey(0)),
               1 => const WeekPlan(key: ValueKey(1)),
-              _ => const _History(key: ValueKey(2)),
+              2 => const _History(key: ValueKey(2)),
+              _ => const StatsScreen(key: ValueKey(3), embedded: true),
             },
           ),
         ),
@@ -62,7 +106,7 @@ class _Disciplines extends StatelessWidget {
     return ListenableBuilder(
       listenable: s,
       builder: (context, _) => ListView(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 120),
         children: [
           FadeSlideIn(index: 0, child: const GpsStartCard()),
           const SizedBox(height: 10),
@@ -155,7 +199,7 @@ class _WeekPlanState extends State<WeekPlan> {
     final s = AppStore.instance;
     return ListenableBuilder(
       listenable: s,
-      builder: (context, _) => ListView(padding: const EdgeInsets.fromLTRB(16, 0, 16, 100), children: [
+      builder: (context, _) => ListView(padding: const EdgeInsets.fromLTRB(16, 0, 16, 120), children: [
         Row(children: [
           IconButton(
               onPressed: () => setState(() => week = week.subtract(const Duration(days: 7))),
@@ -333,7 +377,7 @@ class TrainingHistoryList extends StatelessWidget {
         ),
       ));
     }
-    return ListView(padding: const EdgeInsets.fromLTRB(16, 0, 16, 100), children: children);
+    return ListView(padding: const EdgeInsets.fromLTRB(16, 0, 16, 120), children: children);
   }
 }
 

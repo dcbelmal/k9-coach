@@ -4,6 +4,7 @@ import '../gallery/gallery_screen.dart';
 import '../heat/heat_screen.dart';
 import '../models.dart';
 import '../nutrition/screens/nutrition_screen.dart';
+import '../screens/calendar.dart';
 import '../screens/documents.dart';
 import '../screens/forms.dart';
 import '../screens/gear.dart';
@@ -27,7 +28,7 @@ void openModule(BuildContext context, AppModule m) {
     case AppModule.profile:
       goToTab(3);
     case AppModule.training:
-      push(const TrainingScreen());
+      openTrainingTab(0);
     case AppModule.walks:
       push(const DisciplineScreen(discipline: Discipline.walk));
     case AppModule.feeding:
@@ -35,9 +36,9 @@ void openModule(BuildContext context, AppModule m) {
     case AppModule.foodStock:
       push(const StockScreen());
     case AppModule.calendar:
-      goToTab(1);
+      openCalendar(context);
     case AppModule.healthCalendar:
-      push(const HealthScreen());
+      goToTab(2);
     case AppModule.vaccinations:
       push(const HealthCategoryScreen(category: HealthCategory.vaccination));
     case AppModule.deworming:
@@ -51,7 +52,7 @@ void openModule(BuildContext context, AppModule m) {
     case AppModule.gallery:
       push(const GalleryScreen());
     case AppModule.stats:
-      goToTab(2);
+      openTrainingTab(3);
     case AppModule.gear:
       push(const GearScreen());
     case AppModule.goals:

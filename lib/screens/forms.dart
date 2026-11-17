@@ -561,122 +561,96 @@ class _WeightFormState extends State<_WeightForm> {
 
 /// Szybkie dodawanie (środkowy przycisk „+”).
 Future<void> openQuickAdd(BuildContext context) {
-  Widget tile(IconData icon, Color color, String label, VoidCallback onTap) => Expanded(
-    child: K9Card(
-      padding: const EdgeInsets.symmetric(vertical: 18),
-      onTap: onTap,
-      child: Column(
-        children: [
-          IconBadge(icon, color, size: 48),
-          const SizedBox(height: 10),
-          Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
-        ],
-      ),
+  // Wszystkie ikony w jednym kolorze Valkor. Najczęstsze na wierzchu, reszta pod „Więcej”.
+  final main = <(IconData, String, VoidCallback)>[
+    (Icons.route_rounded, 'Trening GPS', () => openGps(context)),
+    (Icons.directions_run_rounded, 'Trening', () => openTrainingForm(context)),
+    (Icons.restaurant_rounded, 'Karmienie', () => openFeedingForm(context)),
+    (Icons.vaccines_rounded, 'Zdrowie', () => openHealthForm(context)),
+    (Icons.monitor_weight_rounded, 'Waga', () => openWeightForm(context)),
+    (Icons.event_rounded, 'Wydarzenie', () => openEventForm(context)),
+  ];
+  final more = <(IconData, String, VoidCallback)>[
+    (
+      Icons.event_available_rounded,
+      'Plan treningu',
+      () => openTrainingForm(context,
+          planned: true, date: dayOnly(DateTime.now()).add(const Duration(days: 1, hours: 17)))
     ),
-  );
+    (Icons.cookie_rounded, 'Przysmak', () => openFeedingForm(context, kind: FeedKind.treat)),
+    (Icons.qr_code_scanner_rounded, 'Skanuj karmę', () => addProductFlow(context)),
+    (Icons.sports_rounded, 'Trening z nagrodami', () => openTreatTraining(context)),
+    (Icons.emoji_events_rounded, 'Wystawa', () => openShowForm(context)),
+    (Icons.description_rounded, 'Dokument', () => openDocumentForm(context)),
+    (Icons.backpack_rounded, 'Sprzęt', () => openGearForm(context)),
+  ];
+  var showMore = false;
   return showModalBottomSheet(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
-    builder: (c) => SingleChildScrollView(
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(20, 0, 20, 28 + MediaQuery.viewPaddingOf(c).bottom),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const SheetTitle('Dodaj'),
-            Row(
+    builder: (c) {
+      Widget tile((IconData, String, VoidCallback) e) => K9Card(
+            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 6),
+            onTap: () {
+              Navigator.pop(c);
+              e.$3();
+            },
+            child: Column(children: [
+              IconBadge(e.$1, K9.orange, size: 46),
+              const SizedBox(height: 10),
+              Text(e.$2,
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
+            ]),
+          );
+      Widget grid(List<(IconData, String, VoidCallback)> items) => GridView.count(
+            crossAxisCount: 3,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            mainAxisSpacing: 12,
+            crossAxisSpacing: 12,
+            childAspectRatio: 1.05,
+            padding: EdgeInsets.zero,
+            children: [for (final e in items) tile(e)],
+          );
+      Widget row((IconData, String, VoidCallback) e) => ListRow(
+            icon: e.$1,
+            color: K9.orange,
+            title: e.$2,
+            onTap: () {
+              Navigator.pop(c);
+              e.$3();
+            },
+          );
+      return StatefulBuilder(
+        builder: (c2, setState) => SingleChildScrollView(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(20, 0, 20, 28 + MediaQuery.viewPaddingOf(c).bottom),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                tile(Icons.route_rounded, K9.orange, 'Trening GPS', () {
-                  Navigator.pop(c);
-                  openGps(context);
-                }),
-                const SizedBox(width: 12),
-                tile(Icons.directions_run_rounded, K9.orange, 'Trening', () {
-                  Navigator.pop(c);
-                  openTrainingForm(context);
-                }),
-                const SizedBox(width: 12),
-                tile(Icons.event_available_rounded, K9.blue, 'Plan treningu', () {
-                  Navigator.pop(c);
-                  openTrainingForm(
-                    context,
-                    planned: true,
-                    date: dayOnly(DateTime.now()).add(const Duration(days: 1, hours: 17)),
-                  );
-                }),
+                const SheetTitle('Dodaj'),
+                grid(main),
+                const SizedBox(height: 8),
+                TextButton.icon(
+                  onPressed: () => setState(() => showMore = !showMore),
+                  icon: Icon(showMore ? Icons.expand_less_rounded : Icons.expand_more_rounded),
+                  label: Text(showMore ? 'Mniej' : 'Więcej'),
+                ),
+                if (showMore)
+                  K9Card(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    child: Column(children: [for (final e in more) row(e)]),
+                  ),
               ],
             ),
-            gap12,
-            Row(
-              children: [
-                tile(Icons.vaccines_rounded, K9.green, 'Zdrowie', () {
-                  Navigator.pop(c);
-                  openHealthForm(context);
-                }),
-                const SizedBox(width: 12),
-                tile(Icons.event_rounded, K9.yellow, 'Wydarzenie', () {
-                  Navigator.pop(c);
-                  openEventForm(context);
-                }),
-                const SizedBox(width: 12),
-                tile(Icons.monitor_weight_rounded, const Color(0xFFBF5AF2), 'Waga', () {
-                  Navigator.pop(c);
-                  openWeightForm(context);
-                }),
-              ],
-            ),
-            gap12,
-            Row(
-              children: [
-                tile(Icons.emoji_events_rounded, const Color(0xFFFFB020), 'Wystawa', () {
-                  Navigator.pop(c);
-                  openShowForm(context);
-                }),
-                const SizedBox(width: 12),
-                tile(Icons.description_rounded, K9.red, 'Dokument', () {
-                  Navigator.pop(c);
-                  openDocumentForm(context);
-                }),
-                const SizedBox(width: 12),
-                tile(Icons.backpack_rounded, const Color(0xFF30B0C7), 'Sprzęt', () {
-                  Navigator.pop(c);
-                  openGearForm(context);
-                }),
-              ],
-            ),
-            gap12,
-            Row(
-              children: [
-                tile(Icons.restaurant_rounded, K9.orange, 'Karmienie', () {
-                  Navigator.pop(c);
-                  openFeedingForm(context);
-                }),
-                const SizedBox(width: 12),
-                tile(Icons.cookie_rounded, K9.yellow, 'Przysmak', () {
-                  Navigator.pop(c);
-                  openFeedingForm(context, kind: FeedKind.treat);
-                }),
-                const SizedBox(width: 12),
-                tile(Icons.qr_code_scanner_rounded, K9.green, 'Skanuj karmę', () {
-                  Navigator.pop(c);
-                  addProductFlow(context);
-                }),
-              ],
-            ),
-            gap12,
-            Row(
-              children: [
-                tile(Icons.sports_rounded, K9.blue, 'Trening z nagrodami', () {
-                  Navigator.pop(c);
-                  openTreatTraining(context);
-                }),
-              ],
-            ),
-          ],
+          ),
         ),
-      ),
-    ),
+      );
+    },
   );
 }
