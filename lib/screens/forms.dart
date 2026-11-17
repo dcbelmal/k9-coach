@@ -7,6 +7,10 @@ import '../widgets/common.dart';
 import 'documents.dart';
 import 'gear.dart';
 import 'gps_screen.dart';
+import '../nutrition/nutrition_models.dart';
+import '../nutrition/screens/nutrition_forms.dart';
+import '../nutrition/screens/products_screen.dart';
+import '../nutrition/screens/treat_training_screen.dart';
 import 'shows.dart';
 
 final _store = AppStore.instance;
@@ -639,6 +643,34 @@ Future<void> openQuickAdd(BuildContext context) {
                 tile(Icons.backpack_rounded, const Color(0xFF30B0C7), 'Sprzęt', () {
                   Navigator.pop(c);
                   openGearForm(context);
+                }),
+              ],
+            ),
+            gap12,
+            Row(
+              children: [
+                tile(Icons.restaurant_rounded, K9.orange, 'Karmienie', () {
+                  Navigator.pop(c);
+                  openFeedingForm(context);
+                }),
+                const SizedBox(width: 12),
+                tile(Icons.cookie_rounded, K9.yellow, 'Przysmak', () {
+                  Navigator.pop(c);
+                  openFeedingForm(context, kind: FeedKind.treat);
+                }),
+                const SizedBox(width: 12),
+                tile(Icons.qr_code_scanner_rounded, K9.green, 'Skanuj karmę', () {
+                  Navigator.pop(c);
+                  addProductFlow(context);
+                }),
+              ],
+            ),
+            gap12,
+            Row(
+              children: [
+                tile(Icons.sports_rounded, K9.blue, 'Trening z nagrodami', () {
+                  Navigator.pop(c);
+                  openTreatTraining(context);
                 }),
               ],
             ),

@@ -7,6 +7,7 @@ import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
 import 'models_ext.dart';
+import 'nutrition/nutrition_store.dart';
 import 'store.dart';
 
 /// Lokalne przypomnienia (szczepienia, odrobaczanie, wydarzenia, treningi).
@@ -75,6 +76,20 @@ class Notifications {
   /// (widoczną też na ekranie blokady).
   static const liveId = 75415;
   static const goalId = 75416;
+
+  /// Moduł Żywienie: codzienne przypomnienia (61–69) i zmiana dawki.
+  static const dailyBaseId = 61;
+  static const doseChangeId = 75417;
+
+  /// Natychmiastowe powiadomienie (np. zmiana dawki karmy).
+  Future<void> showNow(int id, String title, String body) async {
+    if (!_ready) return;
+    try {
+      await _plugin.show(id: id, title: title, body: body, notificationDetails: _details);
+    } catch (e) {
+      debugPrint('Powiadomienie: $e');
+    }
+  }
 
   static const _liveChannel = AndroidNotificationDetails(
     'k9_training_live',
@@ -213,11 +228,30 @@ class Notifications {
         plan.add((DateTime(r.year, r.month, r.day, 10), 'Czas wymienić sprzęt', g.name));
       }
 
+      plan.addAll(NutritionStore.instance.notificationPlan());
+
+      // Codzienne (powtarzalne) przypomnienia o karmieniu i suplementach.
+      final daily = NutritionStore.instance.dailyReminders().take(8).toList();
+      for (final (i, d) in daily.indexed) {
+        var at = DateTime(now.year, now.month, now.day, d.$1, d.$2);
+        if (!at.isAfter(now)) at = at.add(const Duration(days: 1));
+        await _plugin.zonedSchedule(
+          id: dailyBaseId + i,
+          title: d.$3,
+          body: d.$4,
+          scheduledDate: tz.TZDateTime.from(at, tz.local),
+          notificationDetails: _details,
+          androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+          matchDateTimeComponents: DateTimeComponents.time,
+        );
+      }
+
       plan.sort((a, b) => a.$1.compareTo(b.$1));
       var id = 0;
+      final limit = 60 - daily.length; // limit iOS: 64 zaplanowane powiadomienia
       for (final p in plan) {
         if (!p.$1.isAfter(now)) continue;
-        if (id >= 60) break; // limit iOS: 64 zaplanowane powiadomienia
+        if (id >= limit) break;
         await _plugin.zonedSchedule(
           id: id++,
           title: p.$2,

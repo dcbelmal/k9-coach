@@ -12,6 +12,7 @@ import 'gps/demo_track.dart';
 import 'models.dart';
 import 'models_ext.dart';
 import 'notifications.dart';
+import 'nutrition/nutrition_store.dart';
 
 DateTime dayOnly(DateTime d) => DateTime(d.year, d.month, d.day);
 bool sameDay(DateTime a, DateTime b) =>
@@ -148,6 +149,7 @@ class AppStore extends ChangeNotifier {
     documents = [];
     gear = [];
     goals = [];
+    await NutritionStore.instance.reset();
     await _save();
   }
 
@@ -717,6 +719,7 @@ class AppStore extends ChangeNotifier {
       Goal(id: 'c4', type: GoalType.km, title: '1000 km w roku', start: DateTime(now.year), deadline: DateTime(now.year, 12, 31), target: 1000),
       Goal(id: 'c5', type: GoalType.weight, title: 'Waga docelowa 22 kg', start: today.subtract(const Duration(days: 180)), target: 22),
     ];
+    await NutritionStore.instance.loadDemo();
     await _save();
   }
 }
