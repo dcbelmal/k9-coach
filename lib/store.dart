@@ -8,9 +8,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'champ_rules.dart';
 import 'files/file_store.dart';
+import 'gallery/gallery_store.dart';
 import 'gps/demo_track.dart';
+import 'heat/heat_store.dart';
 import 'models.dart';
 import 'models_ext.dart';
+import 'modules/module_store.dart';
 import 'notifications.dart';
 import 'nutrition/nutrition_store.dart';
 
@@ -150,6 +153,9 @@ class AppStore extends ChangeNotifier {
     gear = [];
     goals = [];
     await NutritionStore.instance.reset();
+    await ModuleStore.instance.reset();
+    await HeatStore.instance.reset();
+    await GalleryStore.instance.reset();
     await _save();
   }
 
@@ -491,6 +497,9 @@ class AppStore extends ChangeNotifier {
       targetWeightKg: 22,
       weeklyKmGoal: 35,
       fciGroup: 1,
+      breedId: 'malinois',
+      activity: DogActivity.veryHigh,
+      purpose: DogPurpose.sport,
     );
     try {
       final bytes = await rootBundle.load('assets/demo_gamora.jpg');
@@ -720,6 +729,7 @@ class AppStore extends ChangeNotifier {
       Goal(id: 'c5', type: GoalType.weight, title: 'Waga docelowa 22 kg', start: today.subtract(const Duration(days: 180)), target: 22),
     ];
     await NutritionStore.instance.loadDemo();
+    await HeatStore.instance.loadDemo();
     await _save();
   }
 }

@@ -6,6 +6,7 @@ import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
+import 'heat/heat_store.dart';
 import 'models_ext.dart';
 import 'nutrition/nutrition_store.dart';
 import 'store.dart';
@@ -229,6 +230,7 @@ class Notifications {
       }
 
       plan.addAll(NutritionStore.instance.notificationPlan());
+      plan.addAll(HeatStore.instance.notificationPlan());
 
       // Codzienne (powtarzalne) przypomnienia o karmieniu i suplementach.
       final daily = NutritionStore.instance.dailyReminders().take(8).toList();
