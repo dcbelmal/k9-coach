@@ -358,7 +358,9 @@ Future<bool> importFromWeb(BuildContext context, FoodProduct p) async {
           ? 'Nie udało się otworzyć strony. Sprawdź internet albo skopiuj tekst ze strony i wklej go tutaj.'
           : r.values.isEmpty
               ? 'Na tej stronie nie znalazłem składu ani wartości. Otwórz ją w przeglądarce, skopiuj tekst „Składniki analityczne” i wklej.'
-              : 'Pobrano: $filled ${filled == 1 ? 'pole' : (filled < 5 ? 'pola' : 'pól')}. Sprawdź dane przed zapisem.');
+              : 'Pobrano: $filled ${filled == 1 ? 'pole' : (filled < 5 ? 'pola' : 'pól')}. '
+                  '${p.kcalPer100g == null && p.estimatedKcalPer100g != null ? 'Strona nie podaje kalorii – liczę je ze składu (ok. ${p.estimatedKcalPer100g!.round()} kcal/100 g). Jeśli znasz dokładną wartość z worka, wpisz ją. ' : ''}'
+                  'Sprawdź dane przed zapisem.');
   return true;
 }
 

@@ -27,15 +27,17 @@ class _Entry {
 
 class FoodCatalog {
   static const _entries = [
-    // pro.royalcanin.co.uk/products/dog/energy-4800 – białko 32%, tłuszcz 30%,
-    // ok. 4800 kcal/kg (od tego nazwa karmy).
+    // royalcanin.com/pl (Sporting Life Energy 4800) – białko 32%, tłuszcz 30%, popiół 8,3%, włókno 2%,
+    // 4522 kcal/kg – wartość z worka (podał Dawid).
     _Entry(
       codes: ['3182550837866'],
       brand: 'Royal Canin',
       name: 'Cyno Energy 4800',
-      kcalPer100g: 480,
+      kcalPer100g: 452,
       protein: 32,
       fat: 30,
+      fiber: 2,
+      ash: 8.3,
       packageGrams: 20000,
       composition: 'Odwodnione białko drobiowe, tłuszcze zwierzęce, ryż, izolat białka roślinnego, '
           'hydrolizowane białka zwierzęce, wysłodki buraczane, włókna roślinne, olej rybny, składniki mineralne, '
