@@ -58,6 +58,7 @@ const _inBottomBar = {AppModule.profile, AppModule.training, AppModule.healthCal
 
 /// Kolejność, w jakiej moduły trafiają do skrótów na ekranie Start.
 const _shortcutOrder = [
+  AppModule.calendar,
   AppModule.walks,
   AppModule.documents,
   AppModule.goals,
