@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart' show Clipboard;
 import 'package:material_ui/material_ui.dart';
 
 import '../../files/file_store.dart';
@@ -8,6 +9,7 @@ import '../../widgets/photo.dart';
 import '../nutrition_models.dart';
 import '../nutrition_store.dart';
 import '../product_lookup.dart';
+import '../web_import.dart';
 import 'label_capture.dart';
 import 'scanner_screen.dart';
 
@@ -180,6 +182,12 @@ Future<FoodProduct?> addProductFlow(BuildContext context, {ProductType? type}) a
             subtitle: 'Odczytam skład, białko, tłuszcz i kcal ze zdjęcia',
             onTap: () => Navigator.pop(c, 1)),
         ListRow(
+            icon: Icons.link_rounded,
+            color: K9.yellow,
+            title: 'Link ze strony producenta',
+            subtitle: 'Wklej adres strony karmy albo skopiowany tekst',
+            onTap: () => Navigator.pop(c, 3)),
+        ListRow(
             icon: Icons.edit_note_rounded,
             color: K9.green,
             title: 'Wpisz ręcznie',
@@ -198,6 +206,10 @@ Future<FoodProduct?> addProductFlow(BuildContext context, {ProductType? type}) a
       if (cap == null || !context.mounted) return null;
       final draft = FoodProduct(id: newId(), name: '', type: type ?? ProductType.dry, photo: cap.photo);
       toast(context, labelResultMessage(cap, applyLabel(draft, cap.values)));
+      return openProductForm(context, draft: draft);
+    case 3:
+      final draft = FoodProduct(id: newId(), name: '', type: type ?? ProductType.dry);
+      if (!await importFromWeb(context, draft) || !context.mounted) return null;
       return openProductForm(context, draft: draft);
     default:
       return openProductForm(context, draft: FoodProduct(id: newId(), name: '', type: type ?? ProductType.dry));
@@ -268,6 +280,88 @@ Future<FoodProduct?> productFromCode(BuildContext context, String code, {Product
   return openProductForm(context, draft: draft);
 }
 
+/// Pyta o link (albo wklejony tekst), pobiera stronę i uzupełnia puste pola produktu.
+/// Zwraca false, gdy użytkownik zrezygnował.
+Future<bool> importFromWeb(BuildContext context, FoodProduct p) async {
+  final ctrl = TextEditingController();
+  try {
+    final clip = (await Clipboard.getData('text/plain'))?.text ?? '';
+    if (WebImport.findUrl(clip) != null && clip.length < 500) ctrl.text = clip.trim();
+  } catch (_) {}
+  if (!context.mounted) return false;
+  final input = await showDialog<String>(
+    context: context,
+    builder: (c) => AlertDialog(
+      title: const Text('Strona producenta'),
+      content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        const Text(
+            'Wklej link do strony tej karmy (producent albo sklep). '
+            'Możesz też wkleić skopiowany ze strony tekst ze składem i analizą.',
+            style: TextStyle(color: K9.muted)),
+        gap12,
+        TextField(
+          controller: ctrl,
+          autofocus: true,
+          minLines: 1,
+          maxLines: 5,
+          keyboardType: TextInputType.multiline,
+          decoration: InputDecoration(
+            labelText: 'Link lub tekst',
+            hintText: 'https://…',
+            suffixIcon: IconButton(
+              tooltip: 'Wklej',
+              icon: const Icon(Icons.content_paste_rounded),
+              onPressed: () async {
+                final t = (await Clipboard.getData('text/plain'))?.text;
+                if (t != null) ctrl.text = t.trim();
+              },
+            ),
+          ),
+        ),
+      ]),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(c), child: const Text('Anuluj')),
+        TextButton(onPressed: () => Navigator.pop(c, ctrl.text.trim()), child: const Text('Pobierz dane')),
+      ],
+    ),
+  );
+  if (input == null || input.isEmpty || !context.mounted) return false;
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => const AlertDialog(
+      content: Row(children: [
+        SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 3)),
+        SizedBox(width: 16),
+        Expanded(child: Text('Czytam stronę…')),
+      ]),
+    ),
+  );
+  final r = await WebImport.fromInput(input);
+  if (!context.mounted) return true;
+  Navigator.of(context).pop();
+  var filled = applyLabel(p, r.values);
+  if (p.name.isEmpty && r.name.isNotEmpty) {
+    p.name = r.name;
+    filled++;
+  }
+  if (p.brand.isEmpty && r.brand.isNotEmpty && r.brand.length < 30) p.brand = r.brand;
+  if (p.photo == null && r.image != null) {
+    try {
+      p.photo = await FileStore.save(r.image!);
+    } catch (_) {}
+  }
+  if (!context.mounted) return true;
+  toast(
+      context,
+      !r.fetched
+          ? 'Nie udało się otworzyć strony. Sprawdź internet albo skopiuj tekst ze strony i wklej go tutaj.'
+          : r.values.isEmpty
+              ? 'Na tej stronie nie znalazłem składu ani wartości. Otwórz ją w przeglądarce, skopiuj tekst „Składniki analityczne” i wklej.'
+              : 'Pobrano: $filled ${filled == 1 ? 'pole' : (filled < 5 ? 'pola' : 'pól')}. Sprawdź dane przed zapisem.');
+  return true;
+}
+
 Future<FoodProduct?> openProductForm(BuildContext context, {FoodProduct? existing, FoodProduct? draft}) =>
     showFormSheet<FoodProduct>(context, _ProductForm(existing: existing, draft: draft));
 
@@ -330,6 +424,12 @@ class _ProductFormState extends State<_ProductForm> {
       _toFields();
     });
     toast(context, labelResultMessage(cap, n));
+  }
+
+  Future<void> _readWeb() async {
+    _collect();
+    await importFromWeb(context, p);
+    if (mounted) setState(_toFields);
   }
 
   void _collect() {
@@ -448,10 +548,15 @@ class _ProductFormState extends State<_ProductForm> {
       gap16,
       Row(children: [
         const Expanded(child: Text('Wartości z etykiety', style: TextStyle(fontWeight: FontWeight.w700))),
+        IconButton(
+          tooltip: 'Pobierz ze strony producenta',
+          onPressed: _readWeb,
+          icon: const Icon(Icons.link_rounded, color: K9.yellow),
+        ),
         TextButton.icon(
           onPressed: _readLabel,
           icon: const Icon(Icons.document_scanner_rounded, size: 20),
-          label: const Text('Odczytaj ze zdjęcia'),
+          label: const Text('Ze zdjęcia'),
         ),
       ]),
       const SizedBox(height: 4),
