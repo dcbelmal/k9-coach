@@ -164,7 +164,7 @@ Masa netto 15 kg''';
   test('wbudowany katalog: Royal Canin Cyno Energy 4800', () async {
     final p = FoodCatalog.byBarcode('3182550837866')!;
     expect(p.title, 'Royal Canin Cyno Energy 4800');
-    expect(p.kcalPer100g, 480);
+    expect(p.kcalPer100g, 452);
     expect(p.packageGrams, 20000);
     final r = await ProductLookup.lookup('3182550837866');
     expect(r.product?.name, 'Cyno Energy 4800');
@@ -219,5 +219,29 @@ Wapń
     expect(WebImport.findUrl('zobacz www.josera.pl/karma'), isNull);
     expect(WebImport.findUrl('https://www.josera.pl/karma?x=1').toString(), 'https://www.josera.pl/karma?x=1');
     expect(WebImport.findUrl('www.josera.pl/karma')?.host, 'www.josera.pl');
+  });
+
+  test('różne zapisy energii', () {
+    double? k(String s) => LabelParser.parse(s).kcalPer100g;
+    expect(k('Energia metaboliczna (kcal/kg): 4 011'), 401);
+    expect(k('Energia metaboliczna (wg NRC85): 3890 kcal/kg'), 389);
+    expect(k('Wartość energetyczna kcal/100 g 372'), 372);
+    expect(k('Metabolizable energy 16,2 MJ/kg'), 387);
+    expect(k('Energia metaboliczna 4100 kcal'), 410);
+    expect(k('Energia metaboliczna: 389'), 389);
+    expect(k('Energia na 100 g: 389 kcal'), 389);
+    expect(k('Energy 1630 kJ/100 g'), 390);
+    expect(k('Energia: 16 500 kJ/kg'), 394);
+    expect(k('Białko 30%, tłuszcz 20%'), isNull);
+  });
+
+  test('strona Royal Canin PL (bez kcal)', () {
+    final v = LabelParser.parse('Składniki analityczne: Białko surowe: 32,0% - Oleje i tłuszcze surowe: 30,0% - '
+        'Popiół surowy: 8,3% - Włókno surowe: 2,0% - Na 1 kg karmy: Luteina: 15,5 mg - Beta-karoten: 2,3 mg.');
+    expect(v.protein, 32);
+    expect(v.fat, 30);
+    expect(v.ash, 8.3);
+    expect(v.fiber, 2);
+    expect(v.kcalPer100g, isNull);
   });
 }

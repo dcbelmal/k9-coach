@@ -70,23 +70,7 @@ class LabelParser {
     _columns(section, v);
 
     // Energia.
-    final kcalKg = RegExp(r'(\d[\d .]{2,6})\s*kcal\s*(?:me\s*|em\s*)?(?:/|na|per|pro|par)\s*(?:1\s*kg|kg|1000\s*g)').firstMatch(flat) ??
-        RegExp(r'(?:^|[^\d.])(\d \d{3}|\d{4})\s*kcal\b(?!\s*/?\s*(?:na\s*)?100)').firstMatch(flat);
-    final kcal100 = RegExp(r'(\d{2,3}(?:\.\d)?)\s*kcal\s*/?\s*(?:na\s*)?100\s*g').firstMatch(flat);
-    final mj = RegExp(r'(\d{1,2}(?:\.\d{1,2})?)\s*mj\s*/\s*kg').firstMatch(flat);
-    final kj100 = RegExp(r'(\d{3,4})\s*kj\s*/?\s*(?:na\s*)?100\s*g').firstMatch(flat);
-    if (kcal100 != null) {
-      v.kcalPer100g = double.tryParse(kcal100.group(1)!);
-    } else if (kcalKg != null) {
-      final x = double.tryParse(kcalKg.group(1)!.replaceAll(RegExp(r'[ .]'), ''));
-      if (x != null && x > 300) v.kcalPer100g = x / 10;
-    } else if (mj != null) {
-      final x = double.tryParse(mj.group(1)!);
-      if (x != null) v.kcalPer100g = x * 239 / 10;
-    } else if (kj100 != null) {
-      final x = double.tryParse(kj100.group(1)!);
-      if (x != null) v.kcalPer100g = x / 4.184;
-    }
+    v.kcalPer100g = _energy(flat);
     if (v.kcalPer100g != null) {
       v.kcalPer100g = double.parse(v.kcalPer100g!.toStringAsFixed(0));
       if (v.kcalPer100g! < 40 || v.kcalPer100g! > 700) v.kcalPer100g = null;
@@ -174,5 +158,48 @@ class LabelParser {
       }
       i = j + 1;
     }
+  }
+
+  /// Kaloryczność w kcal/100 g z różnych zapisów: „3 890 kcal/kg”, „kcal/kg: 3890”,
+  /// „389 kcal/100 g”, „Energia metaboliczna 15,9 MJ/kg”, „1630 kJ/100 g”, „Energia: 3890”.
+  static double? _energy(String t) {
+    double? n(String s) => double.tryParse(s.replaceAll(' ', ''));
+    double? per100(double? x) => x == null ? null : (x >= 1000 ? x / 10 : x);
+    const num = r'(\d(?:[\d ]{0,5}\d)?(?:\.\d{1,2})?)';
+    const kg = r'(?:kg|1\s*kg|1000\s*g)';
+    final rules = <(String, double? Function(double))>[
+      ('$num\\s*kcal\\s*(?:me\\s*|em\\s*)?(?:/|na|per|pro|par|w)?\\s*100\\s*g', (x) => x),
+      ('kcal\\s*(?:me\\s*|em\\s*)?(?:/|na|per|w)\\s*100\\s*g\\)?\\s*[:=-]?\\s*$num(?!\\s*%)', (x) => x),
+      ('100\\s*g\\)?\\s*[:=-]?\\s*$num\\s*kcal', (x) => x),
+      ('$num\\s*kcal\\s*(?:me\\s*|em\\s*)?(?:/|na|per|pro|par)\\s*$kg', (x) => x / 10),
+      ('kcal\\s*(?:me\\s*|em\\s*)?(?:/|na|per)\\s*$kg\\)?\\s*[:=-]?\\s*$num(?!\\s*%)', (x) => x / 10),
+      ('$num\\s*mj\\s*(?:me\\s*)?(?:/|na|per)\\s*$kg', (x) => x * 23.9),
+      ('mj\\s*(?:/|na|per)\\s*$kg\\)?\\s*[:=-]?\\s*$num', (x) => x * 23.9),
+      ('$num\\s*kj\\s*(?:/|na|per|w)?\\s*100\\s*g', (x) => x / 4.184),
+      ('$num\\s*kj\\s*(?:/|na|per)\\s*$kg', (x) => x / 41.84),
+      // „Energia metaboliczna … 3890 kcal” / „Energy: 389” – bez jednostki na kg/100 g.
+      ('(?:energia metaboliczna|warto[śs][ćc] energetyczna|energia|metaboli[sz]able energy|energy|umsetzbare energie|energie|énergie)'
+          '[^0-9%]{0,40}?$num\\s*(kcal|kj|mj)?(?!\\s*(?:%|g\\b|kg\\b|[\\d.]))', (x) => x),
+      ('(?:^|[^\\d.])(\\d \\d{3}|\\d{4})\\s*kcal\\b', (x) => x / 10),
+    ];
+    for (var i = 0; i < rules.length; i++) {
+      for (final m in RegExp(rules[i].$1).allMatches(t)) {
+        final x = n(m.group(1)!);
+        if (x == null) continue;
+        double? r;
+        if (i == rules.length - 2) {
+          final unit = m.groupCount >= 2 ? m.group(2) : null;
+          r = switch (unit) {
+            'mj' => x * 23.9,
+            'kj' => x >= 3000 ? x / 41.84 : x / 4.184,
+            _ => per100(x),
+          };
+        } else {
+          r = rules[i].$2(x);
+        }
+        if (r != null && r >= 40 && r <= 700) return r;
+      }
+    }
+    return null;
   }
 }
