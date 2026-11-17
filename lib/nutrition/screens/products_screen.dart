@@ -8,6 +8,7 @@ import '../../widgets/photo.dart';
 import '../nutrition_models.dart';
 import '../nutrition_store.dart';
 import '../product_lookup.dart';
+import 'label_capture.dart';
 import 'scanner_screen.dart';
 
 final _n = NutritionStore.instance;
@@ -170,13 +171,13 @@ Future<FoodProduct?> addProductFlow(BuildContext context, {ProductType? type}) a
             icon: Icons.qr_code_scanner_rounded,
             color: K9.orange,
             title: 'Skanuj kod kreskowy lub QR',
-            subtitle: 'Szukam w bazie Open Pet Food Facts',
+            subtitle: 'Szukam w darmowych bazach produktów',
             onTap: () => Navigator.pop(c, 0)),
         ListRow(
             icon: Icons.photo_camera_rounded,
             color: K9.blue,
-            title: 'Zdjęcie opakowania',
-            subtitle: 'Zachowam zdjęcie etykiety przy produkcie',
+            title: 'Zdjęcie etykiety',
+            subtitle: 'Odczytam skład, białko, tłuszcz i kcal ze zdjęcia',
             onTap: () => Navigator.pop(c, 1)),
         ListRow(
             icon: Icons.edit_note_rounded,
@@ -193,9 +194,11 @@ Future<FoodProduct?> addProductFlow(BuildContext context, {ProductType? type}) a
       if (code == null || !context.mounted) return null;
       return productFromCode(context, code, type: type);
     case 1:
-      final photo = await pickPhoto(context);
-      if (photo == null || !context.mounted) return null;
-      return openProductForm(context, draft: FoodProduct(id: newId(), name: '', type: type ?? ProductType.dry, photo: photo));
+      final cap = await captureLabel(context);
+      if (cap == null || !context.mounted) return null;
+      final draft = FoodProduct(id: newId(), name: '', type: type ?? ProductType.dry, photo: cap.photo);
+      toast(context, labelResultMessage(cap, applyLabel(draft, cap.values)));
+      return openProductForm(context, draft: draft);
     default:
       return openProductForm(context, draft: FoodProduct(id: newId(), name: '', type: type ?? ProductType.dry));
   }
@@ -219,24 +222,50 @@ Future<FoodProduct?> productFromCode(BuildContext context, String code, {Product
       ]),
     ),
   );
-  final found = await ProductLookup.byBarcode(code);
+  final res = await ProductLookup.lookup(code);
   if (!context.mounted) return null;
   Navigator.of(context).pop();
   final isEan = RegExp(r'^\d{6,14}$').hasMatch(code);
-  if (found == null) {
-    toast(context, isEan ? 'Nie znaleziono w bazie online – uzupełnij dane z etykiety' : 'Odczytany kod QR: $code');
+  var draft = res.product;
+  if (draft == null) {
+    draft = FoodProduct(id: newId(), name: isEan ? '' : code, barcode: isEan ? code : '', type: type ?? ProductType.dry);
+    if (!isEan) {
+      toast(context, 'Odczytany kod QR: $code');
+      return openProductForm(context, draft: draft);
+    }
+    final photo = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: Text(res.offline ? 'Brak internetu' : 'Nie znalazłem tej karmy'),
+        content: Text(res.offline
+            ? 'Nie mogę sprawdzić kodu bez internetu. Zrób zdjęcie etykiety – odczytam wartości na telefonie.'
+            : 'Kodu $code nie ma w darmowych bazach (${res.checked.join(', ')}). '
+                'Zrób zdjęcie tyłu opakowania, a odczytam skład, białko, tłuszcz i kalorie. '
+                'Nazwę i producenta wpisz raz – potem ten kod rozpoznam od razu.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Wpiszę ręcznie')),
+          TextButton(onPressed: () => Navigator.pop(c, true), child: const Text('Zdjęcie etykiety')),
+        ],
+      ),
+    );
+    if (!context.mounted) return null;
+    if (photo == true) {
+      final cap = await captureLabel(context);
+      if (!context.mounted) return null;
+      if (cap != null) {
+        draft.photo = cap.photo;
+        toast(context, labelResultMessage(cap, applyLabel(draft, cap.values)));
+      }
+    }
   } else {
-    toast(context, 'Znaleziono: ${found.title}. Sprawdź dane.');
+    final missing = draft.kcalPer100g == null && draft.proteinPct == null;
+    toast(
+        context,
+        missing
+            ? 'Znaleziono: ${draft.title}, ale bez wartości odżywczych. Dodaj zdjęcie etykiety w formularzu.'
+            : 'Znaleziono: ${draft.title}. Sprawdź dane.');
   }
-  return openProductForm(
-    context,
-    draft: found ??
-        FoodProduct(
-            id: newId(),
-            name: isEan ? '' : code,
-            barcode: isEan ? code : '',
-            type: type ?? ProductType.dry),
-  );
+  return openProductForm(context, draft: draft);
 }
 
 Future<FoodProduct?> openProductForm(BuildContext context, {FoodProduct? existing, FoodProduct? draft}) =>
@@ -271,6 +300,11 @@ class _ProductFormState extends State<_ProductForm> {
     super.initState();
     final src = widget.existing ?? widget.draft ?? FoodProduct(id: newId(), name: '');
     p = FoodProduct.fromJson(src.toJson());
+    _toFields();
+    makeMain = _n.settings.mainProductId == p.id || (_n.mainProduct == null && p.type.isMainFood);
+  }
+
+  void _toFields() {
     String f(double? v) => v == null ? '' : fmtNum(v, v == v.roundToDouble() ? 0 : 1);
     name.text = p.name;
     brand.text = p.brand;
@@ -284,7 +318,18 @@ class _ProductFormState extends State<_ProductForm> {
     pack.text = p.packageGrams == null ? '' : fmtNum(p.packageGrams! / 1000, 2).replaceAll(RegExp(r',?0+$'), '');
     piece.text = f(p.pieceGrams);
     comp.text = p.composition;
-    makeMain = _n.settings.mainProductId == p.id || (_n.mainProduct == null && p.type.isMainFood);
+  }
+
+  Future<void> _readLabel() async {
+    _collect();
+    final cap = await captureLabel(context, savePhoto: p.photo == null);
+    if (cap == null || !mounted) return;
+    final n = applyLabel(p, cap.values);
+    setState(() {
+      p.photo ??= cap.photo;
+      _toFields();
+    });
+    toast(context, labelResultMessage(cap, n));
   }
 
   void _collect() {
@@ -316,10 +361,11 @@ class _ProductFormState extends State<_ProductForm> {
     final c = await scanCode(context);
     if (c == null || !mounted) return;
     code.text = c;
-    final found = await ProductLookup.byBarcode(c);
+    final res = await ProductLookup.lookup(c);
     if (!mounted) return;
+    final found = res.product;
     if (found == null) {
-      toast(context, 'Nie znaleziono w bazie online');
+      toast(context, res.offline ? 'Brak internetu – użyj zdjęcia etykiety' : 'Nie ma w darmowych bazach – użyj „Odczytaj z etykiety”');
       return;
     }
     setState(() {
@@ -400,8 +446,15 @@ class _ProductFormState extends State<_ProductForm> {
         ),
       ),
       gap16,
-      const Text('Wartości z etykiety', style: TextStyle(fontWeight: FontWeight.w700)),
-      const SizedBox(height: 8),
+      Row(children: [
+        const Expanded(child: Text('Wartości z etykiety', style: TextStyle(fontWeight: FontWeight.w700))),
+        TextButton.icon(
+          onPressed: _readLabel,
+          icon: const Icon(Icons.document_scanner_rounded, size: 20),
+          label: const Text('Odczytaj ze zdjęcia'),
+        ),
+      ]),
+      const SizedBox(height: 4),
       Row(children: [
         _num(kcal, 'kcal / 100 g'),
         const SizedBox(width: 10),
