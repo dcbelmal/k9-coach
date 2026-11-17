@@ -220,4 +220,18 @@ Wapń
     expect(WebImport.findUrl('https://www.josera.pl/karma?x=1').toString(), 'https://www.josera.pl/karma?x=1');
     expect(WebImport.findUrl('www.josera.pl/karma')?.host, 'www.josera.pl');
   });
+
+  test('różne zapisy energii', () {
+    double? k(String s) => LabelParser.parse(s).kcalPer100g;
+    expect(k('Energia metaboliczna (kcal/kg): 4 011'), 401);
+    expect(k('Energia metaboliczna (wg NRC85): 3890 kcal/kg'), 389);
+    expect(k('Wartość energetyczna kcal/100 g 372'), 372);
+    expect(k('Metabolizable energy 16,2 MJ/kg'), 387);
+    expect(k('Energia metaboliczna 4100 kcal'), 410);
+    expect(k('Energia metaboliczna: 389'), 389);
+    expect(k('Energia na 100 g: 389 kcal'), 389);
+    expect(k('Energy 1630 kJ/100 g'), 390);
+    expect(k('Energia: 16 500 kJ/kg'), 394);
+    expect(k('Białko 30%, tłuszcz 20%'), isNull);
+  });
 }
