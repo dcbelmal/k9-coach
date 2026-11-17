@@ -57,10 +57,10 @@ class _TrainingScreenState extends State<TrainingScreen> {
         title: const Text('Trening'),
         automaticallyImplyLeading: !widget.inTab,
         actions: [
-          IconButton(
-            tooltip: 'Kalendarz',
+          TextButton.icon(
             onPressed: () => openCalendar(context),
             icon: const Icon(Icons.calendar_month_outlined, color: K9.orange),
+            label: const Text('Kalendarz', style: TextStyle(color: K9.orange, fontWeight: FontWeight.w700)),
           ),
           const SizedBox(width: 4),
         ],
