@@ -5,15 +5,17 @@ import '../store.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import '../models_ext.dart';
+import '../heat/heat_screen.dart';
+import '../modules/module_store.dart';
+import '../modules/modules.dart';
+import '../modules/modules_ui.dart';
 import '../nutrition/screens/nutrition_home_card.dart';
 import 'documents.dart';
 import 'gear.dart';
-import 'goals.dart';
+import 'profile.dart';
 import 'shows.dart';
 import 'forms.dart';
-import 'health.dart';
 import 'shell.dart';
-import 'training.dart';
 import 'track_detail.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -23,21 +25,37 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = AppStore.instance;
     return ListenableBuilder(
-      listenable: s,
+      listenable: modulesListenable,
       builder: (context, _) {
         final dog = s.dog!;
+        final ms = ModuleStore.instance;
         return CustomScrollView(
           slivers: [
             SliverToBoxAdapter(child: _Hero(dog: dog)),
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),
               sliver: SliverList.list(children: [
+                if (!dog.profileComplete) ...[
+                  FadeSlideIn(
+                    child: CompleteProfileCard(
+                      onTap: () => Navigator.of(context)
+                          .push(MaterialPageRoute(builder: (_) => DogEditScreen(existing: dog))),
+                    ),
+                  ),
+                  gap12,
+                ],
                 FadeSlideIn(index: 1, child: _ReadinessCard(r: s.readiness)),
                 gap12,
-                const FadeSlideIn(index: 2, child: _Shortcuts()),
-                gap12,
-                const FadeSlideIn(index: 3, child: NutritionHomeCard()),
-                gap12,
+                if (ms.isEnabled(AppModule.heat)) ...[
+                  const FadeSlideIn(index: 2, child: HeatHomeCard()),
+                  gap12,
+                ],
+                if (ms.isEnabled(AppModule.feeding)) ...[
+                  const FadeSlideIn(index: 3, child: NutritionHomeCard()),
+                  gap12,
+                ],
+                const FadeSlideIn(index: 2, child: ModulesGrid()),
+                const SizedBox(height: 14),
                 FadeSlideIn(index: 4, child: _Upcoming(items: s.upcoming())),
                 gap12,
                 FadeSlideIn(index: 5, child: _WeekSummary(s: s)),
@@ -184,59 +202,6 @@ class _ReadinessCard extends StatelessWidget {
           ]),
         ),
       ]),
-    );
-  }
-}
-
-class _Shortcuts extends StatelessWidget {
-  const _Shortcuts();
-
-  @override
-  Widget build(BuildContext context) {
-    void push(Widget w) => Navigator.of(context).push(MaterialPageRoute(builder: (_) => w));
-    final items = <(IconData, String, VoidCallback, bool)>[
-      (Icons.directions_run_rounded, 'Trening', () => push(const TrainingScreen()), false),
-      (Icons.add_circle_outline_rounded, 'Zdrowie', () => push(const HealthScreen()), false),
-      (Icons.emoji_events_outlined, 'Wystawy', () => push(const ShowsScreen()), false),
-      (Icons.calendar_month_rounded, 'Kalendarz', () => goToTab(1), false),
-      (Icons.description_outlined, 'Dokumenty', () => push(const DocumentsScreen()), false),
-      (Icons.backpack_outlined, 'Sprzęt', () => push(const GearScreen()), false),
-      (Icons.bar_chart_rounded, 'Statystyki', () => goToTab(2), false),
-      (Icons.track_changes_rounded, 'Cele', () => push(const GoalsScreen()), false),
-    ];
-    return GridView.count(
-      crossAxisCount: 4,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      mainAxisSpacing: 10,
-      crossAxisSpacing: 10,
-      childAspectRatio: 0.92,
-      padding: EdgeInsets.zero,
-      children: [
-        for (final it in items)
-          K9Card(
-            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
-            onTap: it.$3,
-            child: Stack(children: [
-              Center(
-                child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  Icon(it.$1, color: it.$4 ? K9.orange.withValues(alpha: 0.55) : K9.orange, size: 30),
-                  const SizedBox(height: 8),
-                  FittedBox(
-                    child: Text(it.$2,
-                        style: TextStyle(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w600,
-                            color: it.$4 ? K9.muted : K9.text)),
-                  ),
-                ]),
-              ),
-              if (it.$4)
-                const Positioned(
-                    top: 0, right: 2, child: Icon(Icons.lock_clock_outlined, size: 13, color: K9.faint)),
-            ]),
-          ),
-      ],
     );
   }
 }

@@ -3,6 +3,9 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'files/file_store.dart';
+import 'gallery/gallery_store.dart';
+import 'heat/heat_store.dart';
+import 'modules/module_store.dart';
 import 'notifications.dart';
 import 'nutrition/nutrition_store.dart';
 import 'screens/onboarding.dart';
@@ -23,6 +26,9 @@ Future<void> main() async {
   await Notifications.instance.init();
   await AppStore.instance.load();
   await NutritionStore.instance.load();
+  await ModuleStore.instance.load();
+  await HeatStore.instance.load();
+  await GalleryStore.instance.load();
   runApp(const K9CoachApp());
 }
 

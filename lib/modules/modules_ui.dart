@@ -1,0 +1,197 @@
+import 'package:material_ui/material_ui.dart';
+
+import '../models.dart';
+import '../store.dart';
+import '../theme.dart';
+import '../widgets/common.dart';
+import 'module_routes.dart';
+import 'module_store.dart';
+import 'modules.dart';
+import 'premium_screen.dart';
+
+Listenable get modulesListenable => Listenable.merge([AppStore.instance, ModuleStore.instance]);
+
+/// Kafelki aktywnych modułów na ekranie Start, pogrupowane w sekcje.
+class ModulesGrid extends StatelessWidget {
+  const ModulesGrid({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: modulesListenable,
+      builder: (context, _) {
+        final dog = AppStore.instance.dog!;
+        final on = ModuleStore.instance.enabled(dog).where((m) => m != AppModule.profile).toList();
+        final children = <Widget>[];
+        for (final sec in ModuleSection.values) {
+          final list = on.where((m) => m.section == sec).toList();
+          if (list.isEmpty) continue;
+          if (children.isNotEmpty) children.add(const SizedBox(height: 14));
+          final title = sec == ModuleSection.training && dog.purpose != null
+              ? 'Trening · ${dog.purpose!.label}'
+              : sec.label;
+          children.add(Padding(
+            padding: const EdgeInsets.only(left: 4, bottom: 8),
+            child: Text(title.toUpperCase(),
+                style: const TextStyle(color: K9.muted, fontSize: 11.5, fontWeight: FontWeight.w700, letterSpacing: 1)),
+          ));
+          children.add(GridView.count(
+            crossAxisCount: 4,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            mainAxisSpacing: 10,
+            crossAxisSpacing: 10,
+            childAspectRatio: 0.92,
+            padding: EdgeInsets.zero,
+            children: [for (final m in list) ModuleTile(module: m)],
+          ));
+        }
+        return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children);
+      },
+    );
+  }
+}
+
+const _tileText = TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, height: 1.15);
+
+class ModuleTile extends StatelessWidget {
+  final AppModule module;
+  const ModuleTile({super.key, required this.module});
+
+  @override
+  Widget build(BuildContext context) {
+    return K9Card(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+      onTap: () => openModule(context, module),
+      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Icon(module.icon, color: K9.orange, size: 28),
+        const SizedBox(height: 8),
+        if (module.label.contains(' '))
+          Text(module.label,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: _tileText)
+        else
+          FittedBox(fit: BoxFit.scaleDown, child: Text(module.label, maxLines: 1, style: _tileText)),
+      ]),
+    );
+  }
+}
+
+/// Zachęta do uzupełnienia profilu (starsze profile bez celu i aktywności).
+class CompleteProfileCard extends StatelessWidget {
+  final VoidCallback onTap;
+  const CompleteProfileCard({super.key, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return K9Card(
+      onTap: onTap,
+      color: const Color(0xFF221509),
+      child: const Row(children: [
+        IconBadge(Icons.tune_rounded, K9.orange),
+        SizedBox(width: 12),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Dopasuj aplikację do psa', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+            SizedBox(height: 2),
+            Text('Podaj cel, aktywność i status rozrodczy, a pokażę tylko potrzebne moduły.',
+                style: TextStyle(color: K9.muted, fontSize: 13)),
+          ]),
+        ),
+        Icon(Icons.chevron_right_rounded, color: K9.orange),
+      ]),
+    );
+  }
+}
+
+/// Ustawienia: ręczne włączanie i wyłączanie modułów.
+class ModulesSettingsScreen extends StatelessWidget {
+  const ModulesSettingsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final ms = ModuleStore.instance;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Moduły')),
+      body: ListenableBuilder(
+        listenable: modulesListenable,
+        builder: (context, _) {
+          final dog = AppStore.instance.dog!;
+          return ListView(padding: const EdgeInsets.fromLTRB(16, 4, 16, 40), children: [
+            Text(
+              'Moduły włączają się same na podstawie profilu psa '
+              '(${[dog.sexLabel, dog.reproLabel.toLowerCase(), if (dog.purpose != null) dog.purpose!.label.toLowerCase()].join(', ')}). '
+              'Możesz je tu włączyć lub wyłączyć ręcznie.',
+              style: const TextStyle(color: K9.muted, fontSize: 13.5),
+            ),
+            gap12,
+            K9Card(
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PremiumScreen())),
+              child: Row(children: [
+                const Icon(Icons.workspace_premium_rounded, color: K9.gold),
+                const SizedBox(width: 12),
+                const Expanded(child: Text('Premium', style: TextStyle(fontWeight: FontWeight.w700))),
+                Text(ms.premium ? 'Aktywne' : 'Nieaktywne', style: const TextStyle(color: K9.muted)),
+                const Icon(Icons.chevron_right_rounded, color: K9.faint),
+              ]),
+            ),
+            for (final sec in ModuleSection.values) ...[
+              const SizedBox(height: 18),
+              Padding(
+                padding: const EdgeInsets.only(left: 4, bottom: 6),
+                child: Text(sec.label.toUpperCase(),
+                    style: const TextStyle(color: K9.muted, fontSize: 11.5, fontWeight: FontWeight.w700, letterSpacing: 1)),
+              ),
+              K9Card(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                child: Column(children: [
+                  for (final m in AppModule.values.where((m) => m.section == sec && m != AppModule.profile))
+                    _ModuleSwitch(module: m, dog: dog),
+                ]),
+              ),
+            ],
+            const SizedBox(height: 18),
+            OutlinedButton.icon(
+              onPressed: ms.overrides.isEmpty
+                  ? null
+                  : () async {
+                      await ms.resetOverrides();
+                      if (context.mounted) toast(context, 'Przywrócono ustawienia automatyczne');
+                    },
+              icon: const Icon(Icons.auto_mode_rounded),
+              label: const Text('Przywróć ustawienia automatyczne'),
+            ),
+          ]);
+        },
+      ),
+    );
+  }
+}
+
+class _ModuleSwitch extends StatelessWidget {
+  final AppModule module;
+  final Dog dog;
+  const _ModuleSwitch({required this.module, required this.dog});
+
+  @override
+  Widget build(BuildContext context) {
+    final ms = ModuleStore.instance;
+    final applicable = module.applicable(dog, premium: ms.premium);
+    final on = ms.isEnabled(module, dog);
+    final sub = !applicable
+        ? module.ruleLabel(dog)
+        : ms.isAuto(module)
+            ? '${module.ruleLabel(dog)} · automatycznie'
+            : 'Ustawione ręcznie';
+    return SwitchListTile(
+      contentPadding: EdgeInsets.zero,
+      secondary: Icon(module.icon, color: applicable ? K9.orange : K9.faint),
+      title: Text(module.label, style: TextStyle(color: applicable ? K9.text : K9.faint)),
+      subtitle: Text(sub, style: const TextStyle(color: K9.muted, fontSize: 12)),
+      value: on,
+      onChanged: applicable ? (v) => ms.setEnabled(module, v) : null,
+    );
+  }
+}

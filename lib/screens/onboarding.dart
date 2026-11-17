@@ -3,7 +3,7 @@ import 'package:material_ui/material_ui.dart';
 import '../store.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
-import 'profile.dart';
+import '../modules/dog_wizard.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -70,7 +70,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 index: 2,
                 child: FilledButton(
                   onPressed: () => Navigator.of(context)
-                      .push(MaterialPageRoute(builder: (_) => const DogEditScreen())),
+                      .push(MaterialPageRoute(builder: (_) => const DogWizardScreen())),
                   child: const Text('Dodaj swojego psa'),
                 ),
               ),

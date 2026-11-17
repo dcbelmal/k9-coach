@@ -9,6 +9,9 @@ import '../notifications.dart';
 import '../store.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import '../modules/dog_profile_fields.dart';
+import '../modules/modules_ui.dart';
+import '../modules/premium_screen.dart';
 import 'forms.dart';
 import 'stats.dart';
 
@@ -95,8 +98,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               duration: const Duration(milliseconds: 250),
               child: switch (tab) {
                 0 => _DataTab(key: const ValueKey(0), dog: dog),
-                1 => _WeightTab(key: const ValueKey(1), s: s),
-                _ => _NotesTab(key: const ValueKey(2), dog: dog),
+                1 => WeightHistory(key: const ValueKey(1), s: s),
+                _ => DogNotesEditor(key: const ValueKey(2), dog: dog),
               },
             ),
             const SizedBox(height: 24),
@@ -128,6 +131,9 @@ class _DataTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final rows = <(IconData, String, String)>[
+      (dog.female ? Icons.female_rounded : Icons.male_rounded, 'Płeć', '${dog.sexLabel} · ${dog.reproLabel.toLowerCase()}'),
+      (Icons.local_fire_department_outlined, 'Aktywność', dog.activity?.label ?? '—'),
+      (Icons.flag_circle_outlined, 'Cel użytkowania', dog.purpose?.label ?? '—'),
       (Icons.cake_outlined, 'Data urodzenia', dog.birthDate == null ? '—' : fmtDate(dog.birthDate!)),
       (Icons.hourglass_bottom_rounded, 'Wiek', dog.ageLabel.isEmpty ? '—' : dog.ageLabel),
       (Icons.monitor_weight_outlined, 'Waga', dog.weightKg == null ? '—' : '${fmtNum(dog.weightKg!)} kg'),
@@ -161,9 +167,9 @@ class _DataTab extends StatelessWidget {
   String _bcsLabel(int b) => b < 4 ? ' – szczupły' : (b <= 5 ? ' – optymalna' : ' – nadwaga');
 }
 
-class _WeightTab extends StatelessWidget {
+class WeightHistory extends StatelessWidget {
   final AppStore s;
-  const _WeightTab({super.key, required this.s});
+  const WeightHistory({super.key, required this.s});
 
   @override
   Widget build(BuildContext context) {
@@ -202,14 +208,14 @@ class _WeightTab extends StatelessWidget {
   }
 }
 
-class _NotesTab extends StatefulWidget {
+class DogNotesEditor extends StatefulWidget {
   final Dog dog;
-  const _NotesTab({super.key, required this.dog});
+  const DogNotesEditor({super.key, required this.dog});
   @override
-  State<_NotesTab> createState() => _NotesTabState();
+  State<DogNotesEditor> createState() => _DogNotesEditorState();
 }
 
-class _NotesTabState extends State<_NotesTab> {
+class _DogNotesEditorState extends State<DogNotesEditor> {
   late final c = TextEditingController(text: widget.dog.notes);
 
   @override
@@ -257,6 +263,20 @@ class _Settings extends StatelessWidget {
             },
           ),
         ListRow(
+          icon: Icons.dashboard_customize_outlined,
+          color: K9.blue,
+          title: 'Moduły',
+          subtitle: 'Włącz lub wyłącz funkcje aplikacji',
+          onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ModulesSettingsScreen())),
+        ),
+        ListRow(
+          icon: Icons.workspace_premium_outlined,
+          color: K9.gold,
+          title: 'Premium',
+          subtitle: 'Moduł hodowlany i funkcje dla zaawansowanych',
+          onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PremiumScreen())),
+        ),
+        ListRow(
           icon: Icons.restart_alt_rounded,
           color: K9.red,
           title: 'Usuń wszystkie dane',
@@ -269,7 +289,7 @@ class _Settings extends StatelessWidget {
         ),
         const Padding(
           padding: EdgeInsets.symmetric(vertical: 10),
-          child: Text('Valkor Coach · wersja 0.5 · dane zapisane tylko na tym telefonie',
+          child: Text('Valkor Coach · wersja 0.7 · dane zapisane tylko na tym telefonie',
               textAlign: TextAlign.center, style: TextStyle(color: K9.faint, fontSize: 11.5)),
         ),
       ]),
@@ -288,7 +308,6 @@ class DogEditScreen extends StatefulWidget {
 class _DogEditScreenState extends State<DogEditScreen> {
   late final Dog d = widget.existing == null ? Dog(name: '') : Dog.fromJson(widget.existing!.toJson());
   late final name = TextEditingController(text: d.name);
-  late final breed = TextEditingController(text: d.breed);
   late final weight = TextEditingController(text: d.weightKg == null ? '' : fmtNum(d.weightKg!));
   late final target = TextEditingController(text: d.targetWeightKg == null ? '' : fmtNum(d.targetWeightKg!));
   late final height = TextEditingController(text: d.heightCm == null ? '' : d.heightCm!.round().toString());
@@ -325,14 +344,7 @@ class _DogEditScreenState extends State<DogEditScreen> {
         const SizedBox(height: 20),
         TextField(controller: name, decoration: const InputDecoration(labelText: 'Imię psa *')),
         gap12,
-        TextField(
-          controller: breed,
-          decoration: const InputDecoration(labelText: 'Rasa'),
-          onChanged: (v) {
-            final g = guessFciGroup(v);
-            if (g != null && g != d.fciGroup) setState(() => d.fciGroup = g);
-          },
-        ),
+        BreedField(dog: d, onChanged: () => setState(() {})),
         gap12,
         DropdownButtonFormField<int?>(
           key: ValueKey(d.fciGroup),
@@ -356,7 +368,9 @@ class _DogEditScreenState extends State<DogEditScreen> {
           onChanged: (v) => setState(() => d.workingTrial = v),
         ),
         Segmented(items: const ['Suka', 'Pies'], index: d.female ? 0 : 1, onChanged: (i) => setState(() => d.female = i == 0)),
-        gap12,
+        gap16,
+        DogLifestyleFields(dog: d, onChanged: () => setState(() {})),
+        gap16,
         DateField(
             label: 'Data urodzenia', value: d.birthDate, onChanged: (v) => setState(() => d.birthDate = v)),
         gap12,
@@ -412,7 +426,6 @@ class _DogEditScreenState extends State<DogEditScreen> {
             }
             d
               ..name = name.text.trim()
-              ..breed = breed.text.trim()
               ..weightKg = parseNum(weight.text)
               ..targetWeightKg = parseNum(target.text)
               ..heightCm = parseNum(height.text)
@@ -420,6 +433,7 @@ class _DogEditScreenState extends State<DogEditScreen> {
               ..pedigree = pedigree.text.trim()
               ..weeklyKmGoal = parseNum(weekly.text) ?? 30;
             await AppStore.instance.saveDog(d);
+            await syncNutritionFromDog(d);
             if (isNew) await Notifications.instance.requestPermission();
             if (context.mounted && Navigator.of(context).canPop()) Navigator.pop(context);
           },

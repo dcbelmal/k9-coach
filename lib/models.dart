@@ -11,6 +11,31 @@ DateTime? _date(dynamic v) => v == null ? null : DateTime.parse(v as String);
 // Pies
 // ---------------------------------------------------------------------------
 
+/// Poziom aktywności psa (kreator profilu).
+enum DogActivity {
+  low('Niski', 'Krótkie spacery, dużo odpoczynku'),
+  medium('Średni', 'Codzienne spacery i zabawa'),
+  high('Wysoki', 'Regularne treningi, dużo biegania'),
+  veryHigh('Bardzo wysoki', 'Sport wyczynowy lub praca codziennie');
+
+  final String label;
+  final String hint;
+  const DogActivity(this.label, this.hint);
+}
+
+/// Cel użytkowania psa – decyduje o modułach treningowych.
+enum DogPurpose {
+  family('Pies rodzinny', Icons.family_restroom_rounded),
+  sport('Sport', Icons.directions_run_rounded),
+  working('Pies pracujący', Icons.shield_rounded),
+  breeding('Hodowla', Icons.child_friendly_rounded),
+  recreation('Rekreacja', Icons.landscape_rounded);
+
+  final String label;
+  final IconData icon;
+  const DogPurpose(this.label, this.icon);
+}
+
 class Dog {
   String name;
   String breed;
@@ -27,6 +52,11 @@ class Dog {
   double weeklyKmGoal;
   int? fciGroup; // 1-10
   bool? workingTrial; // rasa podlega próbom pracy (C.I.B.)
+  bool neutered; // kastrowany / wysterylizowana
+  DogActivity? activity;
+  DogPurpose? purpose;
+  String? breedId; // rasa z lokalnej bazy ras
+  bool mixed; // mieszaniec
 
   Dog({
     required this.name,
@@ -44,7 +74,20 @@ class Dog {
     this.weeklyKmGoal = 30,
     this.fciGroup,
     this.workingTrial,
+    this.neutered = false,
+    this.activity,
+    this.purpose,
+    this.breedId,
+    this.mixed = false,
   });
+
+  /// Czy profil ma już dane z kreatora (starsze profile ich nie mają).
+  bool get profileComplete => activity != null && purpose != null;
+
+  String get sexLabel => female ? 'Suka' : 'Pies';
+  String get reproLabel => female
+      ? (neutered ? 'Wysterylizowana' : 'Niewysterylizowana')
+      : (neutered ? 'Kastrowany' : 'Niekastrowany');
 
   String get ageLabel {
     if (birthDate == null) return '';
@@ -74,6 +117,11 @@ class Dog {
         'weeklyKmGoal': weeklyKmGoal,
         'fciGroup': fciGroup,
         'workingTrial': workingTrial,
+        'neutered': neutered,
+        'activity': activity?.name,
+        'purpose': purpose?.name,
+        'breedId': breedId,
+        'mixed': mixed,
       };
 
   factory Dog.fromJson(Map<String, dynamic> j) => Dog(
@@ -92,6 +140,11 @@ class Dog {
         weeklyKmGoal: (j['weeklyKmGoal'] as num?)?.toDouble() ?? 30,
         fciGroup: j['fciGroup'] as int?,
         workingTrial: j['workingTrial'] as bool?,
+        neutered: j['neutered'] ?? false,
+        activity: DogActivity.values.asNameMap()[j['activity']],
+        purpose: DogPurpose.values.asNameMap()[j['purpose']],
+        breedId: j['breedId'] as String?,
+        mixed: j['mixed'] ?? false,
       );
 }
 
