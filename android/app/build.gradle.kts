@@ -50,6 +50,7 @@ android {
             // Bez hasła (np. lokalnie) podpisujemy kluczem debug, jak wcześniej.
             signingConfig = if (!keystorePassword.isNullOrEmpty()) signingConfigs.getByName("valkor")
                 else signingConfigs.getByName("debug")
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
 }

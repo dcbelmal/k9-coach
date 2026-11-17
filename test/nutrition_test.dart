@@ -1,9 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:k9_coach/models.dart';
+import 'package:k9_coach/nutrition/catalog.dart';
 import 'package:k9_coach/nutrition/energy.dart';
 import 'package:k9_coach/nutrition/label_parser.dart';
 import 'package:k9_coach/nutrition/nutrition_models.dart';
 import 'package:k9_coach/nutrition/product_lookup.dart';
+import 'package:k9_coach/nutrition/web_import.dart';
 
 void main() {
   final now = DateTime(2026, 11, 16, 12);
@@ -157,5 +159,65 @@ Masa netto 15 kg''';
     expect(p.name, 'Medium Adult Dry Dog Food 15 kg');
     expect(p.packageGrams, 15000);
     expect(ProductLookup.parseUpc('1', {'items': []}), null);
+  });
+
+  test('wbudowany katalog: Royal Canin Cyno Energy 4800', () async {
+    final p = FoodCatalog.byBarcode('3182550837866')!;
+    expect(p.title, 'Royal Canin Cyno Energy 4800');
+    expect(p.kcalPer100g, 480);
+    expect(p.packageGrams, 20000);
+    final r = await ProductLookup.lookup('3182550837866');
+    expect(r.product?.name, 'Cyno Energy 4800');
+    expect(FoodCatalog.byBarcode('1234567890123'), null);
+  });
+
+  test('tabela odczytana kolumnami (OCR)', () {
+    const text = '''Składniki analityczne
+Białko
+Tłuszcz
+Włókno surowe
+Popiół surowy
+Wilgotność
+Wapń
+26 %
+16 %
+2,5 %
+7 o/o
+8 %
+1,2 %
+3850 kcal''';
+    final v = LabelParser.parse(text);
+    expect(v.protein, 26);
+    expect(v.fat, 16);
+    expect(v.fiber, 2.5);
+    expect(v.ash, 7);
+    expect(v.moisture, 8);
+    expect(v.kcalPer100g, 385);
+  });
+
+  test('strona producenta (HTML)', () {
+    const html = '''<html><head><title>Sklep</title>
+<meta property="og:title" content="Josera Active Performance | Sklep Zoo">
+<meta property="og:site_name" content="Josera">
+<script>var x = "białko 99%";</script></head><body><h1>Active</h1>
+<h2>Skład</h2><p>Skład: drób suszony, ryż, tłuszcz drobiowy&nbsp;(10&nbsp;%), kukurydza.</p>
+<table><tr><th>Składniki analityczne</th></tr>
+<tr><td>Białko</td><td>30&nbsp;%</td></tr><tr><td>Tłuszcz</td><td>20 %</td></tr>
+<tr><td>Włókno surowe</td><td>2,3 %</td></tr><tr><td>Popiół surowy</td><td>7,5 %</td></tr>
+<tr><td>Wilgotność</td><td>10 %</td></tr></table>
+<p>Energia metaboliczna: 4 050 kcal/kg</p></body></html>''';
+    final r = WebImport.parseHtml(html);
+    expect(r.name, 'Josera Active Performance');
+    expect(r.brand, 'Josera');
+    expect(r.values.protein, 30);
+    expect(r.values.fat, 20);
+    expect(r.values.fiber, 2.3);
+    expect(r.values.ash, 7.5);
+    expect(r.values.moisture, 10);
+    expect(r.values.kcalPer100g, 405);
+    expect(r.values.composition, startsWith('Drób suszony'));
+    expect(WebImport.findUrl('zobacz www.josera.pl/karma'), isNull);
+    expect(WebImport.findUrl('https://www.josera.pl/karma?x=1').toString(), 'https://www.josera.pl/karma?x=1');
+    expect(WebImport.findUrl('www.josera.pl/karma')?.host, 'www.josera.pl');
   });
 }
