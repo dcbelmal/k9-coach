@@ -4,6 +4,10 @@ import '../models.dart';
 import '../store.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import '../modules/module_routes.dart';
+import '../modules/module_store.dart';
+import '../modules/modules.dart';
+import '../modules/modules_ui.dart';
 import 'forms.dart';
 
 Color dueColor(DateTime due) {
@@ -14,30 +18,38 @@ Color dueColor(DateTime due) {
 }
 
 class HealthScreen extends StatelessWidget {
-  const HealthScreen({super.key});
+  /// Pokazywany jako zakładka dolnego paska (bez przycisku wstecz i bez własnego „+”).
+  final bool inTab;
+  const HealthScreen({super.key, this.inTab = false});
 
   @override
   Widget build(BuildContext context) {
     final s = AppStore.instance;
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: !inTab,
         title: const Row(children: [
           Icon(Icons.favorite_border_rounded, color: K9.orange),
           SizedBox(width: 10),
           Text('Zdrowie'),
         ]),
       ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: K9.orange,
-        foregroundColor: Colors.black,
-        onPressed: () => openHealthForm(context),
-        child: const Icon(Icons.add_rounded, size: 30),
-      ),
+      floatingActionButton: inTab
+          ? null
+          : FloatingActionButton(
+              backgroundColor: K9.orange,
+              foregroundColor: Colors.black,
+              onPressed: () => openHealthForm(context),
+              child: const Icon(Icons.add_rounded, size: 30),
+            ),
       body: ListenableBuilder(
-        listenable: s,
+        listenable: modulesListenable,
         builder: (context, _) {
           final due = s.dueItems.take(4).toList();
-          return ListView(padding: const EdgeInsets.fromLTRB(16, 4, 16, 100), children: [
+          final care = [AppModule.heat, AppModule.feeding, AppModule.foodStock, AppModule.weight]
+              .where((m) => ModuleStore.instance.isEnabled(m))
+              .toList();
+          return ListView(padding: const EdgeInsets.fromLTRB(16, 4, 16, 120), children: [
             FadeSlideIn(
               child: K9Card(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -48,7 +60,7 @@ class HealthScreen extends StatelessWidget {
                   for (final h in due)
                     ListRow(
                       icon: h.category.icon,
-                      color: h.category.color,
+                      color: K9.orange,
                       title: h.title,
                       subtitle: '${fmtDate(h.nextDue!)} · ${relDays(h.nextDue!)}',
                       trailing: Container(
@@ -61,7 +73,32 @@ class HealthScreen extends StatelessWidget {
                 ]),
               ),
             ),
+            if (care.isNotEmpty) ...[
+              gap16,
+              FadeSlideIn(
+                index: 1,
+                child: K9Card(
+                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    const SectionTitle('Codzienna opieka', icon: Icons.spa_outlined),
+                    for (final m in care)
+                      ListRow(
+                        icon: m.icon,
+                        color: K9.orange,
+                        title: m.label,
+                        trailing: const Icon(Icons.chevron_right_rounded, color: K9.faint),
+                        onTap: () => openModule(context, m),
+                      ),
+                  ]),
+                ),
+              ),
+            ],
             gap16,
+            const Padding(
+              padding: EdgeInsets.only(left: 4, bottom: 8),
+              child: Text('WPISY ZDROWOTNE',
+                  style: TextStyle(color: K9.muted, fontSize: 11.5, fontWeight: FontWeight.w700, letterSpacing: 1)),
+            ),
             for (final (i, c) in HealthCategory.values.indexed) ...[
               FadeSlideIn(index: i + 1, child: _CategoryCard(category: c, s: s)),
               const SizedBox(height: 10),
@@ -96,7 +133,7 @@ class _CategoryCard extends StatelessWidget {
           .push(MaterialPageRoute(builder: (_) => HealthCategoryScreen(category: category))),
       child: ListRow(
         icon: category.icon,
-        color: category.color,
+        color: K9.orange,
         title: category.label,
         subtitle: sub,
       ),

@@ -103,6 +103,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               },
             ),
             const SizedBox(height: 24),
+            const AllModulesCard(),
+            const SizedBox(height: 16),
             const _Settings(),
           ]),
         );
@@ -289,7 +291,7 @@ class _Settings extends StatelessWidget {
         ),
         const Padding(
           padding: EdgeInsets.symmetric(vertical: 10),
-          child: Text('Valkor Coach · wersja 0.7 · dane zapisane tylko na tym telefonie',
+          child: Text('Valkor Coach · wersja 0.8 · dane zapisane tylko na tym telefonie',
               textAlign: TextAlign.center, style: TextStyle(color: K9.faint, fontSize: 11.5)),
         ),
       ]),

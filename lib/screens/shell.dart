@@ -1,14 +1,21 @@
 import 'package:material_ui/material_ui.dart';
 
 import '../theme.dart';
-import 'calendar.dart';
 import 'forms.dart';
+import 'health.dart';
 import 'home.dart';
 import 'profile.dart';
-import 'stats.dart';
+import 'training.dart';
 
+/// Zakładki dolnego paska: 0 Start, 1 Trening, 2 Zdrowie, 3 Pies.
 final tabIndex = ValueNotifier<int>(0);
 void goToTab(int i) => tabIndex.value = i;
+
+/// Otwiera zakładkę Trening na wybranym segmencie (3 = statystyki).
+void openTrainingTab(int segment) {
+  trainingTab.value = segment;
+  goToTab(1);
+}
 
 class Shell extends StatelessWidget {
   const Shell({super.key});
@@ -31,8 +38,8 @@ class Shell extends StatelessWidget {
             key: ValueKey(i),
             child: switch (i) {
               0 => const HomeScreen(),
-              1 => const CalendarScreen(),
-              2 => const StatsScreen(),
+              1 => const TrainingScreen(inTab: true),
+              2 => const HealthScreen(inTab: true),
               _ => const ProfileScreen(),
             },
           ),
@@ -79,7 +86,7 @@ class _BottomBar extends StatelessWidget {
           height: 66,
           child: Row(children: [
             item(0, Icons.home_outlined, Icons.home_rounded, 'Start'),
-            item(1, Icons.calendar_month_outlined, Icons.calendar_month_rounded, 'Kalendarz'),
+            item(1, Icons.directions_run, Icons.directions_run_rounded, 'Trening'),
             Expanded(
               child: Center(
                 child: GestureDetector(
@@ -97,8 +104,8 @@ class _BottomBar extends StatelessWidget {
                 ),
               ),
             ),
-            item(2, Icons.insights_outlined, Icons.insights_rounded, 'Statystyki'),
-            item(3, Icons.person_outline_rounded, Icons.person_rounded, 'Profil'),
+            item(2, Icons.favorite_border_rounded, Icons.favorite_rounded, 'Zdrowie'),
+            item(3, Icons.pets_outlined, Icons.pets_rounded, 'Pies'),
           ]),
         ),
       ),

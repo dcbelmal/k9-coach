@@ -9,6 +9,10 @@ import 'forms.dart';
 import 'home.dart';
 import 'shows.dart';
 
+/// Kalendarz jako osobny ekran (otwierany ze Start, Treningu i modułów).
+void openCalendar(BuildContext context) => Navigator.of(context)
+    .push(MaterialPageRoute(builder: (_) => const Scaffold(body: CalendarScreen())));
+
 class CalendarScreen extends StatefulWidget {
   const CalendarScreen({super.key});
   @override
@@ -45,8 +49,12 @@ class _CalendarScreenState extends State<CalendarScreen> {
             children: [
               Row(
                 children: [
-                  const Icon(Icons.calendar_month_rounded, color: K9.orange),
-                  const SizedBox(width: 10),
+                  if (Navigator.of(context).canPop())
+                    const BackButton()
+                  else ...[
+                    const Icon(Icons.calendar_month_rounded, color: K9.orange),
+                    const SizedBox(width: 10),
+                  ],
                   const Expanded(
                     child: Text('Kalendarz', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
                   ),

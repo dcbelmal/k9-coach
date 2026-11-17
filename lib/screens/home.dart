@@ -10,6 +10,7 @@ import '../modules/module_store.dart';
 import '../modules/modules.dart';
 import '../modules/modules_ui.dart';
 import '../nutrition/screens/nutrition_home_card.dart';
+import 'calendar.dart';
 import 'documents.dart';
 import 'gear.dart';
 import 'profile.dart';
@@ -54,11 +55,9 @@ class HomeScreen extends StatelessWidget {
                   const FadeSlideIn(index: 3, child: NutritionHomeCard()),
                   gap12,
                 ],
-                const FadeSlideIn(index: 2, child: ModulesGrid()),
-                const SizedBox(height: 14),
-                FadeSlideIn(index: 4, child: _Upcoming(items: s.upcoming())),
+                const FadeSlideIn(index: 4, child: ShortcutsRow()),
                 gap12,
-                FadeSlideIn(index: 5, child: _WeekSummary(s: s)),
+                FadeSlideIn(index: 5, child: _Upcoming(items: s.upcoming(limit: 3))),
               ]),
             ),
           ],
@@ -76,7 +75,7 @@ class _Hero extends StatelessWidget {
   Widget build(BuildContext context) {
     final top = MediaQuery.of(context).padding.top;
     return SizedBox(
-      height: 430 + top,
+      height: 320 + top,
       child: Stack(fit: StackFit.expand, children: [
         Hero(tag: 'dog-photo', child: DogPhoto(dog: dog)),
         const DecoratedBox(
@@ -179,7 +178,7 @@ class _ReadinessCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = readinessColor(r.level);
     return K9Card(
-      onTap: () => goToTab(2),
+      onTap: () => openTrainingTab(3),
       child: Row(children: [
         RingGauge(
           value: r.score / 100,
@@ -215,7 +214,7 @@ class _Upcoming extends StatelessWidget {
     return K9Card(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         SectionTitle('Najbliższe wydarzenia',
-            icon: Icons.event_note_rounded, action: 'Kalendarz', onAction: () => goToTab(1)),
+            icon: Icons.event_note_rounded, action: 'Kalendarz', onAction: () => openCalendar(context)),
         if (items.isEmpty)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 8),
@@ -225,7 +224,7 @@ class _Upcoming extends StatelessWidget {
         for (final i in items)
           ListRow(
             icon: i.icon,
-            color: i.color,
+            color: K9.orange,
             title: i.title,
             subtitle: '${fmtDate(i.date)} (${relDays(i.date)})',
             onTap: () => openAgendaItem(context, i),
@@ -247,40 +246,6 @@ void openAgendaItem(BuildContext context, AgendaItem i) {
   }
 }
 
-class _WeekSummary extends StatelessWidget {
-  final AppStore s;
-  const _WeekSummary({required this.s});
-
-  @override
-  Widget build(BuildContext context) {
-    final w = s.thisWeek;
-    final goal = s.dog?.weeklyKmGoal ?? 30;
-    final progress = goal <= 0 ? 0.0 : w.km / goal;
-    return K9Card(
-      onTap: () => goToTab(2),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const SectionTitle('Podsumowanie tygodnia', icon: Icons.insights_rounded),
-        Row(children: [
-          Expanded(child: StatValue(label: 'Treningi', value: '${w.count}')),
-          Expanded(child: StatValue(label: 'Dystans', value: fmtKm(w.km), unit: 'km')),
-          Expanded(child: StatValue(label: 'Czas', value: fmtDurationShort(w.minutes))),
-          RingGauge(
-            value: progress,
-            size: 64,
-            stroke: 7,
-            gradient: const LinearGradient(colors: [K9.orange, K9.yellow, K9.green, K9.orange]),
-            center: Text('${(progress * 100).clamp(0, 999).round()}%',
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
-          ),
-        ]),
-        const SizedBox(height: 10),
-        Text('Cel tygodniowy: ${fmtKm(goal)} km',
-            style: const TextStyle(color: K9.muted, fontSize: 12.5)),
-      ]),
-    );
-  }
-}
-
 void showReminders(BuildContext context) {
   final items = AppStore.instance.upcoming(days: 45, limit: 12);
   showModalBottomSheet(
@@ -295,7 +260,7 @@ void showReminders(BuildContext context) {
         for (final i in items)
           ListRow(
             icon: i.icon,
-            color: i.color,
+            color: K9.orange,
             title: i.title,
             subtitle: '${fmtDate(i.date)} · ${relDays(i.date)}',
             onTap: () {

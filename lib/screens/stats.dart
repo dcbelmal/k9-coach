@@ -11,7 +11,9 @@ import 'forms.dart';
 import 'home.dart';
 
 class StatsScreen extends StatefulWidget {
-  const StatsScreen({super.key});
+  /// W zakładce Trening: bez własnego nagłówka i marginesu u góry.
+  final bool embedded;
+  const StatsScreen({super.key, this.embedded = false});
   @override
   State<StatsScreen> createState() => _StatsScreenState();
 }
@@ -75,13 +77,16 @@ class _StatsScreenState extends State<StatsScreen> {
 
         return SafeArea(
           bottom: false,
-          child: ListView(padding: const EdgeInsets.fromLTRB(16, 8, 16, 120), children: [
-            const Row(children: [
-              Icon(Icons.bar_chart_rounded, color: K9.orange),
-              SizedBox(width: 10),
-              Text('Statystyki', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
-            ]),
-            gap16,
+          top: !widget.embedded,
+          child: ListView(padding: EdgeInsets.fromLTRB(16, widget.embedded ? 0 : 8, 16, 120), children: [
+            if (!widget.embedded) ...[
+              const Row(children: [
+                Icon(Icons.bar_chart_rounded, color: K9.orange),
+                SizedBox(width: 10),
+                Text('Statystyki', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
+              ]),
+              gap16,
+            ],
             Segmented(
                 items: const ['Tydzień', 'Miesiąc', 'Rok'],
                 index: period,
