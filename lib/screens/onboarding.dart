@@ -18,14 +18,32 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Stack(fit: StackFit.expand, children: [
-        const DogPhoto(dog: null),
+        // Tło z logo Valkor Canis zamiast pustej łapy.
+        const DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: RadialGradient(
+              center: Alignment(0, -0.45),
+              radius: 0.85,
+              colors: [Color(0xFF1A1512), K9.brandBg],
+            ),
+          ),
+        ),
+        SafeArea(
+          child: Align(
+            alignment: const Alignment(0, -0.55),
+            child: FractionallySizedBox(
+              widthFactor: 0.72,
+              child: Image.asset('assets/brand/valkor_logo.png', filterQuality: FilterQuality.medium),
+            ),
+          ),
+        ),
         const DecoratedBox(
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [Color(0x00000000), Color(0xCC0B0B0C), K9.bg],
-              stops: [0.2, 0.55, 0.8],
+              colors: [Color(0x00000000), Color(0x990B0B0C), K9.bg],
+              stops: [0.45, 0.68, 0.85],
             ),
           ),
         ),
@@ -35,11 +53,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               const Spacer(),
               const FadeSlideIn(
-                child: Row(children: [
-                  Text('K9', style: TextStyle(color: K9.orange, fontSize: 48, fontWeight: FontWeight.w900)),
-                  SizedBox(width: 8),
-                  Text('Coach', style: TextStyle(fontSize: 48, fontWeight: FontWeight.w800)),
-                ]),
+                child: Text('VALKOR COACH',
+                    style: TextStyle(
+                        fontFamily: 'Cinzel', color: K9.goldLight, fontSize: 28, fontWeight: FontWeight.w700, letterSpacing: 2.5)),
               ),
               const SizedBox(height: 10),
               const FadeSlideIn(
