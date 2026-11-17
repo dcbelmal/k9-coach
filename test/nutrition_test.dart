@@ -234,4 +234,14 @@ Wapń
     expect(k('Energia: 16 500 kJ/kg'), 394);
     expect(k('Białko 30%, tłuszcz 20%'), isNull);
   });
+
+  test('strona Royal Canin PL (bez kcal)', () {
+    final v = LabelParser.parse('Składniki analityczne: Białko surowe: 32,0% - Oleje i tłuszcze surowe: 30,0% - '
+        'Popiół surowy: 8,3% - Włókno surowe: 2,0% - Na 1 kg karmy: Luteina: 15,5 mg - Beta-karoten: 2,3 mg.');
+    expect(v.protein, 32);
+    expect(v.fat, 30);
+    expect(v.ash, 8.3);
+    expect(v.fiber, 2);
+    expect(v.kcalPer100g, isNull);
+  });
 }

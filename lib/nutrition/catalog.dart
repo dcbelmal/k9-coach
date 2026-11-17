@@ -27,7 +27,7 @@ class _Entry {
 
 class FoodCatalog {
   static const _entries = [
-    // pro.royalcanin.co.uk/products/dog/energy-4800 – białko 32%, tłuszcz 30%,
+    // royalcanin.com/pl (Sporting Life Energy 4800) – białko 32%, tłuszcz 30%, popiół 8,3%, włókno 2%,
     // ok. 4800 kcal/kg (od tego nazwa karmy).
     _Entry(
       codes: ['3182550837866'],
@@ -36,6 +36,8 @@ class FoodCatalog {
       kcalPer100g: 480,
       protein: 32,
       fat: 30,
+      fiber: 2,
+      ash: 8.3,
       packageGrams: 20000,
       composition: 'Odwodnione białko drobiowe, tłuszcze zwierzęce, ryż, izolat białka roślinnego, '
           'hydrolizowane białka zwierzęce, wysłodki buraczane, włókna roślinne, olej rybny, składniki mineralne, '
