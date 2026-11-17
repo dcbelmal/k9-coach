@@ -164,7 +164,7 @@ Masa netto 15 kg''';
   test('wbudowany katalog: Royal Canin Cyno Energy 4800', () async {
     final p = FoodCatalog.byBarcode('3182550837866')!;
     expect(p.title, 'Royal Canin Cyno Energy 4800');
-    expect(p.kcalPer100g, 480);
+    expect(p.kcalPer100g, 452);
     expect(p.packageGrams, 20000);
     final r = await ProductLookup.lookup('3182550837866');
     expect(r.product?.name, 'Cyno Energy 4800');
