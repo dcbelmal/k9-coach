@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:k9_coach/models.dart';
+import 'package:k9_coach/nutrition/catalog.dart';
 import 'package:k9_coach/nutrition/energy.dart';
 import 'package:k9_coach/nutrition/label_parser.dart';
 import 'package:k9_coach/nutrition/nutrition_models.dart';
@@ -157,5 +158,15 @@ Masa netto 15 kg''';
     expect(p.name, 'Medium Adult Dry Dog Food 15 kg');
     expect(p.packageGrams, 15000);
     expect(ProductLookup.parseUpc('1', {'items': []}), null);
+  });
+
+  test('wbudowany katalog: Royal Canin Cyno Energy 4800', () async {
+    final p = FoodCatalog.byBarcode('3182550837866')!;
+    expect(p.title, 'Royal Canin Cyno Energy 4800');
+    expect(p.kcalPer100g, 480);
+    expect(p.packageGrams, 20000);
+    final r = await ProductLookup.lookup('3182550837866');
+    expect(r.product?.name, 'Cyno Energy 4800');
+    expect(FoodCatalog.byBarcode('1234567890123'), null);
   });
 }

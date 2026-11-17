@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../models.dart' show newId;
+import 'catalog.dart';
 import 'nutrition_models.dart';
 
 /// Wyszukiwanie produktu po kodzie kreskowym w otwartych bazach
@@ -35,6 +36,8 @@ class ProductLookup {
   static Future<LookupResult> lookup(String code, {http.Client? client}) async {
     final c = code.trim();
     if (!RegExp(r'^\d{6,14}$').hasMatch(c)) return const LookupResult(null, false, []);
+    final known = FoodCatalog.byBarcode(c);
+    if (known != null) return LookupResult(known, false, const ['Katalog Valkor']);
     final cl = client ?? http.Client();
     final checked = <String>[];
     var answered = 0;
