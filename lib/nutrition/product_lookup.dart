@@ -9,34 +9,89 @@ import 'nutrition_models.dart';
 /// Wyszukiwanie produktu po kodzie kreskowym w otwartych bazach
 /// Open Pet Food Facts / Open Food Facts (bez klucza i opłat).
 /// Gdy brak internetu albo produktu – zwraca null i użytkownik uzupełnia dane ręcznie.
-class ProductLookup {
-  static const _hosts = ['world.openpetfoodfacts.org', 'world.openfoodfacts.org'];
-  static const _fields =
-      'product_name,product_name_pl,brands,quantity,product_quantity,ingredients_text,ingredients_text_pl,nutriments,categories_tags';
+/// Wynik wyszukiwania po kodzie.
+class LookupResult {
+  final FoodProduct? product;
+  final bool offline; // żadne źródło nie odpowiedziało (brak internetu)
+  final List<String> checked; // nazwy sprawdzonych baz
+  const LookupResult(this.product, this.offline, this.checked);
+}
 
-  static Future<FoodProduct?> byBarcode(String code, {http.Client? client}) async {
+class ProductLookup {
+  static const _off = [
+    ('world.openpetfoodfacts.org', 'Open Pet Food Facts', 'openpetfoodfacts'),
+    ('world.openfoodfacts.org', 'Open Food Facts', 'openfoodfacts'),
+    ('world.openproductsfacts.org', 'Open Products Facts', 'openproductsfacts'),
+  ];
+  static const _fields =
+      'product_name,product_name_pl,product_name_en,generic_name,brands,quantity,product_quantity,ingredients_text,ingredients_text_pl,ingredients_text_en,nutriments,categories_tags';
+  static const _ua = {'User-Agent': 'ValkorCoach/0.6 (Android; dog nutrition app)'};
+
+  static Future<FoodProduct?> byBarcode(String code, {http.Client? client}) async =>
+      (await lookup(code, client: client)).product;
+
+  /// Szuka kolejno w bazach Open Food Facts (karmy, żywność, produkty),
+  /// a gdy tam nic nie ma – w katalogu UPCitemdb (tylko nazwa i producent).
+  static Future<LookupResult> lookup(String code, {http.Client? client}) async {
     final c = code.trim();
-    if (!RegExp(r'^\d{6,14}$').hasMatch(c)) return null;
+    if (!RegExp(r'^\d{6,14}$').hasMatch(c)) return const LookupResult(null, false, []);
     final cl = client ?? http.Client();
+    final checked = <String>[];
+    var answered = 0;
     try {
-      for (final host in _hosts) {
+      for (final (host, name, source) in _off) {
+        checked.add(name);
         try {
           final r = await cl
-              .get(Uri.https(host, '/api/v2/product/$c.json', {'fields': _fields}),
-                  headers: {'User-Agent': 'ValkorCoach/0.5 (Android; dog nutrition app)'})
+              .get(Uri.https(host, '/api/v2/product/$c.json', {'fields': _fields}), headers: _ua)
               .timeout(const Duration(seconds: 8));
+          answered++;
           if (r.statusCode != 200) continue;
-          final p = parse(c, jsonDecode(utf8.decode(r.bodyBytes)) as Map<String, dynamic>,
-              source: host.contains('petfood') ? 'openpetfoodfacts' : 'openfoodfacts');
-          if (p != null) return p;
+          final p = parse(c, jsonDecode(utf8.decode(r.bodyBytes)) as Map<String, dynamic>, source: source);
+          if (p != null) return LookupResult(p, false, checked);
         } catch (e) {
           debugPrint('Wyszukiwanie $host: $e');
         }
       }
-      return null;
+      checked.add('UPCitemdb');
+      try {
+        final r = await cl
+            .get(Uri.https('api.upcitemdb.com', '/prod/trial/lookup', {'upc': c}), headers: _ua)
+            .timeout(const Duration(seconds: 8));
+        answered++;
+        if (r.statusCode == 200) {
+          final p = parseUpc(c, jsonDecode(utf8.decode(r.bodyBytes)) as Map<String, dynamic>);
+          if (p != null) return LookupResult(p, false, checked);
+        }
+      } catch (e) {
+        debugPrint('UPCitemdb: $e');
+      }
+      return LookupResult(null, answered == 0, checked);
     } finally {
       if (client == null) cl.close();
     }
+  }
+
+  /// Odpowiedź UPCitemdb: zwykle tylko nazwa, marka i opis.
+  static FoodProduct? parseUpc(String code, Map<String, dynamic> j) {
+    final items = j['items'];
+    if (items is! List || items.isEmpty) return null;
+    final it = (items.first as Map).cast<String, dynamic>();
+    final title = (it['title'] as String? ?? '').trim();
+    if (title.isEmpty) return null;
+    final brand = (it['brand'] as String? ?? '').trim();
+    final text = '${it['category'] ?? ''} $title ${it['description'] ?? ''}'.toLowerCase();
+    return FoodProduct(
+      id: newId(),
+      name: brand.isNotEmpty && title.toLowerCase().startsWith(brand.toLowerCase())
+          ? title.substring(brand.length).trim()
+          : title,
+      brand: brand,
+      type: guessType(text),
+      barcode: code,
+      packageGrams: parseQuantity('${it['size'] ?? ''} $title'),
+      source: 'upcitemdb',
+    );
   }
 
   /// Zamienia odpowiedź API na produkt. Publiczne, żeby dało się testować.
@@ -51,9 +106,15 @@ class ProductLookup {
       return null;
     }
 
-    final name = (p['product_name_pl'] as String?)?.trim().isNotEmpty == true
-        ? p['product_name_pl'] as String
-        : (p['product_name'] as String? ?? '').trim();
+    String pick(List<String> keys) {
+      for (final k in keys) {
+        final v = (p[k] as String?)?.trim() ?? '';
+        if (v.isNotEmpty) return v;
+      }
+      return '';
+    }
+
+    final name = pick(['product_name_pl', 'product_name', 'product_name_en', 'generic_name']);
     final brand = ((p['brands'] as String?) ?? '').split(',').first.trim();
     var kcal = val('energy-kcal_100g');
     final kj = val('energy-kj_100g') ?? val('energy_100g');
@@ -64,9 +125,7 @@ class ProductLookup {
     final qty = (p['product_quantity'] is num)
         ? (p['product_quantity'] as num).toDouble()
         : parseQuantity((p['quantity'] as String?) ?? '');
-    final ingr = (p['ingredients_text_pl'] as String?)?.trim().isNotEmpty == true
-        ? p['ingredients_text_pl'] as String
-        : (p['ingredients_text'] as String? ?? '');
+    final ingr = pick(['ingredients_text_pl', 'ingredients_text', 'ingredients_text_en']);
     if (name.isEmpty && brand.isEmpty) return null;
     return FoodProduct(
       id: newId(),
