@@ -92,22 +92,31 @@ jobs:
         run: flutter build apk --release --dart-define=VALKOR_FLAVOR=beta
       - name: Sprawdź, że APK ma ten sam podpis co poprzednie wersje
         run: python3 tool/apk_cert.py build/app/outputs/flutter-apk/app-release.apk "$(cat android/app/release-cert.sha256)"
+      - name: Zbuduj mniejszy APK tylko dla telefonów arm64 (ten sam numer wersji)
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        run: |
+          cp build/app/outputs/flutter-apk/app-release.apk Valkor-Coach.apk
+          flutter build apk --release --target-platform android-arm64 --dart-define=VALKOR_FLAVOR=beta
+          cp build/app/outputs/flutter-apk/app-release.apk Valkor-Coach-arm64.apk
+          python3 tool/apk_cert.py Valkor-Coach-arm64.apk "$(cat android/app/release-cert.sha256)"
       - name: Usuń plik klucza
         if: always()
         run: rm -f "$RUNNER_TEMP/valkor-release.p12"
       - uses: actions/upload-artifact@v4
         with:
           name: Valkor-Coach-Android
-          path: build/app/outputs/flutter-apk/app-release.apk
-      - run: |
-          cp build/app/outputs/flutter-apk/app-release.apk Valkor-Coach.apk
-          cp build/app/outputs/flutter-apk/app-release.apk K9-Coach.apk
+          path: |
+            Valkor-Coach.apk
+            Valkor-Coach-arm64.apk
+      - run: cp Valkor-Coach.apk K9-Coach.apk
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: najnowsza
           name: Valkor Coach – najnowsza wersja
           make_latest: true
-          body: Plik Valkor-Coach.apk do zainstalowania na telefonie z Androidem (K9-Coach.apk to ten sam plik pod starą nazwą).
+          body: Plik Valkor-Coach.apk do zainstalowania na telefonie z Androidem (K9-Coach.apk to ten sam plik pod starą nazwą). Valkor-Coach-arm64.apk to mniejsza wersja dla większości nowych telefonów.
           files: |
             Valkor-Coach.apk
+            Valkor-Coach-arm64.apk
             K9-Coach.apk
