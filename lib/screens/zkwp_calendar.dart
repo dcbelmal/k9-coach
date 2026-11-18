@@ -2,6 +2,8 @@ import 'package:material_ui/material_ui.dart';
 
 import '../models.dart';
 import '../models_ext.dart';
+import '../shows/countries.dart';
+import '../shows/fci_shows.dart';
 import '../store.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
@@ -14,7 +16,8 @@ const _monthNames = [
   'Lipiec', 'Sierpień', 'Wrzesień', 'Październik', 'Listopad', 'Grudzień',
 ];
 
-/// Terminarz wystaw ZKwP z filtrem po grupie FCI psa.
+/// Terminarz wystaw: kraj zamieszkania (+ kraje sąsiednie) z filtrem po grupie FCI psa.
+/// Polska – pełny terminarz ZKwP, pozostałe kraje – wystawy CACIB z kalendarza FCI.
 class ZkwpCalendar extends StatefulWidget {
   const ZkwpCalendar({super.key});
   @override
@@ -29,38 +32,116 @@ class _ZkwpCalendarState extends State<ZkwpCalendar> {
   String? error;
   DateTime? fetchedAt;
   List<ZkwpShow> shows = [];
+  String home = 'PL';
+  bool withNeighbours = true;
+  /// null = wszystkie kraje, inaczej kod kraju.
+  String? onlyCountry;
+  /// Kraje, z których udało się coś pobrać lub które sprawdzono.
+  List<String> loadedCountries = [];
 
   @override
   void initState() {
     super.initState();
-    _load();
+    _init();
   }
+
+  Future<void> _init() async {
+    final (c, nb) = await HomeCountry.load();
+    home = c;
+    withNeighbours = nb;
+    await _load();
+  }
+
+  List<String> get _countries => [
+        home,
+        if (withNeighbours) ...[for (final n in neighboursOf(home)) if (n.inFci) n.code],
+      ];
 
   Future<void> _load({bool refresh = false}) async {
     setState(() => loading = true);
-    final (list, at, err) = await ZkwpService.load(year, refresh: refresh);
+    final codes = _countries;
+    final results = await Future.wait([
+      for (final c in codes)
+        c == 'PL' ? ZkwpService.load(year, refresh: refresh) : FciService.load(c, refresh: refresh),
+    ]);
     if (!mounted) return;
+    final all = <ZkwpShow>[];
+    final errs = <String>[];
+    DateTime? at;
+    for (final (i, (list, got, err)) in results.indexed) {
+      all.addAll(list.where((z) => z.date.year == year));
+      if (err != null) errs.add('${countryByCode(codes[i]).flag} $err');
+      if (got != null && (at == null || got.isBefore(at))) at = got;
+    }
+    all.sort((a, b) => a.date.compareTo(b.date));
     setState(() {
-      shows = list;
+      shows = all;
       fetchedAt = at;
-      error = err;
+      error = errs.isEmpty ? null : errs.join('\n');
+      loadedCountries = codes;
+      if (onlyCountry != null && !codes.contains(onlyCountry)) onlyCountry = null;
       loading = false;
     });
   }
 
+  Future<void> _pickCountry() async {
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (c) => SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(12, 0, 12, 20 + MediaQuery.viewPaddingOf(c).bottom),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Padding(padding: EdgeInsets.symmetric(horizontal: 8), child: SheetTitle('Kraj zamieszkania')),
+          for (final k in showCountries.where((e) => e.inFci))
+            ListTile(
+              title: Text(k.label),
+              subtitle: (countryNeighbours[k.code] ?? const []).isEmpty
+                  ? null
+                  : Text('Sąsiedzi: ${neighboursOf(k.code).map((n) => n.flag).join(' ')}',
+                      style: const TextStyle(color: K9.muted, fontSize: 12.5)),
+              trailing: k.code == home ? const Icon(Icons.check_rounded, color: K9.orange) : null,
+              onTap: () => Navigator.pop(c, k.code),
+            ),
+        ]),
+      ),
+    );
+    if (picked == null || picked == home) return;
+    setState(() {
+      home = picked;
+      onlyCountry = null;
+    });
+    await HomeCountry.save(home, withNeighbours);
+    await _load();
+  }
+
+  Future<void> _toggleNeighbours() async {
+    setState(() {
+      withNeighbours = !withNeighbours;
+      onlyCountry = null;
+    });
+    await HomeCountry.save(home, withNeighbours);
+    await _load();
+  }
+
+  /// Miejsce zapisywane w "Moich wystawach": dla wystaw z zagranicy z nazwą kraju.
+  String _placeOf(ZkwpShow z) => z.fromFci ? '${z.city}, ${countryByCode(z.country).name}' : z.city;
+
   ShowEntry? _added(ZkwpShow z) => _s.shows
-      .where((e) => sameDay(e.date, z.date) && e.place.toLowerCase() == z.city.toLowerCase() && e.type == z.type)
+      .where((e) => sameDay(e.date, z.date) && e.place.toLowerCase() == _placeOf(z).toLowerCase() && e.type == z.type)
       .firstOrNull;
 
   Future<void> _add(ZkwpShow z) async {
     final e = ShowEntry(
       id: newId(),
       name: z.title,
-      place: z.city,
+      place: _placeOf(z),
       date: DateTime(z.date.year, z.date.month, z.date.day, 9),
       type: z.type,
       showClass: _defaultClass(),
-      notes: 'Z terminarza ZKwP: ${z.place} – ${z.description}',
+      notes: z.fromFci
+          ? 'Z kalendarza FCI: ${countryByCode(z.country).label}, ${z.city} – wystawa międzynarodowa CACIB'
+          : 'Z terminarza ZKwP: ${z.place} – ${z.description}',
     );
     await _s.upsertShow(e);
     if (mounted) toast(context, 'Dodano do moich wystaw. Uzupełnij termin zgłoszeń, a przypomnę o nim.');
@@ -85,7 +166,12 @@ class _ZkwpCalendarState extends State<ZkwpCalendar> {
         .where((z) => !(z.endDate ?? z.date).isBefore(today))
         .where((z) => !mine || z.matches(g))
         .where((z) => !cacibOnly || z.type == ShowType.international)
+        .where((z) => onlyCountry == null || z.country == onlyCountry)
         .toList();
+    final countriesWithShows = [
+      for (final c in loadedCountries)
+        if (shows.any((z) => z.country == c && !(z.endDate ?? z.date).isBefore(today))) c
+    ];
     final byMonth = <int, List<ZkwpShow>>{};
     for (final z in list) {
       byMonth.putIfAbsent(z.date.month, () => []).add(z);
@@ -108,6 +194,34 @@ class _ZkwpCalendarState extends State<ZkwpCalendar> {
       color: K9.orange,
       onRefresh: () => _load(refresh: true),
       child: ListView(padding: const EdgeInsets.fromLTRB(16, 0, 16, 100), children: [
+        Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
+          ActionChip(
+            avatar: const Icon(Icons.home_rounded, size: 18, color: K9.orange),
+            label: Text('Mieszkam: ${countryByCode(home).label}'),
+            backgroundColor: K9.cardHi,
+            side: BorderSide.none,
+            labelStyle: const TextStyle(color: K9.text, fontWeight: FontWeight.w600, fontSize: 13),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            onPressed: _pickCountry,
+          ),
+          if (neighboursOf(home).isNotEmpty) chip('+ kraje sąsiednie', withNeighbours, () {
+            _toggleNeighbours();
+          }),
+        ]),
+        if (withNeighbours && countriesWithShows.length > 1) ...[
+          const SizedBox(height: 8),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(children: [
+              chip('Wszystkie kraje', onlyCountry == null, () => onlyCountry = null),
+              for (final c in countriesWithShows) ...[
+                const SizedBox(width: 8),
+                chip(countryByCode(c).flag, onlyCountry == c, () => onlyCountry = onlyCountry == c ? null : c),
+              ],
+            ]),
+          ),
+        ],
+        const SizedBox(height: 8),
         Wrap(spacing: 8, runSpacing: 8, children: [
           for (final y in [now, now + 1])
             chip('$y', year == y, () {
@@ -137,12 +251,14 @@ class _ZkwpCalendarState extends State<ZkwpCalendar> {
               padding: const EdgeInsets.only(bottom: 10),
               child: K9Card(
                 color: K9.cardHi,
-                child: Row(children: [
+                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   const Icon(Icons.wifi_off_rounded, color: K9.yellow),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                        shows.isEmpty ? '$error Sprawdź internet i pociągnij listę w dół.' : '$error Pokazuję zapisaną wersję.',
+                        shows.isEmpty
+                            ? '$error\nSprawdź internet i pociągnij listę w dół.'
+                            : '$error\nPokazuję to, co udało się pobrać lub zapisaną wersję.',
                         style: const TextStyle(fontSize: 13)),
                   ),
                 ]),
@@ -157,15 +273,20 @@ class _ZkwpCalendarState extends State<ZkwpCalendar> {
                   style: const TextStyle(color: K9.muted, fontWeight: FontWeight.w700)),
             ),
             for (final (i, z) in byMonth[m]!.indexed)
-              FadeSlideIn(index: i < 8 ? i : 0, child: _ZCard(z: z, added: _added(z), onAdd: () => _add(z))),
+              FadeSlideIn(
+                  index: i < 8 ? i : 0,
+                  child: _ZCard(z: z, foreign: z.country != home, added: _added(z), onAdd: () => _add(z))),
           ],
           if (fetchedAt != null)
             Padding(
               padding: const EdgeInsets.only(top: 14),
               child: Text(
-                  'Źródło: terminarz ZKwP (zkwp.pl), pobrano ${fmtDate(fetchedAt!)}, ${fmtTime(fetchedAt!)}. '
+                  'Źródła: ${loadedCountries.contains('PL') ? 'Polska – terminarz ZKwP (zkwp.pl); ' : ''}'
+                  '${loadedCountries.any((c) => c != 'PL') ? 'inne kraje – kalendarz wystaw międzynarodowych FCI (fci.be), tylko CACIB; ' : ''}'
+                  'pobrano ${fmtDate(fetchedAt!)}, ${fmtTime(fetchedAt!)}. '
                   'Grupy przypisuję według rodzaju wystawy: międzynarodowe i krajowe są dla wszystkich ras, '
-                  'klubowe i specjalistyczne według nazwy. Sprawdź szczegóły u organizatora.',
+                  'klubowe i specjalistyczne według nazwy. Sprawdź szczegóły u organizatora.'
+                  '${withNeighbours && neighboursOf(home).any((n) => !n.inFci) ? ' ${neighboursOf(home).where((n) => !n.inFci).map((n) => n.name).join(', ')}: brak wystaw w kalendarzu FCI.' : ''}',
                   style: const TextStyle(color: K9.faint, fontSize: 11.5)),
             ),
         ],
@@ -176,14 +297,17 @@ class _ZkwpCalendarState extends State<ZkwpCalendar> {
 
 class _ZCard extends StatelessWidget {
   final ZkwpShow z;
+  final bool foreign;
   final ShowEntry? added;
   final VoidCallback onAdd;
-  const _ZCard({required this.z, required this.added, required this.onAdd});
+  const _ZCard({required this.z, required this.foreign, required this.added, required this.onAdd});
 
   @override
   Widget build(BuildContext context) {
     final intl = z.type == ShowType.international;
     final days = z.endDate == null ? '${z.date.day}' : '${z.date.day}–${z.endDate!.day}';
+    final c = countryByCode(z.country);
+    final placeText = z.fromFci || foreign ? '${c.flag} ${z.fromFci ? z.city : z.place}, ${c.name}' : z.place;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: K9Card(
@@ -207,7 +331,7 @@ class _ZCard extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(z.place, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+              Text(placeText, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
               const SizedBox(height: 2),
               Text(z.description, style: const TextStyle(color: Color(0xFFCFCFD4), fontSize: 13)),
               const SizedBox(height: 6),
