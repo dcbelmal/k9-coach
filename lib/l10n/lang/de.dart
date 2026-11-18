@@ -1742,4 +1742,15 @@ const strings = <String, String>{
   'Dyskwalifikacja': 'Disqualifiziert',
   'Nie oceniono': 'Nicht bewertet',
   'międzynarodowa - CACIB': 'international – CACIB',
+  // Kilka psów (0.11.0)
+  'Moje psy': 'Meine Hunde',
+  'Każdy pies ma osobne treningi, zdrowie, żywienie i moduły.': 'Jeder Hund hat eigenes Training, Gesundheit, Ernährung und Module.',
+  'Dodaj kolejnego psa': 'Weiteren Hund hinzufügen',
+  'Psy ({0})': 'Hunde ({0})',
+  'Wróć': 'Zurück',
+  'Przełącz psa albo dodaj kolejnego': 'Hund wechseln oder weiteren hinzufügen',
+  'Usuń profil psa': 'Hundeprofil löschen',
+  'Usuwa tego psa i wszystkie jego wpisy': 'Löscht diesen Hund und alle seine Einträge',
+  '{0} – profil, treningi i wszystkie wpisy': '{0} – Profil, Training und alle Einträge',
+  'Osobne treningi, zdrowie, żywienie i moduły dla każdego psa': 'Eigenes Training, Gesundheit, Ernährung und Module für jeden Hund',
 };

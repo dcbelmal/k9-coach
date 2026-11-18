@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../dogs/dog_profiles.dart';
+
 import '../models.dart';
 import '../modules/module_store.dart';
 import '../modules/modules.dart';
@@ -24,8 +26,13 @@ class HeatStore extends ChangeNotifier {
 
   Future<void> load() async {
     _prefs = await SharedPreferences.getInstance();
-    final raw = _prefs!.getString(_key);
-    if (raw == null) return;
+    final raw = _prefs!.getString(dogKey(_key));
+    cycles = [];
+    remind = true;
+    if (raw == null) {
+      notifyListeners();
+      return;
+    }
     try {
       final j = jsonDecode(raw) as Map<String, dynamic>;
       cycles = [for (final e in (j['cycles'] as List? ?? [])) HeatCycle.fromJson(e)];
@@ -34,6 +41,7 @@ class HeatStore extends ChangeNotifier {
     } catch (e) {
       debugPrint('Cieczka: błąd odczytu $e');
     }
+    notifyListeners();
   }
 
   void _sort() => cycles.sort((a, b) => b.start.compareTo(a.start));
@@ -43,7 +51,7 @@ class HeatStore extends ChangeNotifier {
     notifyListeners();
     _prefs ??= await SharedPreferences.getInstance();
     await _prefs!.setString(
-        _key, jsonEncode({'cycles': cycles.map((c) => c.toJson()).toList(), 'remind': remind}));
+        dogKey(_key), jsonEncode({'cycles': cycles.map((c) => c.toJson()).toList(), 'remind': remind}));
     await Notifications.instance.reschedule(AppStore.instance);
   }
 
@@ -115,6 +123,6 @@ class HeatStore extends ChangeNotifier {
     notifyListeners();
     _prefs ??= await SharedPreferences.getInstance();
     await _prefs!.setString(
-        _key, jsonEncode({'cycles': cycles.map((c) => c.toJson()).toList(), 'remind': remind}));
+        dogKey(_key), jsonEncode({'cycles': cycles.map((c) => c.toJson()).toList(), 'remind': remind}));
   }
 }

@@ -1797,4 +1797,15 @@ const strings = <String, String>{
   'Dyskwalifikacja': '取消资格',
   'Nie oceniono': '未评级',
   'międzynarodowa - CACIB': '国际 – CACIB',
+  // Kilka psów (0.11.0)
+  'Moje psy': '我的狗',
+  'Każdy pies ma osobne treningi, zdrowie, żywienie i moduły.': '每只狗都有独立的训练、健康、营养和模块。',
+  'Dodaj kolejnego psa': '添加另一只狗',
+  'Psy ({0})': '狗 ({0})',
+  'Wróć': '返回',
+  'Przełącz psa albo dodaj kolejnego': '切换狗或添加新的狗',
+  'Usuń profil psa': '删除狗的档案',
+  'Usuwa tego psa i wszystkie jego wpisy': '删除这只狗及其所有记录',
+  '{0} – profil, treningi i wszystkie wpisy': '{0} – 档案、训练和所有记录',
+  'Osobne treningi, zdrowie, żywienie i moduły dla każdego psa': '每只狗独立的训练、健康、营养和模块',
 };

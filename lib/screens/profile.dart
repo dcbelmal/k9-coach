@@ -5,6 +5,8 @@ import 'package:material_ui/material_ui.dart';
 
 import '../breeds/breed_screen.dart';
 import '../champ_rules.dart';
+import '../dogs/dog_profiles.dart';
+import '../dogs/dog_switcher.dart';
 import '../models.dart';
 import '../notifications.dart';
 import '../store.dart';
@@ -40,6 +42,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
             Row(children: [
               Expanded(
                   child: Text(tr('Profil psa'), style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800))),
+              IconButton(
+                onPressed: () => showDogSwitcher(context),
+                tooltip: tr('Moje psy'),
+                icon: const Icon(Icons.swap_horiz_rounded, color: K9.orange),
+              ),
               IconButton(
                 onPressed: () => Navigator.of(context)
                     .push(MaterialPageRoute(builder: (_) => DogEditScreen(existing: dog))),
@@ -288,6 +295,13 @@ class _Settings extends StatelessWidget {
             },
           ),
         ListRow(
+          icon: Icons.pets_rounded,
+          color: K9.orange,
+          title: tr('Moje psy'),
+          subtitle: tr('Przełącz psa albo dodaj kolejnego'),
+          onTap: () => showDogSwitcher(context),
+        ),
+        ListRow(
           icon: Icons.dashboard_customize_outlined,
           color: K9.blue,
           title: tr('Moduły'),
@@ -304,17 +318,18 @@ class _Settings extends StatelessWidget {
         ListRow(
           icon: Icons.restart_alt_rounded,
           color: K9.red,
-          title: tr('Usuń wszystkie dane'),
-          subtitle: tr('Zacznij od nowa z innym psem'),
+          title: tr('Usuń profil psa'),
+          subtitle: tr('Usuwa tego psa i wszystkie jego wpisy'),
           onTap: () async {
-            if (await confirmDelete(context, tr('wszystkie dane psa, treningi i wpisy'))) {
-              await s.resetAll();
+            final name = s.dog?.name ?? '';
+            if (await confirmDelete(context, tr('{0} – profil, treningi i wszystkie wpisy', [name]))) {
+              await DogProfiles.instance.deleteActive();
             }
           },
         ),
         Padding(
           padding: EdgeInsets.symmetric(vertical: 10),
-          child: Text(tr('Valkor Coach · wersja {0} · dane zapisane tylko na tym telefonie', ['0.10']),
+          child: Text(tr('Valkor Coach · wersja {0} · dane zapisane tylko na tym telefonie', ['0.11']),
               textAlign: TextAlign.center, style: TextStyle(color: K9.faint, fontSize: 11.5)),
         ),
       ]),

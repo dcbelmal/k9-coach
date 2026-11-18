@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../dogs/dog_profiles.dart';
+
 /// Postępy w przewodnikach treningowych (0 = nie zaczęte, 1 = w trakcie, 2 = opanowane).
 class GuideStore extends ChangeNotifier {
   GuideStore._();
@@ -15,8 +17,12 @@ class GuideStore extends ChangeNotifier {
 
   Future<void> load() async {
     _prefs = await SharedPreferences.getInstance();
-    final raw = _prefs!.getString(_key);
-    if (raw == null) return;
+    final raw = _prefs!.getString(dogKey(_key));
+    progress.clear();
+    if (raw == null) {
+      notifyListeners();
+      return;
+    }
     try {
       final j = jsonDecode(raw) as Map<String, dynamic>;
       progress
@@ -25,6 +31,7 @@ class GuideStore extends ChangeNotifier {
     } catch (e) {
       debugPrint('Przewodniki: błąd odczytu $e');
     }
+    notifyListeners();
   }
 
   int statusOf(String id) => progress[id] ?? 0;
@@ -37,13 +44,13 @@ class GuideStore extends ChangeNotifier {
     }
     notifyListeners();
     _prefs ??= await SharedPreferences.getInstance();
-    await _prefs!.setString(_key, jsonEncode(progress));
+    await _prefs!.setString(dogKey(_key), jsonEncode(progress));
   }
 
   Future<void> reset() async {
     progress.clear();
     notifyListeners();
     _prefs ??= await SharedPreferences.getInstance();
-    await _prefs!.remove(_key);
+    await _prefs!.remove(dogKey(_key));
   }
 }

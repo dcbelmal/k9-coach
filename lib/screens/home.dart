@@ -6,6 +6,7 @@ import '../theme.dart';
 import '../widgets/common.dart';
 import '../models_ext.dart';
 import '../breeding/breeding_screen.dart';
+import '../dogs/dog_switcher.dart';
 import '../heat/heat_screen.dart';
 import '../modules/module_store.dart';
 import '../modules/modules.dart';
@@ -99,6 +100,7 @@ class _Hero extends StatelessWidget {
           child: Row(children: [
             const _Logo(),
             const Spacer(),
+            DogSwitchButton(dog: dog),
             IconButton(
               onPressed: () => showReminders(context),
               icon: const Icon(Icons.notifications_none_rounded, size: 26),

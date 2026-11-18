@@ -3,6 +3,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'breeding/breeding_store.dart';
+import 'dogs/dog_profiles.dart';
 import 'files/file_store.dart';
 import 'guides/guide_store.dart';
 import 'modules/billing.dart';
@@ -31,6 +32,7 @@ Future<void> main() async {
   await initializeDateFormatting();
   await FileStore.init();
   await Notifications.instance.init();
+  await DogProfiles.instance.load();
   await AppStore.instance.load();
   await NutritionStore.instance.load();
   await ModuleStore.instance.load();
@@ -93,14 +95,14 @@ class _BootState extends State<_Boot> {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: AppStore.instance,
+      listenable: Listenable.merge([AppStore.instance, DogProfiles.instance]),
       builder: (context, _) => AnimatedSwitcher(
         duration: const Duration(milliseconds: 400),
         child: _splash
             ? const SplashScreen(key: ValueKey('splash'))
             : AppStore.instance.dog == null
             ? const OnboardingScreen(key: ValueKey('onb'))
-            : const Shell(key: ValueKey('shell')),
+            : Shell(key: ValueKey('shell-${DogProfiles.instance.activeId}')),
       ),
     );
   }

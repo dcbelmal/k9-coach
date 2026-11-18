@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../dogs/dog_profiles.dart';
+
 import '../files/file_store.dart';
 import '../models.dart';
 
@@ -29,20 +31,25 @@ class GalleryStore extends ChangeNotifier {
 
   Future<void> load() async {
     _prefs = await SharedPreferences.getInstance();
-    final raw = _prefs!.getString(_key);
-    if (raw == null) return;
+    final raw = _prefs!.getString(dogKey(_key));
+    photos = [];
+    if (raw == null) {
+      notifyListeners();
+      return;
+    }
     try {
       photos = [for (final e in (jsonDecode(raw) as List)) GalleryPhoto.fromJson(e)];
     } catch (e) {
       debugPrint('Galeria: błąd odczytu $e');
     }
+    notifyListeners();
   }
 
   Future<void> _save() async {
     photos.sort((a, b) => b.date.compareTo(a.date));
     notifyListeners();
     _prefs ??= await SharedPreferences.getInstance();
-    await _prefs!.setString(_key, jsonEncode(photos.map((p) => p.toJson()).toList()));
+    await _prefs!.setString(dogKey(_key), jsonEncode(photos.map((p) => p.toJson()).toList()));
   }
 
   Future<void> add(Uint8List bytes, {DateTime? date}) async {

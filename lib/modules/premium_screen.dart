@@ -9,7 +9,7 @@ import '../l10n/l10n.dart';
 /// Co odblokowuje Premium. `ready` = już działa w aplikacji.
 const premiumFeatures = <(IconData, String, String, bool)>[
   (Icons.child_friendly_rounded, 'Moduł hodowlany', 'Krycia, kalkulator ciąży, termin porodu, mioty i ważenie szczeniąt', true),
-  (Icons.pets_rounded, 'Kilka psów w aplikacji', '', false),
+  (Icons.pets_rounded, 'Kilka psów w aplikacji', 'Osobne treningi, zdrowie, żywienie i moduły dla każdego psa', true),
   (Icons.cloud_sync_rounded, 'Kopia i synchronizacja w chmurze', '', false),
   (Icons.picture_as_pdf_rounded, 'Eksport PDF i Excel', '', false),
   (Icons.insights_rounded, 'Zaawansowane statystyki', '', false),

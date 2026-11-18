@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../dogs/dog_profiles.dart';
+
 import '../models.dart';
 import '../guides/guide_store.dart';
 import '../guides/guides_data.dart';
@@ -25,6 +27,8 @@ class ModuleStore extends ChangeNotifier {
   static final ModuleStore instance = ModuleStore._();
 
   static const _key = 'valkor_modules_v1';
+  // Premium dotyczy całej aplikacji (wszystkich psów), więc ma własny klucz.
+  static const _premiumKey = 'valkor_premium_v1';
   SharedPreferences? _prefs;
 
   /// null = automatycznie wg profilu, true/false = ręcznie.
@@ -36,13 +40,25 @@ class ModuleStore extends ChangeNotifier {
 
   Future<void> load() async {
     _prefs = await SharedPreferences.getInstance();
-    final raw = _prefs!.getString(_key);
-    if (raw == null) return;
+    overrides.clear();
+    // Starsze wersje trzymały Premium razem z modułami pierwszego psa.
+    final rawPremium = _prefs!.getString(_premiumKey) ?? _prefs!.getString(_key);
+    if (rawPremium != null) {
+      try {
+        final j = jsonDecode(rawPremium) as Map<String, dynamic>;
+        premium = j['premium'] ?? false;
+        premiumSource = PremiumSource.values.asNameMap()[j['premiumSource']] ?? PremiumSource.test;
+      } catch (e) {
+        debugPrint('Premium: błąd odczytu $e');
+      }
+    }
+    final raw = _prefs!.getString(dogKey(_key));
+    if (raw == null) {
+      notifyListeners();
+      return;
+    }
     try {
       final j = jsonDecode(raw) as Map<String, dynamic>;
-      premium = j['premium'] ?? false;
-      premiumSource = PremiumSource.values.asNameMap()[j['premiumSource']] ?? PremiumSource.test;
-      overrides.clear();
       final o = (j['overrides'] as Map?) ?? {};
       for (final e in o.entries) {
         final m = AppModule.values.asNameMap()[e.key];
@@ -51,13 +67,16 @@ class ModuleStore extends ChangeNotifier {
     } catch (e) {
       debugPrint('Moduły: błąd odczytu $e');
     }
+    notifyListeners();
   }
 
   Future<void> _save() async {
     notifyListeners();
     _prefs ??= await SharedPreferences.getInstance();
     await _prefs!.setString(
-        _key,
+        _premiumKey, jsonEncode({'premium': premium, 'premiumSource': premiumSource.name}));
+    await _prefs!.setString(
+        dogKey(_key),
         jsonEncode({
           'premium': premium,
           'premiumSource': premiumSource.name,
@@ -119,9 +138,8 @@ class ModuleStore extends ChangeNotifier {
   }
 
   Future<void> reset() async {
+    // Usunięcie psa czyści tylko jego moduły; Premium dotyczy całej aplikacji.
     overrides.clear();
-    // Opłaconej subskrypcji nie kasujemy razem z danymi psa.
-    if (premiumSource != PremiumSource.play) premium = false;
     await _save();
   }
 }
