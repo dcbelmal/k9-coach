@@ -16,15 +16,19 @@ import 'screens/shell.dart';
 import 'screens/splash.dart';
 import 'store.dart';
 import 'theme.dart';
+import 'l10n/l10n.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-    statusBarColor: Colors.transparent,
-    statusBarIconBrightness: Brightness.light,
-    systemNavigationBarColor: K9.bg,
-  ));
-  await initializeDateFormatting('pl');
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.light,
+      systemNavigationBarColor: K9.bg,
+    ),
+  );
+  await L10n.instance.load();
+  await initializeDateFormatting();
   await FileStore.init();
   await Notifications.instance.init();
   await AppStore.instance.load();
@@ -43,34 +47,44 @@ class K9CoachApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Valkor Coach',
-      debugShowCheckedModeBanner: false,
-      theme: K9.theme(),
-      darkTheme: K9.theme(),
-      themeMode: ThemeMode.dark,
-      locale: const Locale('pl'),
-      supportedLocales: const [Locale('pl')],
-      localizationsDelegates: GlobalMaterialLocalizations.delegates,
-      home: const _Boot(),
+    // Zmiana języka przebudowuje całą aplikację.
+    return ListenableBuilder(
+      listenable: L10n.instance,
+      builder: (context, _) => MaterialApp(
+        key: ValueKey(L10n.instance.code),
+        title: 'Valkor Coach',
+        debugShowCheckedModeBanner: false,
+        theme: K9.theme(),
+        darkTheme: K9.theme(),
+        themeMode: ThemeMode.dark,
+        locale: Locale(L10n.instance.code),
+        supportedLocales: [for (final l in appLanguages) Locale(l.code)],
+        localizationsDelegates: GlobalMaterialLocalizations.delegates,
+        home: _Boot(skipSplash: _started),
+      ),
     );
   }
 }
 
 /// Pokazuje ekran startowy z logo przez chwilę, potem aplikację.
+bool _started = false;
+
 class _Boot extends StatefulWidget {
-  const _Boot();
+  const _Boot({this.skipSplash = false});
+  final bool skipSplash;
 
   @override
   State<_Boot> createState() => _BootState();
 }
 
 class _BootState extends State<_Boot> {
-  bool _splash = true;
+  late bool _splash = !widget.skipSplash;
 
   @override
   void initState() {
     super.initState();
+    _started = true;
+    if (!_splash) return;
     Future.delayed(const Duration(milliseconds: 1600), () {
       if (mounted) setState(() => _splash = false);
     });
@@ -85,8 +99,8 @@ class _BootState extends State<_Boot> {
         child: _splash
             ? const SplashScreen(key: ValueKey('splash'))
             : AppStore.instance.dog == null
-                ? const OnboardingScreen(key: ValueKey('onb'))
-                : const Shell(key: ValueKey('shell')),
+            ? const OnboardingScreen(key: ValueKey('onb'))
+            : const Shell(key: ValueKey('shell')),
       ),
     );
   }

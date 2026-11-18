@@ -6,6 +6,7 @@ import '../nutrition/nutrition_models.dart';
 import '../nutrition/nutrition_store.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import '../l10n/l10n.dart';
 
 /// Ustawia rasę psa (z bazy, mieszaniec lub wpisaną ręcznie).
 void applyBreed(Dog d, {Breed? breed, String? custom, bool mixed = false}) {
@@ -13,7 +14,7 @@ void applyBreed(Dog d, {Breed? breed, String? custom, bool mixed = false}) {
     d
       ..mixed = true
       ..breedId = null
-      ..breed = mixedBreedLabel
+      ..breed = mixedBreedName
       ..fciGroup = null;
   } else if (breed != null) {
     d
@@ -40,7 +41,7 @@ class BreedField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final text = dog.breed.isEmpty ? 'Wybierz rasę' : dog.breed;
+    final text = dog.breed.isEmpty ? tr('Wybierz rasę') : dog.breed;
     return InkWell(
       borderRadius: BorderRadius.circular(14),
       onTap: () async {
@@ -53,8 +54,8 @@ class BreedField extends StatelessWidget {
         if (changed == true) onChanged();
       },
       child: InputDecorator(
-        decoration: const InputDecoration(
-          labelText: 'Rasa',
+        decoration: InputDecoration(
+          labelText: tr('Rasa'),
           suffixIcon: Icon(Icons.search_rounded, color: K9.muted),
         ),
         child: Text(text, style: TextStyle(color: dog.breed.isEmpty ? K9.muted : K9.text)),
@@ -85,12 +86,12 @@ class _BreedPickerState extends State<_BreedPicker> {
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
             child: Column(children: [
-              const SheetTitle('Wybierz rasę'),
+              SheetTitle(tr('Wybierz rasę')),
               TextField(
                 controller: q,
                 autofocus: true,
                 onChanged: (_) => setState(() {}),
-                decoration: const InputDecoration(hintText: 'Szukaj, np. malinois, labrador', prefixIcon: Icon(Icons.search_rounded)),
+                decoration: InputDecoration(hintText: tr('Szukaj, np. malinois, labrador'), prefixIcon: Icon(Icons.search_rounded)),
               ),
             ]),
           ),
@@ -100,8 +101,8 @@ class _BreedPickerState extends State<_BreedPicker> {
               children: [
                 ListTile(
                   leading: const Icon(Icons.diversity_3_rounded, color: K9.orange),
-                  title: const Text(mixedBreedLabel, style: TextStyle(fontWeight: FontWeight.w700)),
-                  subtitle: const Text('Dane tylko z tego, co wpiszesz', style: TextStyle(color: K9.muted, fontSize: 12.5)),
+                  title: Text(mixedBreedName, style: const TextStyle(fontWeight: FontWeight.w700)),
+                  subtitle: Text(tr('Dane tylko z tego, co wpiszesz'), style: TextStyle(color: K9.muted, fontSize: 12.5)),
                   onTap: () {
                     applyBreed(widget.dog, mixed: true);
                     Navigator.pop(context, true);
@@ -110,7 +111,7 @@ class _BreedPickerState extends State<_BreedPicker> {
                 if (custom.isNotEmpty && !list.any((b) => b.name.toLowerCase() == custom.toLowerCase()))
                   ListTile(
                     leading: const Icon(Icons.edit_rounded, color: K9.muted),
-                    title: Text('Użyj nazwy: „$custom”'),
+                    title: Text(tr('Użyj nazwy: „{0}”', [custom])),
                     onTap: () {
                       applyBreed(widget.dog, custom: custom);
                       Navigator.pop(context, true);
@@ -190,7 +191,7 @@ class DogLifestyleFields extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       ChoiceChips<DogActivity>(
-        label: 'Poziom aktywności',
+        label: tr('Poziom aktywności'),
         values: DogActivity.values,
         value: dog.activity,
         text: (v) => v.label,
@@ -206,7 +207,7 @@ class DogLifestyleFields extends StatelessWidget {
         ),
       gap16,
       ChoiceChips<DogPurpose>(
-        label: 'Cel użytkowania psa',
+        label: tr('Cel użytkowania psa'),
         values: DogPurpose.values,
         value: dog.purpose,
         text: (v) => v.label,
@@ -218,12 +219,12 @@ class DogLifestyleFields extends StatelessWidget {
       ),
       gap16,
       ChoiceChips<bool>(
-        label: 'Status rozrodczy',
+        label: tr('Status rozrodczy'),
         values: const [false, true],
         value: dog.neutered,
         text: (v) => dog.female
-            ? (v ? 'Wysterylizowana' : 'Niewysterylizowana')
-            : (v ? 'Kastrowany' : 'Niekastrowany'),
+            ? (v ? tr('Wysterylizowana') : tr('Niewysterylizowana'))
+            : (v ? tr('Kastrowany') : tr('Niekastrowany')),
         onChanged: (v) {
           dog.neutered = v;
           onChanged();

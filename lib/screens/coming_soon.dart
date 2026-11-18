@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../theme.dart';
 import '../widgets/common.dart';
+import '../l10n/l10n.dart';
 
 enum Module {
   shows('Wystawy', Icons.emoji_events_rounded, [
@@ -33,10 +34,12 @@ enum Module {
     'Raporty PDF',
   ]);
 
-  final String label;
+  final String _label;
+  String get label => tr(_label);
   final IconData icon;
-  final List<String> features;
-  const Module(this.label, this.icon, this.features);
+  final List<String> _features;
+  List<String> get features => trList(_features);
+  const Module(this._label, this.icon, this._features);
 }
 
 class ComingSoonScreen extends StatelessWidget {
@@ -51,10 +54,10 @@ class ComingSoonScreen extends StatelessWidget {
         const SizedBox(height: 20),
         Center(child: IconBadge(module.icon, K9.orange, size: 88)),
         const SizedBox(height: 20),
-        const Text('Wkrótce w Valkor Coach',
+        Text(tr('Wkrótce w Valkor Coach'),
             textAlign: TextAlign.center, style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
         const SizedBox(height: 8),
-        const Text('Ten moduł pojawi się w kolejnej wersji aplikacji.',
+        Text(tr('Ten moduł pojawi się w kolejnej wersji aplikacji.'),
             textAlign: TextAlign.center, style: TextStyle(color: K9.muted)),
         const SizedBox(height: 28),
         K9Card(

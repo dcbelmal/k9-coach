@@ -7,6 +7,7 @@ import '../store.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/photo.dart';
+import '../l10n/l10n.dart';
 
 final _s = AppStore.instance;
 
@@ -19,10 +20,10 @@ class GearScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-          title: const Row(children: [
+          title: Row(children: [
         Icon(Icons.backpack_outlined, color: K9.orange),
         SizedBox(width: 10),
-        Text('Sprzęt'),
+        Text(tr('Sprzęt')),
       ])),
       floatingActionButton: FloatingActionButton(
         backgroundColor: K9.orange,
@@ -39,9 +40,9 @@ class GearScreen extends StatelessWidget {
           if (_s.gear.isEmpty) {
             return EmptyState(
               icon: Icons.backpack_rounded,
-              title: 'Brak sprzętu',
-              text: 'Dodaj szelki, linkę czy rower. Policzę kilometry z treningów i przypomnę o wymianie.',
-              action: 'Dodaj sprzęt',
+              title: tr('Brak sprzętu'),
+              text: tr('Dodaj szelki, linkę czy rower. Policzę kilometry z treningów i przypomnę o wymianie.'),
+              action: tr('Dodaj sprzęt'),
               onAction: () => openGearForm(context),
             );
           }
@@ -50,17 +51,17 @@ class GearScreen extends StatelessWidget {
           return ListView(padding: const EdgeInsets.fromLTRB(16, 4, 16, 100), children: [
             K9Card(
               child: Row(children: [
-                Expanded(child: StatValue(label: 'W użyciu', value: '${active.length}')),
-                Expanded(child: StatValue(label: 'Do wymiany', value: '$toReplace', color: K9.yellow)),
-                Expanded(child: StatValue(label: 'Wartość', value: fmtNum(value, 0), unit: 'zł')),
+                Expanded(child: StatValue(label: tr('W użyciu'), value: '${active.length}')),
+                Expanded(child: StatValue(label: tr('Do wymiany'), value: '$toReplace', color: K9.yellow)),
+                Expanded(child: StatValue(label: tr('Wartość'), value: fmtNum(value, 0), unit: tr('zł'))),
               ]),
             ),
             gap12,
             for (final (i, g) in active.indexed) FadeSlideIn(index: i, child: _GearCard(g: g)),
             if (retired.isNotEmpty) ...[
-              const Padding(
+              Padding(
                 padding: EdgeInsets.fromLTRB(4, 12, 4, 8),
-                child: Text('Wycofany', style: TextStyle(color: K9.muted, fontWeight: FontWeight.w700)),
+                child: Text(tr('Wycofany'), style: TextStyle(color: K9.muted, fontWeight: FontWeight.w700)),
               ),
               for (final g in retired) Opacity(opacity: 0.55, child: _GearCard(g: g)),
             ],
@@ -82,9 +83,9 @@ class _GearCard extends StatelessWidget {
     final c = wearColor(wear);
     final r = g.replaceDate;
     final details = <String>[
-      if (g.purchased != null) 'kupione ${fmtDate(g.purchased!)}',
-      if (g.disciplines.isNotEmpty) '${fmtKm(km)}${g.maxKm != null ? ' / ${fmtKm(g.maxKm!)}' : ''} km',
-      if (r != null) 'wymiana ${relDays(r)}',
+      if (g.purchased != null) tr('kupione {0}', [fmtDate(g.purchased!)]),
+      if (g.disciplines.isNotEmpty) tr('{0}{1} km', [fmtKm(km), g.maxKm != null ? ' / ${fmtKm(g.maxKm!)}' : '']),
+      if (r != null) tr('wymiana {0}', [relDays(r)]),
     ];
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
@@ -129,14 +130,14 @@ class _GearCard extends StatelessWidget {
             Row(children: [
               const Icon(Icons.warning_amber_rounded, color: K9.red, size: 18),
               const SizedBox(width: 6),
-              const Expanded(
-                  child: Text('Czas na wymianę', style: TextStyle(color: K9.red, fontWeight: FontWeight.w600, fontSize: 13))),
+              Expanded(
+                  child: Text(tr('Czas na wymianę'), style: TextStyle(color: K9.red, fontWeight: FontWeight.w600, fontSize: 13))),
               TextButton(
                 onPressed: () {
                   g.retired = true;
                   _s.upsertGear(g);
                 },
-                child: const Text('Wycofaj'),
+                child: Text(tr('Wycofaj')),
               ),
             ]),
           ],
@@ -183,11 +184,11 @@ class _GearFormState extends State<_GearForm> {
   @override
   Widget build(BuildContext context) {
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      SheetTitle(widget.existing == null ? 'Nowy sprzęt' : 'Edytuj sprzęt',
+      SheetTitle(widget.existing == null ? tr('Nowy sprzęt') : tr('Edytuj sprzęt'),
           onDelete: widget.existing == null
               ? null
               : () async {
-                  if (await confirmDelete(context, 'sprzęt')) {
+                  if (await confirmDelete(context, tr('sprzęt'))) {
                     await _s.deleteGear(widget.existing!);
                     if (context.mounted) Navigator.pop(context);
                   }
@@ -212,9 +213,9 @@ class _GearFormState extends State<_GearForm> {
         const SizedBox(width: 12),
         Expanded(
           child: Column(children: [
-            TextField(controller: name, decoration: const InputDecoration(labelText: 'Nazwa *')),
+            TextField(controller: name, decoration: InputDecoration(labelText: tr('Nazwa *'))),
             const SizedBox(height: 8),
-            TextField(controller: brand, decoration: const InputDecoration(labelText: 'Marka / model')),
+            TextField(controller: brand, decoration: InputDecoration(labelText: tr('Marka / model'))),
           ]),
         ),
       ]),
@@ -246,14 +247,14 @@ class _GearFormState extends State<_GearForm> {
       Row(children: [
         Expanded(
             flex: 3,
-            child: DateField(label: 'Data zakupu', value: g.purchased, clearable: true, onChanged: (v) => setState(() => g.purchased = v))),
+            child: DateField(label: tr('Data zakupu'), value: g.purchased, clearable: true, onChanged: (v) => setState(() => g.purchased = v))),
         const SizedBox(width: 12),
         Expanded(
             flex: 2,
             child: TextField(
                 controller: price,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(labelText: 'Cena (zł)'))),
+                decoration: InputDecoration(labelText: tr('Cena (zł)')))),
       ]),
       gap12,
       Row(children: [
@@ -261,16 +262,16 @@ class _GearFormState extends State<_GearForm> {
             child: TextField(
                 controller: months,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Wymiana po (mies.)'))),
+                decoration: InputDecoration(labelText: tr('Wymiana po (mies.)')))),
         const SizedBox(width: 12),
         Expanded(
             child: TextField(
                 controller: maxKm,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'lub po (km)'))),
+                decoration: InputDecoration(labelText: tr('lub po (km)')))),
       ]),
       gap16,
-      const Text('Licz kilometry z treningów', style: TextStyle(fontWeight: FontWeight.w600)),
+      Text(tr('Licz kilometry z treningów'), style: TextStyle(fontWeight: FontWeight.w600)),
       const SizedBox(height: 8),
       Wrap(spacing: 8, runSpacing: 8, children: [
         for (final d in Discipline.values.where((d) => d.hasDistance && d != Discipline.recovery))
@@ -289,23 +290,23 @@ class _GearFormState extends State<_GearForm> {
       ]),
       SwitchListTile(
         contentPadding: EdgeInsets.zero,
-        title: const Text('Przypomnij o wymianie'),
+        title: Text(tr('Przypomnij o wymianie')),
         value: g.remind,
         onChanged: (v) => setState(() => g.remind = v),
       ),
       if (widget.existing != null)
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
-          title: const Text('Wycofany z użytku'),
+          title: Text(tr('Wycofany z użytku')),
           value: g.retired,
           onChanged: (v) => setState(() => g.retired = v),
         ),
-      TextField(controller: notes, maxLines: 3, minLines: 1, decoration: const InputDecoration(labelText: 'Notatki (rozmiar, serwis)')),
+      TextField(controller: notes, maxLines: 3, minLines: 1, decoration: InputDecoration(labelText: tr('Notatki (rozmiar, serwis)'))),
       const SizedBox(height: 20),
       FilledButton(
         onPressed: () async {
           if (name.text.trim().isEmpty) {
-            toast(context, 'Wpisz nazwę');
+            toast(context, tr('Wpisz nazwę'));
             return;
           }
           g
@@ -318,7 +319,7 @@ class _GearFormState extends State<_GearForm> {
           await _s.upsertGear(g);
           if (context.mounted) Navigator.pop(context);
         },
-        child: const Text('Zapisz'),
+        child: Text(tr('Zapisz')),
       ),
     ]);
   }

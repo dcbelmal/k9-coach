@@ -14,6 +14,7 @@ import '../store.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import 'track_detail.dart';
+import '../l10n/l10n.dart';
 
 final _rec = TrackRecorder.instance;
 
@@ -53,7 +54,7 @@ class OsmCredit extends StatelessWidget {
       margin: const EdgeInsets.all(6),
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.55), borderRadius: BorderRadius.circular(6)),
-      child: const Text('© OpenStreetMap', style: TextStyle(color: Colors.white70, fontSize: 9.5)),
+      child: Text(tr('© OpenStreetMap'), style: TextStyle(color: Colors.white70, fontSize: 9.5)),
     ),
   );
 }
@@ -138,11 +139,11 @@ class _GpsScreenState extends State<GpsScreen> {
       final go = await showDialog<bool>(
         context: context,
         builder: (c) => AlertDialog(
-          title: const Text('Za gorąco'),
-          content: Text('${fmtNum(weather!.temp)}°C, odczuwalna ${fmtNum(weather!.feels)}°C.\n\n${weather!.advice}'),
+          title: Text(tr('Za gorąco')),
+          content: Text(tr('{0}°C, odczuwalna {1}°C.\n\n{2}', [fmtNum(weather!.temp), fmtNum(weather!.feels), weather!.advice])),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Rezygnuję')),
-            TextButton(onPressed: () => Navigator.pop(c, true), child: const Text('Startuję mimo to')),
+            TextButton(onPressed: () => Navigator.pop(c, false), child: Text(tr('Rezygnuję'))),
+            TextButton(onPressed: () => Navigator.pop(c, true), child: Text(tr('Startuję mimo to'))),
           ],
         ),
       );
@@ -164,14 +165,14 @@ class _GpsScreenState extends State<GpsScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const SheetTitle('Zakończyć trening?'),
-              FilledButton(onPressed: () => Navigator.pop(c, 1), child: const Text('Zakończ i zapisz')),
+              SheetTitle(tr('Zakończyć trening?')),
+              FilledButton(onPressed: () => Navigator.pop(c, 1), child: Text(tr('Zakończ i zapisz'))),
               const SizedBox(height: 10),
-              OutlinedButton(onPressed: () => Navigator.pop(c, 0), child: const Text('Wróć do treningu')),
+              OutlinedButton(onPressed: () => Navigator.pop(c, 0), child: Text(tr('Wróć do treningu'))),
               const SizedBox(height: 4),
               TextButton(
                 onPressed: () => Navigator.pop(c, 2),
-                child: const Text('Odrzuć bez zapisywania', style: TextStyle(color: K9.red)),
+                child: Text(tr('Odrzuć bez zapisywania'), style: TextStyle(color: K9.red)),
               ),
             ],
           ),
@@ -234,10 +235,10 @@ class _GpsScreenState extends State<GpsScreen> {
         return PopScope(
           canPop: idle,
           onPopInvokedWithResult: (did, _) {
-            if (!did) toast(context, 'Trening trwa. Zakończ go przyciskiem Stop.');
+            if (!did) toast(context, tr('Trening trwa. Zakończ go przyciskiem Stop.'));
           },
           child: Scaffold(
-            appBar: AppBar(title: Text(idle ? 'Start treningu' : _rec.discipline.label), automaticallyImplyLeading: idle),
+            appBar: AppBar(title: Text(idle ? tr('Start treningu') : _rec.discipline.label), automaticallyImplyLeading: idle),
             body: idle ? _setup() : _live(),
           ),
         );
@@ -355,7 +356,7 @@ class _GpsScreenState extends State<GpsScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Z planu: ${plan.discipline.label}${plan.notes.isEmpty ? '' : ' – ${plan.notes}'}',
+                          tr('Z planu: {0}{1}', [plan.discipline.label, plan.notes.isEmpty ? '' : ' – ${plan.notes}']),
                           style: const TextStyle(fontWeight: FontWeight.w700),
                         ),
                         Text(
@@ -387,14 +388,14 @@ class _GpsScreenState extends State<GpsScreen> {
                       onPressed: () async {
                         await Geolocator.openAppSettings();
                       },
-                      child: const Text('Ustawienia'),
+                      child: Text(tr('Ustawienia')),
                     ),
                 ],
               ),
             ),
           ),
         if (gps) ...[_map(height: 200), gap16],
-        const SectionTitle('Dyscyplina'),
+        SectionTitle(tr('Dyscyplina')),
         Wrap(
           spacing: 8,
           runSpacing: 8,
@@ -403,26 +404,26 @@ class _GpsScreenState extends State<GpsScreen> {
         const SizedBox(height: 10),
         Text(_rec.discipline.description, style: const TextStyle(color: K9.muted, fontSize: 12.5)),
         if (!gps)
-          const Padding(
+          Padding(
             padding: EdgeInsets.only(top: 6),
             child: Text(
-              'Bez GPS – liczę tylko czas treningu.',
+              tr('Bez GPS – liczę tylko czas treningu.'),
               style: TextStyle(color: K9.yellow, fontSize: 12.5),
             ),
           ),
         gap16,
-        const SectionTitle('Cel czasu'),
+        SectionTitle(tr('Cel czasu')),
         Wrap(
           spacing: 8,
           runSpacing: 8,
           children: [
             for (final g in goals)
-              chip(g == 0 ? 'Bez celu' : '$g min', _rec.targetMin == g, () => _rec.targetMin = g),
+              chip(g == 0 ? tr('Bez celu') : tr('{0} min', [g]), _rec.targetMin == g, () => _rec.targetMin = g),
           ],
         ),
         const SizedBox(height: 6),
-        const Text(
-          'Gdy minie założony czas, usłyszysz komunikat i dostaniesz powiadomienie.',
+        Text(
+          tr('Gdy minie założony czas, usłyszysz komunikat i dostaniesz powiadomienie.'),
           style: TextStyle(color: K9.faint, fontSize: 12),
         ),
         gap16,
@@ -434,8 +435,8 @@ class _GpsScreenState extends State<GpsScreen> {
                 children: [
                   const Icon(Icons.record_voice_over_rounded, color: K9.orange),
                   const SizedBox(width: 12),
-                  const Expanded(
-                    child: Text('Komunikaty głosowe', style: TextStyle(fontWeight: FontWeight.w600)),
+                  Expanded(
+                    child: Text(tr('Komunikaty głosowe'), style: TextStyle(fontWeight: FontWeight.w600)),
                   ),
                   Switch(
                     value: _rec.voice,
@@ -449,14 +450,14 @@ class _GpsScreenState extends State<GpsScreen> {
                 children: [
                   const Icon(Icons.water_drop_rounded, color: K9.blue),
                   const SizedBox(width: 12),
-                  const Expanded(
-                    child: Text('Przypomnienie o wodzie', style: TextStyle(fontWeight: FontWeight.w600)),
+                  Expanded(
+                    child: Text(tr('Przypomnienie o wodzie'), style: TextStyle(fontWeight: FontWeight.w600)),
                   ),
                 ],
               ),
               const SizedBox(height: 10),
               Segmented(
-                items: const ['Wył.', '10 min', '15 min', '20 min'],
+                items: [tr('Wył.'), tr('10 min'), tr('15 min'), tr('20 min')],
                 index: switch (_rec.waterEveryMin) {
                   10 => 1,
                   15 => 2,
@@ -475,12 +476,12 @@ class _GpsScreenState extends State<GpsScreen> {
           child: FilledButton.icon(
             onPressed: _start,
             icon: const Icon(Icons.play_arrow_rounded, size: 30),
-            label: const Text('Start', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            label: Text(tr('Start'), style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
           ),
         ),
         const SizedBox(height: 10),
-        const Text(
-          'Działa też przy wyłączonym ekranie. Na ekranie blokady zobaczysz powiadomienie z czasem treningu.',
+        Text(
+          tr('Działa też przy wyłączonym ekranie. Na ekranie blokady zobaczysz powiadomienie z czasem treningu.'),
           textAlign: TextAlign.center,
           style: TextStyle(color: K9.faint, fontSize: 12),
         ),
@@ -490,26 +491,26 @@ class _GpsScreenState extends State<GpsScreen> {
 
   Widget _weatherCard() {
     if (weatherLoading) {
-      return const K9Card(
+      return K9Card(
         child: Row(
           children: [
             SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: K9.orange)),
             SizedBox(width: 12),
-            Text('Sprawdzam pogodę…', style: TextStyle(color: K9.muted)),
+            Text(tr('Sprawdzam pogodę…'), style: TextStyle(color: K9.muted)),
           ],
         ),
       );
     }
     final w = weather;
     if (w == null) {
-      return const K9Card(
+      return K9Card(
         child: Row(
           children: [
             Icon(Icons.cloud_off_rounded, color: K9.muted),
             SizedBox(width: 12),
             Expanded(
               child: Text(
-                'Brak danych o pogodzie. Przy ponad 15°C biegnij krócej i zabierz wodę.',
+                tr('Brak danych o pogodzie. Przy ponad 15°C biegnij krócej i zabierz wodę.'),
                 style: TextStyle(color: K9.muted, fontSize: 13),
               ),
             ),
@@ -533,7 +534,7 @@ class _GpsScreenState extends State<GpsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '${fmtNum(w.temp)}°C · odczuwalna ${fmtNum(w.feels)}°C · wilg. ${w.humidity}%',
+                  tr('{0}°C · odczuwalna {1}°C · wilg. {2}%', [fmtNum(w.temp), fmtNum(w.feels), w.humidity]),
                   style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 4),
@@ -585,10 +586,10 @@ class _GpsScreenState extends State<GpsScreen> {
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
             children: [
               if (paused)
-                const Padding(
+                Padding(
                   padding: EdgeInsets.only(bottom: 10),
                   child: Center(
-                    child: Pill(icon: Icons.pause_rounded, text: 'Pauza'),
+                    child: Pill(icon: Icons.pause_rounded, text: tr('Pauza')),
                   ),
                 ),
               if (_rec.error != null)
@@ -602,18 +603,18 @@ class _GpsScreenState extends State<GpsScreen> {
                 child: Column(
                   children: [
                     if (gps) ...[
-                      big('Dystans', fmtKm(_rec.meters / 1000), unit: 'km', hero: true),
+                      big(tr('Dystans'), fmtKm(_rec.meters / 1000), unit: 'km', hero: true),
                       const SizedBox(height: 14),
                       Row(
                         children: [
-                          Expanded(child: big('Czas', fmtClock(_rec.seconds))),
-                          Expanded(child: big('Tempo śr.', fmtPace(_rec.avgPace), unit: '/km')),
-                          Expanded(child: big('Prędkość', speed == null ? '–' : fmtNum(speed), unit: 'km/h')),
+                          Expanded(child: big(tr('Czas'), fmtClock(_rec.seconds))),
+                          Expanded(child: big(tr('Tempo śr.'), fmtPace(_rec.avgPace), unit: '/km')),
+                          Expanded(child: big(tr('Prędkość'), speed == null ? '–' : fmtNum(speed), unit: 'km/h')),
                         ],
                       ),
                     ] else ...[
                       const SizedBox(height: 12),
-                      big('Czas treningu', fmtClock(_rec.seconds), hero: true),
+                      big(tr('Czas treningu'), fmtClock(_rec.seconds), hero: true),
                       const SizedBox(height: 12),
                     ],
                     if (goal > 0) ...[
@@ -628,8 +629,8 @@ class _GpsScreenState extends State<GpsScreen> {
                           Expanded(
                             child: Text(
                               _rec.targetTimeDone
-                                  ? 'Cel ${_rec.targetMin} min osiągnięty!'
-                                  : 'Cel ${_rec.targetMin} min · zostało ${fmtClock(goal - _rec.seconds)}',
+                                  ? tr('Cel {0} min osiągnięty!', [_rec.targetMin])
+                                  : tr('Cel {0} min · zostało {1}', [_rec.targetMin, fmtClock(goal - _rec.seconds)]),
                               style: TextStyle(
                                 fontWeight: FontWeight.w700,
                                 color: _rec.targetTimeDone ? K9.green : K9.text,
@@ -652,7 +653,7 @@ class _GpsScreenState extends State<GpsScreen> {
                     if (_rec.laps.isNotEmpty) ...[
                       const Divider(color: K9.border, height: 24),
                       Text(
-                        'Okrążenie ${_rec.laps.length + 1}: ${fmtClock(_rec.lapSeconds)} · ${fmtKm(_rec.lapMeters / 1000)} km',
+                        tr('Okrążenie {0}: {1} · {2} km', [_rec.laps.length + 1, fmtClock(_rec.lapSeconds), fmtKm(_rec.lapMeters / 1000)]),
                         style: const TextStyle(color: K9.muted, fontWeight: FontWeight.w600),
                       ),
                     ],
@@ -668,16 +669,16 @@ class _GpsScreenState extends State<GpsScreen> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              _roundBtn(Icons.flag_rounded, gps ? 'Okrążenie' : 'Runda', K9.cardHi, K9.text, _rec.lap),
+              _roundBtn(Icons.flag_rounded, gps ? tr('Okrążenie') : tr('Runda'), K9.cardHi, K9.text, _rec.lap),
               _roundBtn(
                 paused ? Icons.play_arrow_rounded : Icons.pause_rounded,
-                paused ? 'Wznów' : 'Pauza',
+                paused ? tr('Wznów') : tr('Pauza'),
                 K9.orange,
                 Colors.black,
                 paused ? _rec.resume : _rec.pause,
                 size: 80,
               ),
-              _roundBtn(Icons.stop_rounded, 'Stop', K9.red, Colors.white, _stop),
+              _roundBtn(Icons.stop_rounded, tr('Stop'), K9.red, Colors.white, _stop),
             ],
           ),
         ),
@@ -738,11 +739,11 @@ class RecordsCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
               Icon(Icons.military_tech_rounded, color: K9.yellow, size: 20),
               SizedBox(width: 8),
-              Text('Rekordy', style: TextStyle(fontWeight: FontWeight.w700)),
+              Text(tr('Rekordy'), style: TextStyle(fontWeight: FontWeight.w700)),
             ],
           ),
           const SizedBox(height: 12),
@@ -750,12 +751,12 @@ class RecordsCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               item(
-                'Najszybszy km',
-                r.bestKm == null ? '–' : '${fmtPace(r.bestKm!.bestKmSec!.toDouble())}/km',
+                tr('Najszybszy km'),
+                r.bestKm == null ? '–' : tr('{0}/km', [fmtPace(r.bestKm!.bestKmSec!.toDouble())]),
                 r.bestKm,
               ),
-              item('Najdłuższa trasa', r.longest == null ? '–' : '${fmtKm(r.longest!.distanceKm!)} km', r.longest),
-              item('Tempo na 5 km+', r.best5k == null ? '–' : '${fmtPace(Records.avgPace(r.best5k!)!)}/km', r.best5k),
+              item(tr('Najdłuższa trasa'), r.longest == null ? '–' : tr('{0} km', [fmtKm(r.longest!.distanceKm!)]), r.longest),
+              item(tr('Tempo na 5 km+'), r.best5k == null ? '–' : tr('{0}/km', [fmtPace(Records.avgPace(r.best5k!)!)]), r.best5k),
             ],
           ),
         ],

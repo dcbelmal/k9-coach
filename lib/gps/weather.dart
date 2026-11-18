@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import '../l10n/l10n.dart';
 
 class Weather {
   final double temp;
@@ -12,9 +13,9 @@ class Weather {
   int get risk => feels >= 22 || temp >= 20 ? 2 : (feels >= 15 || temp >= 15 ? 1 : 0);
 
   String get advice => switch (risk) {
-        2 => 'Za gorąco na canicross i bikejoring. Wybierz spokojny spacer, wodę lub trening wcześnie rano.',
-        1 => 'Ciepło. Skróć dystans, biegnij wolniej, zabierz wodę i obserwuj język i oddech psa.',
-        _ => 'Dobre warunki do biegu z psem.',
+        2 => tr('Za gorąco na canicross i bikejoring. Wybierz spokojny spacer, wodę lub trening wcześnie rano.'),
+        1 => tr('Ciepło. Skróć dystans, biegnij wolniej, zabierz wodę i obserwuj język i oddech psa.'),
+        _ => tr('Dobre warunki do biegu z psem.'),
       };
 }
 

@@ -9,6 +9,7 @@ import '../modules/module_store.dart';
 import '../modules/modules.dart';
 import '../modules/modules_ui.dart';
 import 'forms.dart';
+import '../l10n/l10n.dart';
 
 Color dueColor(DateTime due) {
   final days = dayOnly(due).difference(dayOnly(DateTime.now())).inDays;
@@ -28,10 +29,10 @@ class HealthScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: !inTab,
-        title: const Row(children: [
+        title: Row(children: [
           Icon(Icons.favorite_border_rounded, color: K9.orange),
           SizedBox(width: 10),
-          Text('Zdrowie'),
+          Text(tr('Zdrowie')),
         ]),
       ),
       floatingActionButton: inTab
@@ -53,9 +54,9 @@ class HealthScreen extends StatelessWidget {
             FadeSlideIn(
               child: K9Card(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const SectionTitle('Najbliższe terminy', icon: Icons.notifications_active_outlined),
+                  SectionTitle(tr('Najbliższe terminy'), icon: Icons.notifications_active_outlined),
                   if (due.isEmpty)
-                    const Text('Brak terminów. Dodaj szczepienie lub zabieg z datą następnego terminu.',
+                    Text(tr('Brak terminów. Dodaj szczepienie lub zabieg z datą następnego terminu.'),
                         style: TextStyle(color: K9.muted)),
                   for (final h in due)
                     ListRow(
@@ -80,7 +81,7 @@ class HealthScreen extends StatelessWidget {
                 child: K9Card(
                   padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    const SectionTitle('Codzienna opieka', icon: Icons.spa_outlined),
+                    SectionTitle(tr('Codzienna opieka'), icon: Icons.spa_outlined),
                     for (final m in care)
                       ListRow(
                         icon: m.icon,
@@ -94,9 +95,9 @@ class HealthScreen extends StatelessWidget {
               ),
             ],
             gap16,
-            const Padding(
+            Padding(
               padding: EdgeInsets.only(left: 4, bottom: 8),
-              child: Text('WPISY ZDROWOTNE',
+              child: Text(tr('WPISY ZDROWOTNE'),
                   style: TextStyle(color: K9.muted, fontSize: 11.5, fontWeight: FontWeight.w700, letterSpacing: 1)),
             ),
             for (final (i, c) in HealthCategory.values.indexed) ...[
@@ -121,11 +122,11 @@ class _CategoryCard extends StatelessWidget {
     final upcoming = s.dueItems.where((h) => h.category == category).toList();
     String sub;
     if (upcoming.isNotEmpty) {
-      sub = 'Następne: ${fmtDate(upcoming.first.nextDue!)}';
+      sub = tr('Następne: {0}', [fmtDate(upcoming.first.nextDue!)]);
     } else if (latest != null) {
-      sub = 'Ostatnio: ${latest.title}, ${fmtDate(latest.date)}';
+      sub = tr('Ostatnio: {0}, {1}', [latest.title, fmtDate(latest.date)]);
     } else {
-      sub = 'Brak wpisów';
+      sub = tr('Brak wpisów');
     }
     return K9Card(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -155,7 +156,7 @@ class HealthCategoryScreen extends StatelessWidget {
         foregroundColor: Colors.black,
         onPressed: () => openHealthForm(context, category: category),
         icon: const Icon(Icons.add_rounded),
-        label: const Text('Dodaj wpis', style: TextStyle(fontWeight: FontWeight.w700)),
+        label: Text(tr('Dodaj wpis'), style: TextStyle(fontWeight: FontWeight.w700)),
       ),
       body: ListenableBuilder(
         listenable: s,
@@ -164,8 +165,8 @@ class HealthCategoryScreen extends StatelessWidget {
           if (list.isEmpty) {
             return EmptyState(
               icon: category.icon,
-              title: 'Brak wpisów',
-              text: 'Dodaj pierwszy wpis, a przypomnę o kolejnym terminie.',
+              title: tr('Brak wpisów'),
+              text: tr('Dodaj pierwszy wpis, a przypomnę o kolejnym terminie.'),
             );
           }
           return ListView.separated(
@@ -196,7 +197,7 @@ class HealthCategoryScreen extends StatelessWidget {
                       Row(children: [
                         Icon(Icons.event_repeat_rounded, size: 16, color: dueColor(h.nextDue!)),
                         const SizedBox(width: 6),
-                        Text('Następny termin: ${fmtDate(h.nextDue!)} (${relDays(h.nextDue!)})',
+                        Text(tr('Następny termin: {0} ({1})', [fmtDate(h.nextDue!), relDays(h.nextDue!)]),
                             style: TextStyle(color: dueColor(h.nextDue!), fontSize: 13, fontWeight: FontWeight.w600)),
                       ]),
                     ],

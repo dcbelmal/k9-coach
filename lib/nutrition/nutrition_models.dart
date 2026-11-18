@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
 import '../models.dart' show newId;
+import '../l10n/l10n.dart';
 
 // ---------------------------------------------------------------------------
 // Moduł Żywienie (AI Nutrition) – modele danych.
@@ -18,10 +19,11 @@ enum ProductType {
   supplement('Suplement', Icons.medication_liquid_rounded, Color(0xFF34C759)),
   other('Inne', Icons.restaurant_rounded, Color(0xFF8E8E93));
 
-  final String label;
+  final String _label;
+  String get label => tr(_label);
   final IconData icon;
   final Color color;
-  const ProductType(this.label, this.icon, this.color);
+  const ProductType(this._label, this.icon, this.color);
 
   bool get isMainFood => this == dry || this == wet;
 }
@@ -194,10 +196,11 @@ enum FeedKind {
   treat('Przysmak', Icons.cookie_rounded, Color(0xFFFFB020)),
   supplement('Suplement', Icons.medication_liquid_rounded, Color(0xFF34C759));
 
-  final String label;
+  final String _label;
+  String get label => tr(_label);
   final IconData icon;
   final Color color;
-  const FeedKind(this.label, this.icon, this.color);
+  const FeedKind(this._label, this.icon, this.color);
 
   bool get isMeal => this == morning || this == evening || this == extra;
 }
@@ -298,9 +301,10 @@ enum NutritionGoal {
   lose('Redukcja', Icons.trending_down_rounded),
   gain('Budowa masy', Icons.trending_up_rounded);
 
-  final String label;
+  final String _label;
+  String get label => tr(_label);
   final IconData icon;
-  const NutritionGoal(this.label, this.icon);
+  const NutritionGoal(this._label, this.icon);
 }
 
 enum ActivityLevel {
@@ -308,10 +312,12 @@ enum ActivityLevel {
   normal('Umiarkowany', 'Codzienne spacery, zwykła aktywność', 1.0),
   high('Bardzo aktywny', 'Dużo swobodnego biegania, pies pracujący', 1.2);
 
-  final String label;
-  final String hint;
+  final String _label;
+  String get label => tr(_label);
+  final String _hint;
+  String get hint => tr(_hint);
   final double factor;
-  const ActivityLevel(this.label, this.hint, this.factor);
+  const ActivityLevel(this._label, this._hint, this.factor);
 }
 
 /// Ustawienia żywienia psa.

@@ -6,6 +6,7 @@ import 'health.dart';
 import 'home.dart';
 import 'profile.dart';
 import 'training.dart';
+import '../l10n/l10n.dart';
 
 /// Zakładki dolnego paska: 0 Start, 1 Trening, 2 Zdrowie, 3 Pies.
 final tabIndex = ValueNotifier<int>(0);
@@ -85,8 +86,8 @@ class _BottomBar extends StatelessWidget {
         child: SizedBox(
           height: 66,
           child: Row(children: [
-            item(0, Icons.home_outlined, Icons.home_rounded, 'Start'),
-            item(1, Icons.directions_run, Icons.directions_run_rounded, 'Trening'),
+            item(0, Icons.home_outlined, Icons.home_rounded, tr('Start')),
+            item(1, Icons.directions_run, Icons.directions_run_rounded, tr('Trening')),
             Expanded(
               child: Center(
                 child: GestureDetector(
@@ -104,8 +105,8 @@ class _BottomBar extends StatelessWidget {
                 ),
               ),
             ),
-            item(2, Icons.favorite_border_rounded, Icons.favorite_rounded, 'Zdrowie'),
-            item(3, Icons.pets_outlined, Icons.pets_rounded, 'Pies'),
+            item(2, Icons.favorite_border_rounded, Icons.favorite_rounded, tr('Zdrowie')),
+            item(3, Icons.pets_outlined, Icons.pets_rounded, trc('dog', 'Pies')),
           ]),
         ),
       ),

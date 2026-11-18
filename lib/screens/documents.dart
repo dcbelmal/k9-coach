@@ -7,6 +7,7 @@ import '../store.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/photo.dart';
+import '../l10n/l10n.dart';
 
 final _s = AppStore.instance;
 
@@ -24,10 +25,10 @@ class DocumentsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-          title: const Row(children: [
+          title: Row(children: [
         Icon(Icons.description_outlined, color: K9.orange),
         SizedBox(width: 10),
-        Text('Dokumenty'),
+        Text(tr('Dokumenty')),
       ])),
       floatingActionButton: FloatingActionButton(
         backgroundColor: K9.orange,
@@ -41,9 +42,9 @@ class DocumentsScreen extends StatelessWidget {
           if (_s.documents.isEmpty) {
             return EmptyState(
               icon: Icons.folder_copy_rounded,
-              title: 'Brak dokumentów',
-              text: 'Zrób zdjęcia rodowodu, paszportu czy wyników badań. Będą zawsze pod ręką, także bez internetu.',
-              action: 'Dodaj dokument',
+              title: tr('Brak dokumentów'),
+              text: tr('Zrób zdjęcia rodowodu, paszportu czy wyników badań. Będą zawsze pod ręką, także bez internetu.'),
+              action: tr('Dodaj dokument'),
               onAction: () => openDocumentForm(context),
             );
           }
@@ -84,7 +85,7 @@ class DocumentsScreen extends StatelessWidget {
                           if (d.expires != null)
                             Padding(
                               padding: const EdgeInsets.only(top: 3),
-                              child: Text('Ważny do ${fmtDate(d.expires!)}',
+                              child: Text(tr('Ważny do {0}', [fmtDate(d.expires!)]),
                                   style: TextStyle(
                                       color: _expiryColor(d.expires!), fontSize: 12, fontWeight: FontWeight.w600)),
                             ),
@@ -114,10 +115,10 @@ class DocumentScreen extends StatelessWidget {
         final d = _s.documents.where((e) => e.id == id).firstOrNull;
         if (d == null) return const Scaffold();
         final rows = <(String, String)>[
-          ('Rodzaj', d.type.label),
-          if (d.number.isNotEmpty) ('Numer', d.number),
-          if (d.issued != null) ('Data wydania', fmtDate(d.issued!)),
-          if (d.expires != null) ('Ważny do', '${fmtDate(d.expires!)} (${relDays(d.expires!)})'),
+          (tr('Rodzaj'), d.type.label),
+          if (d.number.isNotEmpty) (tr('Numer'), d.number),
+          if (d.issued != null) (tr('Data wydania'), fmtDate(d.issued!)),
+          if (d.expires != null) (tr('Ważny do'), '${fmtDate(d.expires!)} (${relDays(d.expires!)})'),
         ];
         return Scaffold(
           appBar: AppBar(title: Text(d.title), actions: [
@@ -160,7 +161,7 @@ class DocumentScreen extends StatelessWidget {
                 await _s.upsertDocument(d);
               },
               icon: const Icon(Icons.add_a_photo_outlined),
-              label: Text(d.images.isEmpty ? 'Dodaj zdjęcie dokumentu' : 'Dodaj kolejną stronę'),
+              label: Text(d.images.isEmpty ? tr('Dodaj zdjęcie dokumentu') : tr('Dodaj kolejną stronę')),
             ),
             gap12,
             K9Card(
@@ -184,7 +185,7 @@ class DocumentScreen extends StatelessWidget {
             ],
             if (d.images.isNotEmpty) ...[
               gap16,
-              const Text('Stuknij zdjęcie, aby je powiększyć.', textAlign: TextAlign.center, style: TextStyle(color: K9.faint, fontSize: 12)),
+              Text(tr('Stuknij zdjęcie, aby je powiększyć.'), textAlign: TextAlign.center, style: TextStyle(color: K9.faint, fontSize: 12)),
             ],
           ]),
         );
@@ -214,11 +215,11 @@ class _DocFormState extends State<_DocForm> {
   @override
   Widget build(BuildContext context) {
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      SheetTitle(widget.existing == null ? 'Nowy dokument' : 'Edytuj dokument',
+      SheetTitle(widget.existing == null ? tr('Nowy dokument') : tr('Edytuj dokument'),
           onDelete: widget.existing == null
               ? null
               : () async {
-                  if (await confirmDelete(context, 'dokument i jego zdjęcia')) {
+                  if (await confirmDelete(context, tr('dokument i jego zdjęcia'))) {
                     await _s.deleteDocument(widget.existing!);
                     if (context.mounted) Navigator.pop(context);
                   }
@@ -242,27 +243,27 @@ class _DocFormState extends State<_DocForm> {
           ),
       ]),
       gap16,
-      TextField(controller: title, decoration: const InputDecoration(labelText: 'Nazwa *')),
+      TextField(controller: title, decoration: InputDecoration(labelText: tr('Nazwa *'))),
       gap12,
-      TextField(controller: number, decoration: const InputDecoration(labelText: 'Numer dokumentu')),
+      TextField(controller: number, decoration: InputDecoration(labelText: tr('Numer dokumentu'))),
       gap12,
       Row(children: [
         Expanded(
             child: DateField(
-                label: 'Data wydania', value: d.issued, clearable: true, onChanged: (v) => setState(() => d.issued = v))),
+                label: tr('Data wydania'), value: d.issued, clearable: true, onChanged: (v) => setState(() => d.issued = v))),
         const SizedBox(width: 12),
         Expanded(
             child: DateField(
-                label: 'Ważny do', value: d.expires, clearable: true, onChanged: (v) => setState(() => d.expires = v))),
+                label: tr('Ważny do'), value: d.expires, clearable: true, onChanged: (v) => setState(() => d.expires = v))),
       ]),
       SwitchListTile(
         contentPadding: EdgeInsets.zero,
-        title: const Text('Przypomnij przed wygaśnięciem'),
-        subtitle: const Text('30 dni wcześniej i w dniu wygaśnięcia', style: TextStyle(color: K9.muted, fontSize: 12.5)),
+        title: Text(tr('Przypomnij przed wygaśnięciem')),
+        subtitle: Text(tr('30 dni wcześniej i w dniu wygaśnięcia'), style: TextStyle(color: K9.muted, fontSize: 12.5)),
         value: d.remind,
         onChanged: d.expires == null ? null : (v) => setState(() => d.remind = v),
       ),
-      TextField(controller: notes, maxLines: 3, minLines: 1, decoration: const InputDecoration(labelText: 'Notatki')),
+      TextField(controller: notes, maxLines: 3, minLines: 1, decoration: InputDecoration(labelText: tr('Notatki'))),
       if (widget.existing == null) ...[
         gap12,
         Row(children: [
@@ -279,7 +280,7 @@ class _DocFormState extends State<_DocForm> {
               if (r != null) setState(() => d.images.add(r));
             },
             icon: const Icon(Icons.add_a_photo_outlined),
-            label: const Text('Dodaj zdjęcie'),
+            label: Text(tr('Dodaj zdjęcie')),
           ),
         ]),
       ],
@@ -287,7 +288,7 @@ class _DocFormState extends State<_DocForm> {
       FilledButton(
         onPressed: () async {
           if (title.text.trim().isEmpty) {
-            toast(context, 'Wpisz nazwę dokumentu');
+            toast(context, tr('Wpisz nazwę dokumentu'));
             return;
           }
           d
@@ -297,7 +298,7 @@ class _DocFormState extends State<_DocForm> {
           await _s.upsertDocument(d);
           if (context.mounted) Navigator.pop(context);
         },
-        child: const Text('Zapisz'),
+        child: Text(tr('Zapisz')),
       ),
     ]);
   }

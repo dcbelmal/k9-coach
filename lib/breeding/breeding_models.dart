@@ -1,4 +1,5 @@
 import 'package:material_ui/material_ui.dart';
+import '../l10n/l10n.dart';
 
 DateTime _day(DateTime d) => DateTime(d.year, d.month, d.day);
 
@@ -6,8 +7,9 @@ enum MatingMethod {
   natural('Naturalne'),
   ai('Inseminacja');
 
-  final String label;
-  const MatingMethod(this.label);
+  final String _label;
+  String get label => tr(_label);
+  const MatingMethod(this._label);
 }
 
 enum PregnancyStatus {
@@ -16,9 +18,10 @@ enum PregnancyStatus {
   notPregnant('Nie zaszła', Color(0xFF8E8E93)),
   whelped('Po porodzie', Color(0xFF5E8BFF));
 
-  final String label;
+  final String _label;
+  String get label => tr(_label);
   final Color color;
-  const PregnancyStatus(this.label, this.color);
+  const PregnancyStatus(this._label, this.color);
 }
 
 class PuppyWeight {

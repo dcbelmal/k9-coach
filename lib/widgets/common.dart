@@ -5,6 +5,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../models.dart';
 import '../theme.dart';
+import '../l10n/l10n.dart';
 
 class K9Card extends StatelessWidget {
   final Widget child;
@@ -441,7 +442,7 @@ class DateField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final text = value == null
-        ? 'Nie ustawiono'
+        ? tr('Nie ustawiono')
         : withTime
             ? '${fmtDate(value!)}, ${fmtTime(value!)}'
             : fmtDate(value!);
@@ -454,7 +455,6 @@ class DateField extends StatelessWidget {
           initialDate: value ?? now,
           firstDate: DateTime(now.year - 30),
           lastDate: DateTime(now.year + 10),
-          locale: const Locale('pl'),
         );
         if (d == null || !context.mounted) return;
         var result = d;
@@ -499,13 +499,13 @@ Future<bool> confirmDelete(BuildContext context, String what) async {
   final r = await showDialog<bool>(
     context: context,
     builder: (c) => AlertDialog(
-      title: const Text('Usunąć?'),
-      content: Text('Czy na pewno usunąć: $what?'),
+      title: Text(tr('Usunąć?')),
+      content: Text(tr('Czy na pewno usunąć: {0}?', [what])),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Anuluj')),
+        TextButton(onPressed: () => Navigator.pop(c, false), child: Text(tr('Anuluj'))),
         TextButton(
             onPressed: () => Navigator.pop(c, true),
-            child: const Text('Usuń', style: TextStyle(color: K9.red))),
+            child: Text(tr('Usuń'), style: TextStyle(color: K9.red))),
       ],
     ),
   );

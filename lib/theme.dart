@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:material_ui/material_ui.dart';
+import 'l10n/l10n.dart';
 
 /// Paleta Valkor Coach: ciemne tło, karty grafitowe, akcent pomarańczowy.
 class K9 {
@@ -114,26 +115,28 @@ class K9 {
 }
 
 // ---------------------------------------------------------------------------
-// Formatowanie po polsku
+// Formatowanie zależne od języka aplikacji
 // ---------------------------------------------------------------------------
 
-String fmtDate(DateTime d) => DateFormat('d MMM yyyy', 'pl').format(d);
-String fmtDateShort(DateTime d) => DateFormat('d MMM', 'pl').format(d);
-String fmtDayMonth(DateTime d) => DateFormat('d.MM', 'pl').format(d);
-String fmtTime(DateTime d) => DateFormat('HH:mm', 'pl').format(d);
-String fmtWeekday(DateTime d) => DateFormat('EEE', 'pl').format(d);
+String get _loc => L10n.instance.code;
+String fmtDate(DateTime d) => DateFormat.yMMMd(_loc).format(d);
+String fmtDateShort(DateTime d) => DateFormat.MMMd(_loc).format(d);
+String fmtDayMonth(DateTime d) => _loc == 'pl' ? DateFormat('d.MM').format(d) : DateFormat.Md(_loc).format(d);
+String fmtTime(DateTime d) => DateFormat.Hm(_loc).format(d);
+String fmtWeekday(DateTime d) => DateFormat.E(_loc).format(d);
 String fmtMonthYear(DateTime d) {
-  final s = DateFormat('LLLL yyyy', 'pl').format(d);
+  final s = DateFormat.yMMMM(_loc).format(d);
   return s[0].toUpperCase() + s.substring(1);
 }
 
-String fmtKm(double km) => km >= 100 ? km.toStringAsFixed(0) : km.toStringAsFixed(1).replaceAll('.', ',');
-String fmtNum(double v, [int digits = 1]) => v.toStringAsFixed(digits).replaceAll('.', ',');
+String _dec(String s) => L10n.instance.decimalComma ? s.replaceAll('.', ',') : s;
+String fmtKm(double km) => km >= 100 ? km.toStringAsFixed(0) : _dec(km.toStringAsFixed(1));
+String fmtNum(double v, [int digits = 1]) => _dec(v.toStringAsFixed(digits));
 
 String fmtDuration(int minutes) {
   final h = minutes ~/ 60, m = minutes % 60;
-  if (h == 0) return '$m min';
-  return m == 0 ? '$h h' : '$h h $m min';
+  if (h == 0) return tr('{0} min', [m]);
+  return m == 0 ? '$h h' : tr('{0} h {1} min', [h, m]);
 }
 
 /// "za 10 dni", "jutro", "dziś", "3 dni temu".
@@ -142,16 +145,16 @@ String relDays(DateTime d) {
   final a = DateTime(now.year, now.month, now.day);
   final b = DateTime(d.year, d.month, d.day);
   final diff = b.difference(a).inDays;
-  if (diff == 0) return 'dziś';
+  if (diff == 0) return tr('dziś');
   if (diff == 1) return 'jutro';
   if (diff == -1) return 'wczoraj';
-  if (diff > 1) return 'za $diff dni';
-  return '${-diff} dni temu';
+  if (diff > 1) return tr('za {0} dni', [diff]);
+  return tr('{0} dni temu', [-diff]);
 }
 
 String fmtDurationShort(int minutes) {
   final h = minutes ~/ 60, m = minutes % 60;
-  if (h == 0) return '$m min';
+  if (h == 0) return tr('{0} min', [m]);
   return '${h}h ${m.toString().padLeft(2, '0')}m';
 }
 

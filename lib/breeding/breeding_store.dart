@@ -9,6 +9,7 @@ import '../notifications.dart';
 import '../store.dart';
 import 'breeding_logic.dart';
 import 'breeding_models.dart';
+import '../l10n/l10n.dart';
 
 /// Moduł hodowlany (Premium) – dane zapisane osobno (klucz valkor_breeding_v1).
 class BreedingStore extends ChangeNotifier {
@@ -113,13 +114,13 @@ class BreedingStore extends ChangeNotifier {
     final today = dayOnly(DateTime.now());
     final m1 = today.subtract(const Duration(days: 34));
     final born = today.subtract(const Duration(days: 400));
-    final litter = Litter(born: born, notes: 'Poród naturalny, 6 h', puppies: [
-      for (final (i, p) in const [
-        ('Atos', false, 'płowy', 410),
-        ('Bora', true, 'płowa', 380),
-        ('Cezar', false, 'płowy', 455),
-        ('Dina', true, 'płowa z maską', 360),
-        ('Echo', true, 'płowa', 395),
+    final litter = Litter(born: born, notes: tr('Poród naturalny, 6 h'), puppies: [
+      for (final (i, p) in [
+        (tr('Atos'), false, tr('płowy'), 410),
+        (tr('Bora'), true, tr('płowa'), 380),
+        (tr('Cezar'), false, tr('płowy'), 455),
+        (tr('Dina'), true, tr('płowa z maską'), 360),
+        (tr('Echo'), true, tr('płowa'), 395),
       ].indexed)
         Puppy(id: 'p$i', name: p.$1, female: p.$2, color: p.$3, weights: [
           for (var d = 0; d <= 14; d += 2) PuppyWeight(born.add(Duration(days: d)), (p.$4 * (1 + d * (0.105 - i * 0.004))).round()),
@@ -129,14 +130,14 @@ class BreedingStore extends ChangeNotifier {
       Mating(
         id: 'm1',
         dates: [m1, m1.add(const Duration(days: 2))],
-        partner: 'Ares z Valkor Canis',
+        partner: tr('Ares z Valkor Canis'),
         status: PregnancyStatus.confirmed,
-        notes: 'Progesteron 18 ng/ml w dniu krycia',
+        notes: tr('Progesteron 18 ng/ml w dniu krycia'),
       ),
       Mating(
         id: 'm0',
         dates: [born.subtract(const Duration(days: 63)), born.subtract(const Duration(days: 61))],
-        partner: 'Bruno Malinowy Las',
+        partner: tr('Bruno Malinowy Las'),
         status: PregnancyStatus.whelped,
         litter: litter,
       ),

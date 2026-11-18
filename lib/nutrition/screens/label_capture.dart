@@ -7,6 +7,7 @@ import '../../widgets/common.dart';
 import '../label_parser.dart';
 import '../nutrition_models.dart';
 import '../ocr/text_reader.dart';
+import '../../l10n/l10n.dart';
 
 /// Wynik zdjęcia etykiety: zapisane zdjęcie i odczytane wartości.
 class LabelCapture {
@@ -25,21 +26,20 @@ Future<LabelCapture?> captureLabel(BuildContext context, {bool savePhoto = true}
     builder: (c) => SingleChildScrollView(
       padding: EdgeInsets.fromLTRB(20, 0, 20, 24 + MediaQuery.viewPaddingOf(c).bottom),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
-        const SheetTitle('Zdjęcie etykiety'),
-        const Text(
-            'Sfotografuj tył opakowania: skład, „składniki analityczne” i energię (kcal). '
-            'Trzymaj telefon prosto, żeby tekst był ostry i dobrze oświetlony.',
+        SheetTitle(tr('Zdjęcie etykiety')),
+        Text(
+            tr('Sfotografuj tył opakowania: skład, „składniki analityczne” i energię (kcal). Trzymaj telefon prosto, żeby tekst był ostry i dobrze oświetlony.'),
             style: TextStyle(color: K9.muted)),
         gap12,
         ListRow(
             icon: Icons.photo_camera_rounded,
             color: K9.orange,
-            title: 'Zrób zdjęcie',
+            title: tr('Zrób zdjęcie'),
             onTap: () => Navigator.pop(c, ImageSource.camera)),
         ListRow(
             icon: Icons.photo_library_rounded,
             color: K9.blue,
-            title: 'Wybierz z galerii',
+            title: tr('Wybierz z galerii'),
             onTap: () => Navigator.pop(c, ImageSource.gallery)),
       ]),
     ),
@@ -49,7 +49,7 @@ Future<LabelCapture?> captureLabel(BuildContext context, {bool savePhoto = true}
   try {
     img = await ImagePicker().pickImage(source: source, maxWidth: 2400, maxHeight: 2400, imageQuality: 90);
   } catch (_) {
-    if (context.mounted) toast(context, 'Nie udało się zrobić zdjęcia');
+    if (context.mounted) toast(context, tr('Nie udało się zrobić zdjęcia'));
     return null;
   }
   if (img == null || !context.mounted) return null;
@@ -57,11 +57,11 @@ Future<LabelCapture?> captureLabel(BuildContext context, {bool savePhoto = true}
   showDialog(
     context: context,
     barrierDismissible: false,
-    builder: (_) => const AlertDialog(
+    builder: (_) => AlertDialog(
       content: Row(children: [
         SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 3)),
         SizedBox(width: 16),
-        Expanded(child: Text('Czytam etykietę…')),
+        Expanded(child: Text(tr('Czytam etykietę…'))),
       ]),
     ),
   );
@@ -102,10 +102,10 @@ int applyLabel(FoodProduct p, LabelValues v) {
 }
 
 String labelResultMessage(LabelCapture c, int filled) {
-  if (!c.ocrAvailable) return 'Odczyt etykiety działa tylko w aplikacji na telefonie. Zdjęcie zapisane.';
+  if (!c.ocrAvailable) return tr('Odczyt etykiety działa tylko w aplikacji na telefonie. Zdjęcie zapisane.');
   if (c.values.isEmpty) {
-    return 'Nie udało się odczytać wartości. Zrób ostrzejsze zdjęcie samej tabeli albo wpisz je ręcznie.';
+    return tr('Nie udało się odczytać wartości. Zrób ostrzejsze zdjęcie samej tabeli albo wpisz je ręcznie.');
   }
-  if (filled == 0) return 'Odczytane wartości już były wpisane.';
-  return 'Odczytano z etykiety: $filled ${filled == 1 ? 'pole' : (filled < 5 ? 'pola' : 'pól')}. Sprawdź je przed zapisem.';
+  if (filled == 0) return tr('Odczytane wartości już były wpisane.');
+  return tr('Odczytano z etykiety: {0} {1}. Sprawdź je przed zapisem.', [filled, filled == 1 ? tr('pole') : (filled < 5 ? tr('pola') : tr('pól'))]);
 }

@@ -10,6 +10,7 @@ import '../models.dart';
 import '../notifications.dart';
 import '../theme.dart' show fmtKm;
 import 'track.dart';
+import '../l10n/l10n.dart';
 
 enum RecState { idle, running, paused }
 
@@ -63,13 +64,13 @@ class TrackRecorder extends ChangeNotifier {
 
   /// Sprawdza GPS i uprawnienia. Zwraca komunikat błędu albo null.
   static Future<String?> ensurePermission() async {
-    if (kIsWeb) return 'Trening GPS działa tylko w aplikacji na telefonie.';
-    if (!await Geolocator.isLocationServiceEnabled()) return 'Włącz lokalizację (GPS) w telefonie.';
+    if (kIsWeb) return tr('Trening GPS działa tylko w aplikacji na telefonie.');
+    if (!await Geolocator.isLocationServiceEnabled()) return tr('Włącz lokalizację (GPS) w telefonie.');
     var p = await Geolocator.checkPermission();
     if (p == LocationPermission.denied) p = await Geolocator.requestPermission();
-    if (p == LocationPermission.denied) return 'Bez dostępu do lokalizacji nie da się nagrać trasy.';
+    if (p == LocationPermission.denied) return tr('Bez dostępu do lokalizacji nie da się nagrać trasy.');
     if (p == LocationPermission.deniedForever) {
-      return 'Dostęp do lokalizacji jest zablokowany. Włącz go w ustawieniach telefonu dla Valkor Coach.';
+      return tr('Dostęp do lokalizacji jest zablokowany. Włącz go w ustawieniach telefonu dla Valkor Coach.');
     }
     return null;
   }
@@ -81,9 +82,9 @@ class TrackRecorder extends ChangeNotifier {
         distanceFilter: 3,
         intervalDuration: const Duration(seconds: 1),
         foregroundNotificationConfig: ForegroundNotificationConfig(
-          notificationTitle: 'Valkor Coach – trening ${discipline.label}',
-          notificationText: 'Nagrywam trasę. Możesz wyłączyć ekran.',
-          notificationChannelName: 'Trening GPS',
+          notificationTitle: tr('Valkor Coach – trening {0}', [discipline.label]),
+          notificationText: tr('Nagrywam trasę. Możesz wyłączyć ekran.'),
+          notificationChannelName: tr('Trening GPS'),
           enableWakeLock: true,
           setOngoing: true,
           notificationIcon: AndroidResource(name: 'ic_stat_valkor', defType: 'drawable'),
@@ -124,7 +125,7 @@ class TrackRecorder extends ChangeNotifier {
       ..start();
     state = RecState.running;
     try {
-      await _tts.setLanguage('pl-PL');
+      await _tts.setLanguage(L10n.instance.ttsLocale);
       await _tts.setSpeechRate(0.5);
     } catch (_) {}
     await Notifications.instance.requestPermission();
@@ -134,14 +135,14 @@ class TrackRecorder extends ChangeNotifier {
     _updateNotification();
     notifyListeners();
     if (voice) {
-      _say('Start. Trening ${discipline.label}.${targetMin > 0 ? ' Cel: $targetMin ${_minWord(targetMin)}.' : ''}');
+      _say(tr('Start. Trening {0}.{1}', [discipline.label, targetMin > 0 ? tr(' Cel: {0} {1}.', [targetMin, _minWord(targetMin)]) : '']));
     }
   }
 
   void _listen() {
     _sub?.cancel();
     _sub = Geolocator.getPositionStream(locationSettings: _settings()).listen(_onPosition, onError: (e) {
-      error = 'Brak sygnału GPS';
+      error = tr('Brak sygnału GPS');
       notifyListeners();
     });
   }
@@ -175,13 +176,13 @@ class TrackRecorder extends ChangeNotifier {
       _kmStartT = seconds;
       HapticFeedback.mediumImpact();
       if (voice) {
-        _say('Kilometr $km. Czas ${_spoken(seconds)}. Tempo ostatniego kilometra ${_spoken(kmTime)}.');
+        _say(tr('Kilometr {0}. Czas {1}. Tempo ostatniego kilometra {2}.', [km, _spoken(seconds), _spoken(kmTime)]));
       }
     }
     if (targetKm != null && targetKm! > 0 && !targetKmDone && meters >= targetKm! * 1000) {
       targetKmDone = true;
       HapticFeedback.heavyImpact();
-      _say('Cel dystansu osiągnięty. ${fmtKm(targetKm!)} kilometra. Brawo!');
+      _say(tr('Cel dystansu osiągnięty. {0} kilometra. Brawo!', [fmtKm(targetKm!)]));
     }
   }
 
@@ -190,7 +191,7 @@ class TrackRecorder extends ChangeNotifier {
     if (targetMin > 0 && !targetTimeDone && seconds >= targetMin * 60) {
       targetTimeDone = true;
       HapticFeedback.heavyImpact();
-      _say('Cel osiągnięty. $targetMin ${_minWord(targetMin)} treningu. Brawo!');
+      _say(tr('Cel osiągnięty. {0} {1} treningu. Brawo!', [targetMin, _minWord(targetMin)]));
     }
     if (seconds - _lastNotif >= 10) _updateNotification();
     if (waterEveryMin > 0) {
@@ -198,7 +199,7 @@ class TrackRecorder extends ChangeNotifier {
       if (n > _waterCount) {
         _waterCount = n;
         HapticFeedback.heavyImpact();
-        _say('Czas na wodę dla psa.');
+        _say(tr('Czas na wodę dla psa.'));
       }
     }
     notifyListeners();
@@ -211,7 +212,7 @@ class TrackRecorder extends ChangeNotifier {
     currentSpeedKmh = null;
     Notifications.instance.cancel(Notifications.goalId);
     _updateNotification();
-    if (voice) _say('Pauza.');
+    if (voice) _say(tr('Pauza.'));
     notifyListeners();
   }
 
@@ -222,7 +223,7 @@ class TrackRecorder extends ChangeNotifier {
     state = RecState.running;
     _scheduleGoal();
     _updateNotification();
-    if (voice) _say('Wznawiam.');
+    if (voice) _say(tr('Wznawiam.'));
     notifyListeners();
   }
 
@@ -235,7 +236,7 @@ class TrackRecorder extends ChangeNotifier {
     _lastLapM = meters;
     HapticFeedback.mediumImpact();
     if (voice) {
-      _say('Okrążenie ${laps.length}. ${_spoken(lt)}${lm > 50 ? ', ${(lm / 1000).toStringAsFixed(2).replaceAll('.', ' przecinek ')} kilometra' : ''}.');
+      _say(tr('Okrążenie {0}. {1}{2}.', [laps.length, _spoken(lt), lm > 50 ? tr(', {0} kilometra', [(lm / 1000).toStringAsFixed(2).replaceAll('.', ' ${tr('przecinek')} ')]) : '']));
     }
     notifyListeners();
   }
@@ -267,8 +268,8 @@ class TrackRecorder extends ChangeNotifier {
     if (left <= 0) return;
     Notifications.instance.scheduleGoal(
       DateTime.now().add(Duration(milliseconds: (left * 1000).round())),
-      'Cel osiągnięty! $targetMin min',
-      'Trening ${discipline.label}: wykonaliście założony czas. Możesz kończyć albo trenować dalej.',
+      tr('Cel osiągnięty! {0} min', [targetMin]),
+      tr('Trening {0}: wykonaliście założony czas. Możesz kończyć albo trenować dalej.', [discipline.label]),
     );
   }
 
@@ -277,13 +278,13 @@ class TrackRecorder extends ChangeNotifier {
     _lastNotif = seconds.floor();
     final paused = state == RecState.paused;
     final parts = <String>[
-      if (useGps) '${fmtKm(meters / 1000)} km',
-      if (useGps && meters >= 20) 'tempo ${_paceText(avgPace)}/km',
-      if (targetMin > 0) targetTimeDone ? 'cel $targetMin min ✓' : 'cel $targetMin min',
+      if (useGps) tr('{0} km', [fmtKm(meters / 1000)]),
+      if (useGps && meters >= 20) tr('tempo {0}/km', [_paceText(avgPace)]),
+      if (targetMin > 0) targetTimeDone ? tr('cel {0} min ✓', [targetMin]) : tr('cel {0} min', [targetMin]),
     ];
     Notifications.instance.showLive(
-      title: paused ? 'Pauza – ${discipline.label}' : 'Trening trwa – ${discipline.label}',
-      body: parts.isEmpty ? 'Stuknij, aby wrócić do treningu' : parts.join(' · '),
+      title: paused ? tr('Pauza – {0}', [discipline.label]) : tr('Trening trwa – {0}', [discipline.label]),
+      body: parts.isEmpty ? tr('Stuknij, aby wrócić do treningu') : parts.join(' · '),
       chronoBase: paused ? null : DateTime.now().subtract(Duration(milliseconds: _watch.elapsedMilliseconds)),
     );
   }
@@ -298,15 +299,15 @@ class TrackRecorder extends ChangeNotifier {
     final t = sec.round();
     final h = t ~/ 3600, m = (t % 3600) ~/ 60, s = t % 60;
     final parts = <String>[
-      if (h > 0) '$h ${h == 1 ? 'godzina' : 'godziny'}',
+      if (h > 0) '$h ${h == 1 ? tr('godzina') : tr('godziny')}',
       if (m > 0) '$m ${_minWord(m)}',
       '$s ${_secWord(s)}',
     ];
     return parts.join(' ');
   }
 
-  String _minWord(int n) => n == 1 ? 'minuta' : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? 'minuty' : 'minut');
-  String _secWord(int n) => n == 1 ? 'sekunda' : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? 'sekundy' : 'sekund');
+  String _minWord(int n) => n == 1 ? tr('minuta') : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? tr('minuty') : tr('minut'));
+  String _secWord(int n) => n == 1 ? tr('sekunda') : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? tr('sekundy') : tr('sekund'));
 
   void _say(String text) {
     _tts.speak(text).catchError((_) => null);

@@ -5,6 +5,7 @@ import '../models_ext.dart';
 import '../store.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import '../l10n/l10n.dart';
 
 final _s = AppStore.instance;
 
@@ -17,10 +18,10 @@ class GoalsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Row(children: [
+        title: Row(children: [
           Icon(Icons.track_changes_rounded, color: K9.orange),
           SizedBox(width: 10),
-          Text('Cele'),
+          Text(tr('Cele')),
         ]),
         actions: [
           IconButton(
@@ -34,9 +35,9 @@ class GoalsScreen extends StatelessWidget {
           if (_s.goals.isEmpty) {
             return EmptyState(
               icon: Icons.flag_rounded,
-              title: 'Brak celów',
-              text: 'Ustaw cel: egzamin BH-VT lub IGP, championat, kilometry albo wagę docelową.',
-              action: 'Dodaj cel',
+              title: tr('Brak celów'),
+              text: tr('Ustaw cel: egzamin BH-VT lub IGP, championat, kilometry albo wagę docelową.'),
+              action: tr('Dodaj cel'),
               onAction: () => openGoalForm(context),
             );
           }
@@ -52,8 +53,8 @@ class GoalsScreen extends StatelessWidget {
                   center: Text('$done/${_s.goals.length}', style: const TextStyle(fontWeight: FontWeight.w800)),
                 ),
                 const SizedBox(width: 16),
-                const Expanded(
-                  child: Text('Osiągnięte cele. Postęp liczy się sam z treningów, wystaw i pomiarów wagi.',
+                Expanded(
+                  child: Text(tr('Osiągnięte cele. Postęp liczy się sam z treningów, wystaw i pomiarów wagi.'),
                       style: TextStyle(color: Color(0xFFCFCFD4), fontSize: 13.5)),
                 ),
               ]),
@@ -99,7 +100,7 @@ class _GoalCard extends StatelessWidget {
             const SizedBox(height: 2),
             Text(label, style: const TextStyle(color: K9.muted, fontSize: 13)),
             if (g.deadline != null && !achieved)
-              Text('Termin: ${fmtDate(g.deadline!)} (${relDays(g.deadline!)})',
+              Text(tr('Termin: {0} ({1})', [fmtDate(g.deadline!), relDays(g.deadline!)]),
                   style: const TextStyle(color: K9.faint, fontSize: 12)),
           ]),
         ),
@@ -121,7 +122,7 @@ class _GoalForm extends StatefulWidget {
 
 class _GoalFormState extends State<_GoalForm> {
   late final g = widget.existing == null
-      ? Goal(id: newId(), type: GoalType.exam, title: 'BH-VT', start: dayOnly(DateTime.now()))
+      ? Goal(id: newId(), type: GoalType.exam, title: tr('BH-VT'), start: dayOnly(DateTime.now()))
       : Goal.fromJson(widget.existing!.toJson());
   late final title = TextEditingController(text: g.title);
   late final target = TextEditingController(text: g.target == null ? '' : fmtNum(g.target!, g.type == GoalType.weight ? 1 : 0));
@@ -166,7 +167,7 @@ class _GoalFormState extends State<_GoalForm> {
   Widget build(BuildContext context) {
     final manual = g.type == GoalType.exam || g.type == GoalType.custom;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      SheetTitle(widget.existing == null ? 'Nowy cel' : 'Edytuj cel',
+      SheetTitle(widget.existing == null ? tr('Nowy cel') : tr('Edytuj cel'),
           onDelete: widget.existing == null
               ? null
               : () async {
@@ -195,27 +196,27 @@ class _GoalFormState extends State<_GoalForm> {
         ]),
         gap12,
       ],
-      TextField(controller: title, decoration: const InputDecoration(labelText: 'Nazwa celu *')),
+      TextField(controller: title, decoration: InputDecoration(labelText: tr('Nazwa celu *'))),
       if (g.type == GoalType.km || g.type == GoalType.weight) ...[
         gap12,
         TextField(
           controller: target,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: InputDecoration(labelText: g.type == GoalType.km ? 'Cel (km)' : 'Waga docelowa (kg)'),
+          decoration: InputDecoration(labelText: g.type == GoalType.km ? tr('Cel (km)') : tr('Waga docelowa (kg)')),
         ),
       ],
       gap12,
       Row(children: [
-        Expanded(child: DateField(label: 'Od', value: g.start, onChanged: (v) => setState(() => g.start = v!))),
+        Expanded(child: DateField(label: tr('Od'), value: g.start, onChanged: (v) => setState(() => g.start = v!))),
         const SizedBox(width: 12),
         Expanded(
             child: DateField(
-                label: 'Termin', value: g.deadline, clearable: true, onChanged: (v) => setState(() => g.deadline = v))),
+                label: tr('Termin'), value: g.deadline, clearable: true, onChanged: (v) => setState(() => g.deadline = v))),
       ]),
       if (manual) ...[
         gap16,
         Row(children: [
-          const Text('Przygotowanie', style: TextStyle(fontWeight: FontWeight.w600)),
+          Text(tr('Przygotowanie'), style: TextStyle(fontWeight: FontWeight.w600)),
           const Spacer(),
           Text('${(g.manualProgress * 100).round()}%', style: const TextStyle(color: K9.orange, fontWeight: FontWeight.w700)),
         ]),
@@ -230,7 +231,7 @@ class _GoalFormState extends State<_GoalForm> {
       if (g.type != GoalType.km && g.type != GoalType.weight)
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
-          title: Text(g.type == GoalType.title ? 'Tytuł zdobyty' : 'Zaliczone'),
+          title: Text(g.type == GoalType.title ? tr('Tytuł zdobyty') : tr('Zaliczone')),
           value: g.done,
           onChanged: (v) => setState(() {
             g.done = v;
@@ -241,7 +242,7 @@ class _GoalFormState extends State<_GoalForm> {
       FilledButton(
         onPressed: () async {
           if (title.text.trim().isEmpty) {
-            toast(context, 'Wpisz nazwę celu');
+            toast(context, tr('Wpisz nazwę celu'));
             return;
           }
           g
@@ -252,7 +253,7 @@ class _GoalFormState extends State<_GoalForm> {
           await _s.upsertGoal(g);
           if (context.mounted) Navigator.pop(context);
         },
-        child: const Text('Zapisz'),
+        child: Text(tr('Zapisz')),
       ),
     ]);
   }

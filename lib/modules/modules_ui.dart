@@ -9,6 +9,7 @@ import 'module_routes.dart';
 import 'module_store.dart';
 import 'modules.dart';
 import 'premium_screen.dart';
+import '../l10n/l10n.dart';
 
 Listenable get modulesListenable => Listenable.merge([AppStore.instance, ModuleStore.instance]);
 
@@ -29,7 +30,7 @@ class ModulesGrid extends StatelessWidget {
           if (list.isEmpty) continue;
           if (children.isNotEmpty) children.add(const SizedBox(height: 14));
           final title = sec == ModuleSection.training && dog.purpose != null
-              ? 'Trening · ${dog.purpose!.label}'
+              ? tr('Trening · {0}', [dog.purpose!.label])
               : sec.label;
           children.add(Padding(
             padding: const EdgeInsets.only(left: 4, bottom: 8),
@@ -91,10 +92,10 @@ class ShortcutsRow extends StatelessWidget {
               child: K9Card(
                 padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
                 onTap: () => goToTab(3),
-                child: const Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
                   Icon(Icons.apps_rounded, color: K9.orange, size: 28),
                   SizedBox(height: 8),
-                  FittedBox(fit: BoxFit.scaleDown, child: Text('Wszystkie', maxLines: 1, style: _tileText)),
+                  FittedBox(fit: BoxFit.scaleDown, child: Text(tr('Wszystkie'), maxLines: 1, style: _tileText)),
                 ]),
               ),
             ),
@@ -129,7 +130,7 @@ class _AllModulesCardState extends State<AllModulesCard> {
           if (list.isEmpty) continue;
           final open = _open.contains(sec);
           final title = sec == ModuleSection.training && dog.purpose != null
-              ? 'Trening · ${dog.purpose!.label}'
+              ? tr('Trening · {0}', [dog.purpose!.label])
               : sec.label;
           if (rows.isNotEmpty) rows.add(const Divider(height: 1, color: K9.border));
           rows.add(InkWell(
@@ -171,7 +172,7 @@ class _AllModulesCardState extends State<AllModulesCard> {
         return K9Card(
           padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            const SectionTitle('Wszystkie funkcje', icon: Icons.apps_rounded),
+            SectionTitle(tr('Wszystkie funkcje'), icon: Icons.apps_rounded),
             ...rows,
           ]),
         );
@@ -217,14 +218,14 @@ class CompleteProfileCard extends StatelessWidget {
     return K9Card(
       onTap: onTap,
       color: const Color(0xFF221509),
-      child: const Row(children: [
+      child: Row(children: [
         IconBadge(Icons.tune_rounded, K9.orange),
         SizedBox(width: 12),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Dopasuj aplikację do psa', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+            Text(tr('Dopasuj aplikację do psa'), style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
             SizedBox(height: 2),
-            Text('Podaj cel, aktywność i status rozrodczy, a pokażę tylko potrzebne moduły.',
+            Text(tr('Podaj cel, aktywność i status rozrodczy, a pokażę tylko potrzebne moduły.'),
                 style: TextStyle(color: K9.muted, fontSize: 13)),
           ]),
         ),
@@ -242,16 +243,14 @@ class ModulesSettingsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final ms = ModuleStore.instance;
     return Scaffold(
-      appBar: AppBar(title: const Text('Moduły')),
+      appBar: AppBar(title: Text(tr('Moduły'))),
       body: ListenableBuilder(
         listenable: modulesListenable,
         builder: (context, _) {
           final dog = AppStore.instance.dog!;
           return ListView(padding: const EdgeInsets.fromLTRB(16, 4, 16, 40), children: [
             Text(
-              'Moduły włączają się same na podstawie profilu psa '
-              '(${[dog.sexLabel, dog.reproLabel.toLowerCase(), if (dog.purpose != null) dog.purpose!.label.toLowerCase()].join(', ')}). '
-              'Możesz je tu włączyć lub wyłączyć ręcznie.',
+              tr('Moduły włączają się same na podstawie profilu psa ({0}). Możesz je tu włączyć lub wyłączyć ręcznie.', [[dog.sexLabel, dog.reproLabel.toLowerCase(), if (dog.purpose != null) dog.purpose!.label.toLowerCase()].join(', ')]),
               style: const TextStyle(color: K9.muted, fontSize: 13.5),
             ),
             gap12,
@@ -260,8 +259,8 @@ class ModulesSettingsScreen extends StatelessWidget {
               child: Row(children: [
                 const Icon(Icons.workspace_premium_rounded, color: K9.gold),
                 const SizedBox(width: 12),
-                const Expanded(child: Text('Premium', style: TextStyle(fontWeight: FontWeight.w700))),
-                Text(ms.premium ? 'Aktywne' : 'Nieaktywne', style: const TextStyle(color: K9.muted)),
+                Expanded(child: Text(tr('Premium'), style: TextStyle(fontWeight: FontWeight.w700))),
+                Text(ms.premium ? tr('Aktywne') : tr('Nieaktywne'), style: const TextStyle(color: K9.muted)),
                 const Icon(Icons.chevron_right_rounded, color: K9.faint),
               ]),
             ),
@@ -286,10 +285,10 @@ class ModulesSettingsScreen extends StatelessWidget {
                   ? null
                   : () async {
                       await ms.resetOverrides();
-                      if (context.mounted) toast(context, 'Przywrócono ustawienia automatyczne');
+                      if (context.mounted) toast(context, tr('Przywrócono ustawienia automatyczne'));
                     },
               icon: const Icon(Icons.auto_mode_rounded),
-              label: const Text('Przywróć ustawienia automatyczne'),
+              label: Text(tr('Przywróć ustawienia automatyczne')),
             ),
           ]);
         },
@@ -311,8 +310,8 @@ class _ModuleSwitch extends StatelessWidget {
     final sub = !applicable
         ? module.ruleLabel(dog)
         : ms.isAuto(module)
-            ? '${module.ruleLabel(dog)} · automatycznie'
-            : 'Ustawione ręcznie';
+            ? tr('{0} · automatycznie', [module.ruleLabel(dog)])
+            : tr('Ustawione ręcznie');
     return SwitchListTile(
       contentPadding: EdgeInsets.zero,
       secondary: Icon(module.icon, color: applicable ? K9.orange : K9.faint),
