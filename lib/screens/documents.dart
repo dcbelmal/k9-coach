@@ -158,7 +158,8 @@ class DocumentScreen extends StatelessWidget {
                 final r = await pickPhoto(context);
                 if (r == null) return;
                 d.images.add(r);
-                await _s.upsertDocument(d);
+                if (!context.mounted) return;
+                if (!await saveGuarded(context, () => _s.upsertDocument(d))) return;
               },
               icon: const Icon(Icons.add_a_photo_outlined),
               label: Text(d.images.isEmpty ? tr('Dodaj zdjęcie dokumentu') : tr('Dodaj kolejną stronę')),
@@ -220,7 +221,8 @@ class _DocFormState extends State<_DocForm> {
               ? null
               : () async {
                   if (await confirmDelete(context, tr('dokument i jego zdjęcia'))) {
-                    await _s.deleteDocument(widget.existing!);
+                    if (!context.mounted) return;
+                    if (!await saveGuarded(context, () => _s.deleteDocument(widget.existing!))) return;
                     if (context.mounted) Navigator.pop(context);
                   }
                 }),
@@ -295,7 +297,8 @@ class _DocFormState extends State<_DocForm> {
             ..title = title.text.trim()
             ..number = number.text.trim()
             ..notes = notes.text.trim();
-          await _s.upsertDocument(d);
+          if (!context.mounted) return;
+          if (!await saveGuarded(context, () => _s.upsertDocument(d))) return;
           if (context.mounted) Navigator.pop(context);
         },
         child: Text(tr('Zapisz')),

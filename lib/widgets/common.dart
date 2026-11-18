@@ -6,6 +6,7 @@ import 'package:material_ui/material_ui.dart';
 import '../models.dart';
 import '../theme.dart';
 import '../l10n/l10n.dart';
+import '../storage/safe_prefs.dart';
 
 class K9Card extends StatelessWidget {
   final Widget child;
@@ -539,3 +540,36 @@ class SheetTitle extends StatelessWidget {
 
 const gap12 = SizedBox(height: 12);
 const gap16 = SizedBox(height: 16);
+
+/// Globalny dostęp do komunikatów (np. błąd zapisu zgłoszony poza formularzem).
+final appMessenger = GlobalKey<ScaffoldMessengerState>();
+
+/// Wykonuje zapis i pokazuje zrozumiały komunikat, gdy się nie uda.
+/// Zwraca true dopiero po potwierdzonym zapisie – wtedy można zamknąć formularz
+/// i pokazać „Zapisano”. Przy błędzie formularz zostaje, można ponowić.
+Future<bool> saveGuarded(BuildContext context, Future<void> Function() op) async {
+  // Drugie naciśnięcie „Zapisz” w trakcie zapisu jest ignorowane.
+  if (_saving) return false;
+  _saving = true;
+  try {
+    await op();
+    return true;
+  } catch (e) {
+    logError('Zapis', e);
+    if (context.mounted) {
+      await showDialog<void>(
+        context: context,
+        builder: (c) => AlertDialog(
+          title: Text(tr('Nie zapisano')),
+          content: Text(storageErrorMessage(e)),
+          actions: [TextButton(onPressed: () => Navigator.pop(c), child: Text(tr('OK')))],
+        ),
+      );
+    }
+    return false;
+  } finally {
+    _saving = false;
+  }
+}
+
+bool _saving = false;

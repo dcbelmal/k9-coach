@@ -16,6 +16,7 @@ import 'calendar.dart';
 import 'documents.dart';
 import 'gear.dart';
 import 'profile.dart';
+import 'recovery.dart';
 import 'shows.dart';
 import 'forms.dart';
 import 'shell.dart';
@@ -39,6 +40,7 @@ class HomeScreen extends StatelessWidget {
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),
               sliver: SliverList.list(children: [
+                const DataIssuesCard(),
                 if (!dog.profileComplete) ...[
                   FadeSlideIn(
                     child: CompleteProfileCard(

@@ -6,6 +6,7 @@ import '../theme.dart';
 import '../widgets/common.dart';
 import 'gallery_store.dart';
 import '../l10n/l10n.dart';
+import '../storage/safe_prefs.dart';
 
 /// Moduł „Galeria” – zdjęcia psa.
 class GalleryScreen extends StatelessWidget {
@@ -20,8 +21,8 @@ class GalleryScreen extends StatelessWidget {
       for (final f in files) {
         await GalleryStore.instance.add(await f.readAsBytes(), date: await f.lastModified());
       }
-    } catch (_) {
-      if (context.mounted) toast(context, tr('Nie udało się dodać zdjęcia'));
+    } catch (e) {
+      if (context.mounted) toast(context, isStorageError(e) ? storageErrorMessage(e) : tr('Nie udało się dodać zdjęcia'));
     }
   }
 
@@ -99,7 +100,8 @@ class _PhotoScreenState extends State<_PhotoScreen> {
             icon: const Icon(Icons.delete_outline_rounded, color: K9.red),
             onPressed: () async {
               if (await confirmDelete(context, tr('to zdjęcie'))) {
-                await GalleryStore.instance.delete(p);
+                if (!context.mounted) return;
+                if (!await saveGuarded(context, () => GalleryStore.instance.delete(p))) return;
                 if (context.mounted) Navigator.pop(context);
               }
             },

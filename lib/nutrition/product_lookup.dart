@@ -1,12 +1,12 @@
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../models.dart' show newId;
 import 'catalog.dart';
 import 'nutrition_models.dart';
 import '../l10n/l10n.dart';
+import '../storage/safe_prefs.dart';
 
 /// Wyszukiwanie produktu po kodzie kreskowym w otwartych bazach
 /// Open Pet Food Facts / Open Food Facts (bez klucza i opłat).
@@ -54,7 +54,7 @@ class ProductLookup {
           final p = parse(c, jsonDecode(utf8.decode(r.bodyBytes)) as Map<String, dynamic>, source: source);
           if (p != null) return LookupResult(p, false, checked);
         } catch (e) {
-          debugPrint('Wyszukiwanie $host: $e');
+          logError('Wyszukiwanie produktu', e);
         }
       }
       checked.add(tr('UPCitemdb'));
@@ -68,7 +68,7 @@ class ProductLookup {
           if (p != null) return LookupResult(p, false, checked);
         }
       } catch (e) {
-        debugPrint('UPCitemdb: $e');
+        logError('UPCitemdb', e);
       }
       return LookupResult(null, answered == 0, checked);
     } finally {

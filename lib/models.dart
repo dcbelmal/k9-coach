@@ -8,6 +8,15 @@ String newId() =>
 
 DateTime? _date(dynamic v) => v == null ? null : DateTime.parse(v as String);
 
+/// Liczba całkowita z JSON. Akceptuje też 30.0 (zapis z innych wersji),
+/// ale nie zgaduje wartości niecałkowitych – wtedy rekord trafia do odzysku.
+int? jsonInt(dynamic v) {
+  if (v == null) return null;
+  if (v is int) return v;
+  if (v is num && v == v.roundToDouble()) return v.toInt();
+  throw FormatException('int expected');
+}
+
 // ---------------------------------------------------------------------------
 // Pies
 // ---------------------------------------------------------------------------
@@ -135,14 +144,14 @@ class Dog {
         birthDate: _date(j['birthDate']),
         weightKg: (j['weightKg'] as num?)?.toDouble(),
         heightCm: (j['heightCm'] as num?)?.toDouble(),
-        bcs: j['bcs'] as int?,
+        bcs: jsonInt(j['bcs']),
         chip: j['chip'] ?? '',
         pedigree: j['pedigree'] ?? '',
         notes: j['notes'] ?? '',
         photoBase64: j['photo'] as String?,
         targetWeightKg: (j['targetWeightKg'] as num?)?.toDouble(),
         weeklyKmGoal: (j['weeklyKmGoal'] as num?)?.toDouble() ?? 30,
-        fciGroup: j['fciGroup'] as int?,
+        fciGroup: jsonInt(j['fciGroup']),
         workingTrial: j['workingTrial'] as bool?,
         neutered: j['neutered'] ?? false,
         activity: DogActivity.values.asNameMap()[j['activity']],
@@ -312,15 +321,15 @@ class TrainingSession {
         id: j['id'],
         discipline: Discipline.values.byName(j['discipline']),
         date: DateTime.parse(j['date']),
-        durationMin: j['durationMin'] ?? 30,
+        durationMin: jsonInt(j['durationMin']) ?? 30,
         distanceKm: (j['distanceKm'] as num?)?.toDouble(),
-        rpe: j['rpe'] ?? 5,
+        rpe: jsonInt(j['rpe']) ?? 5,
         notes: j['notes'] ?? '',
         done: j['done'] ?? true,
         trackRef: j['track'],
-        movingSec: j['movingSec'],
+        movingSec: jsonInt(j['movingSec']),
         maxSpeedKmh: (j['maxSpeed'] as num?)?.toDouble(),
-        bestKmSec: j['bestKm'],
+        bestKmSec: jsonInt(j['bestKm']),
       );
 }
 

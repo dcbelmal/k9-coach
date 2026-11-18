@@ -189,7 +189,8 @@ class _LitterFormState extends State<_LitterForm> {
               ..notes = notes.text.trim();
           }
           m.status = PregnancyStatus.whelped;
-          await BreedingStore.instance.upsert(m);
+          if (!context.mounted) return;
+          if (!await saveGuarded(context, () => BreedingStore.instance.upsert(m))) return;
           if (!context.mounted) return;
           Navigator.pop(context);
           if (isNew) openLitter(context, m);

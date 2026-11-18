@@ -6,7 +6,11 @@ import 'package:flutter_tts/flutter_tts.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../dogs/dog_profiles.dart';
 import '../models.dart';
+import '../storage/safe_prefs.dart';
+import 'gps_drafts.dart';
+import 'online_services.dart';
 import '../notifications.dart';
 import '../theme.dart' show fmtKm;
 import 'track.dart';
@@ -55,7 +59,49 @@ class TrackRecorder extends ChangeNotifier {
   double _lastLapM = 0;
   int _waterCount = 0;
 
+  /// Sesja i pies ustalone w chwili startu – trening zapisze się u tego psa,
+  /// nawet jeśli w międzyczasie ktoś przełączy psa.
+  String? sessionId;
+  String? dogId;
+  double _lastDraftT = -100;
+
+  /// Co ile sekund zapisujemy szkic trwającego treningu.
+  static const draftEverySec = 15;
+
   double get seconds => _watch.elapsedMilliseconds / 1000;
+
+  /// Bieżący stan jako szkic (do zapisu i finalizacji).
+  GpsDraft draft() => GpsDraft(
+        sessionId: sessionId ?? 's${DateTime.now().microsecondsSinceEpoch}',
+        dogId: dogId ?? DogProfiles.instance.activeId,
+        discipline: discipline,
+        startedAt: startedAt ?? DateTime.now(),
+        seconds: seconds,
+        segments: [for (final s in segments) [...s]],
+        laps: [...laps],
+        useGps: useGps,
+        planId: plan?.id,
+        rpe: plan?.rpe ?? 5,
+        notes: plan?.notes ?? '',
+      );
+
+  final _draftQueue = SerialQueue();
+
+  Future<void> _saveDraft() {
+    _lastDraftT = seconds;
+    final d = draft();
+    return _draftQueue.run(() async {
+      if (state == RecState.idle) return; // po zakończeniu szkic zapisuje już finalizacja
+      try {
+        await GpsDrafts.save(d);
+      } catch (e) {
+        logError('Szkic treningu', e);
+      }
+    });
+  }
+
+  /// Czeka, aż zapiszą się szkice w toku.
+  Future<void> flushDrafts() => _draftQueue.run(() async {});
   double get avgPace => meters < 20 ? 0 : seconds / meters * 1000;
   double get avgSpeedKmh => seconds <= 0 ? 0 : meters / seconds * 3.6;
   double get lapSeconds => seconds - _lastLapT;
@@ -65,9 +111,9 @@ class TrackRecorder extends ChangeNotifier {
   /// Sprawdza GPS i uprawnienia. Zwraca komunikat błędu albo null.
   static Future<String?> ensurePermission() async {
     if (kIsWeb) return tr('Trening GPS działa tylko w aplikacji na telefonie.');
-    if (!await Geolocator.isLocationServiceEnabled()) return tr('Włącz lokalizację (GPS) w telefonie.');
-    var p = await Geolocator.checkPermission();
-    if (p == LocationPermission.denied) p = await Geolocator.requestPermission();
+    if (!await GpsServices.serviceEnabled()) return tr('Włącz lokalizację (GPS) w telefonie.');
+    var p = await GpsServices.checkPermission();
+    if (p == LocationPermission.denied) p = await GpsServices.requestPermission();
     if (p == LocationPermission.denied) return tr('Bez dostępu do lokalizacji nie da się nagrać trasy.');
     if (p == LocationPermission.deniedForever) {
       return tr('Dostęp do lokalizacji jest zablokowany. Włącz go w ustawieniach telefonu dla Valkor Coach.');
@@ -120,6 +166,9 @@ class TrackRecorder extends ChangeNotifier {
     _lastNotif = -100;
     currentSpeedKmh = null;
     startedAt = DateTime.now();
+    sessionId = 's${startedAt!.microsecondsSinceEpoch}';
+    dogId = DogProfiles.instance.activeId;
+    _lastDraftT = -100;
     _watch
       ..reset()
       ..start();
@@ -131,6 +180,7 @@ class TrackRecorder extends ChangeNotifier {
     await Notifications.instance.requestPermission();
     if (useGps) _listen();
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
+    unawaited(_saveDraft());
     _scheduleGoal();
     _updateNotification();
     notifyListeners();
@@ -194,6 +244,7 @@ class TrackRecorder extends ChangeNotifier {
       _say(tr('Cel osiągnięty. {0} {1} treningu. Brawo!', [targetMin, _minWord(targetMin)]));
     }
     if (seconds - _lastNotif >= 10) _updateNotification();
+    if (seconds - _lastDraftT >= draftEverySec) unawaited(_saveDraft());
     if (waterEveryMin > 0) {
       final n = seconds ~/ (waterEveryMin * 60);
       if (n > _waterCount) {
@@ -210,6 +261,7 @@ class TrackRecorder extends ChangeNotifier {
     _watch.stop();
     state = RecState.paused;
     currentSpeedKmh = null;
+    unawaited(_saveDraft());
     Notifications.instance.cancel(Notifications.goalId);
     _updateNotification();
     if (voice) _say(tr('Pauza.'));
@@ -257,6 +309,15 @@ class TrackRecorder extends ChangeNotifier {
 
   Future<void> discard() async {
     await stop();
+    final id = sessionId;
+    if (id != null) {
+      try {
+        await GpsDrafts.discard(id);
+      } catch (e) {
+        logError('Szkic treningu', e);
+      }
+    }
+    sessionId = null;
     segments = [];
     meters = 0;
     notifyListeners();

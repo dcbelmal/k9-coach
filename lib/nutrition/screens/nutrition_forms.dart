@@ -137,7 +137,10 @@ class _FeedingFormState extends State<_FeedingForm> {
         onDelete: widget.existing == null
             ? null
             : () async {
-                await _n.deleteEntry(widget.existing!);
+                if (!context.mounted) return;
+                if (!await saveGuarded(context, () => _n.deleteEntry(widget.existing!))) {
+                  return;
+                }
                 if (context.mounted) Navigator.pop(context);
               },
       ),
@@ -222,7 +225,10 @@ class _FeedingFormState extends State<_FeedingForm> {
             trainingId: widget.existing?.trainingId,
             notes: notes.text.trim(),
           );
-          await _n.addEntry(entry);
+          if (!context.mounted) return;
+          if (!await saveGuarded(context, () => _n.addEntry(entry))) {
+            return;
+          }
           if (context.mounted) {
             Navigator.pop(context);
             final p = _n.plan;
@@ -283,7 +289,10 @@ class _BagFormState extends State<_BagForm> {
             ? null
             : () async {
                 if (await confirmDelete(context, tr('ten worek z magazynu'))) {
-                  await _n.deleteBag(b);
+                  if (!context.mounted) return;
+                  if (!await saveGuarded(context, () => _n.deleteBag(b))) {
+                    return;
+                  }
                   if (context.mounted) Navigator.pop(context);
                 }
               },
@@ -331,7 +340,10 @@ class _BagFormState extends State<_BagForm> {
       if (b != null && b.active) ...[
         OutlinedButton.icon(
           onPressed: () async {
-            await _n.finishBag(b);
+            if (!context.mounted) return;
+            if (!await saveGuarded(context, () => _n.finishBag(b))) {
+              return;
+            }
             if (context.mounted) {
               Navigator.pop(context);
               toast(context, tr('Worek oznaczony jako skończony'));
@@ -350,15 +362,21 @@ class _BagFormState extends State<_BagForm> {
             return;
           }
           if (b == null) {
-            await _n.openBag(FoodBag(
-                id: newId(), productId: product!.id, opened: opened, initialGrams: g, price: parseNum(price.text)));
+            if (!context.mounted) return;
+            if (!await saveGuarded(context, () => _n.openBag(FoodBag(
+                id: newId(), productId: product!.id, opened: opened, initialGrams: g, price: parseNum(price.text))))) {
+                  return;
+                }
           } else {
             b
               ..productId = product!.id
               ..opened = opened
               ..initialGrams = g
               ..price = parseNum(price.text);
-            await _n.upsertBag(b);
+            if (!context.mounted) return;
+            if (!await saveGuarded(context, () => _n.upsertBag(b))) {
+              return;
+            }
             final l = parseNum(left.text);
             if (l != null && (l * 1000 - _n.remainingIn(b)).abs() > 1) await _n.setRemaining(b, l * 1000);
           }
@@ -506,9 +524,15 @@ class _SettingsFormState extends State<_SettingsForm> {
           final t = parseNum(target.text);
           if (dog != null && t != dog.targetWeightKg) {
             dog.targetWeightKg = t;
-            await AppStore.instance.saveDog(dog);
+            if (!context.mounted) return;
+            if (!await saveGuarded(context, () => AppStore.instance.saveDog(dog))) {
+              return;
+            }
           }
-          await _n.saveSettings(s);
+          if (!context.mounted) return;
+          if (!await saveGuarded(context, () => _n.saveSettings(s))) {
+            return;
+          }
           if (context.mounted) Navigator.pop(context);
         },
         child: Text(tr('Zapisz')),
@@ -546,7 +570,10 @@ class _SupplementFormState extends State<_SupplementForm> {
         onDelete: widget.existing == null
             ? null
             : () async {
-                await _n.deleteSupplement(widget.existing!);
+                if (!context.mounted) return;
+                if (!await saveGuarded(context, () => _n.deleteSupplement(widget.existing!))) {
+                  return;
+                }
                 if (context.mounted) Navigator.pop(context);
               },
       ),
@@ -589,7 +616,10 @@ class _SupplementFormState extends State<_SupplementForm> {
             toast(context, tr('Wpisz nazwę'));
             return;
           }
-          await _n.upsertSupplement(s);
+          if (!context.mounted) return;
+          if (!await saveGuarded(context, () => _n.upsertSupplement(s))) {
+            return;
+          }
           if (context.mounted) Navigator.pop(context);
         },
         child: Text(tr('Zapisz')),

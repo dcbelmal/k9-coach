@@ -53,6 +53,39 @@ class _TrainingFormState extends State<_TrainingForm> {
   final distance = TextEditingController();
   final notes = TextEditingController();
 
+  /// Stałe ID wpisu nadane przy otwarciu formularza: ponowienie po błędzie
+  /// albo podwójne naciśnięcie „Zapisz” nie tworzy drugiego treningu.
+  late final String _id = widget.existing?.id ?? newId();
+  bool _saving = false;
+  String? _durationError, _distanceError;
+
+  /// Zakres czasu (min) i dystansu (km) zależnie od dyscypliny.
+  static const maxMinutes = 24 * 60;
+  static double maxKm(Discipline d) => switch (d) {
+        Discipline.bikejoring => 300,
+        Discipline.walk || Discipline.recovery => 80,
+        _ => 150,
+      };
+
+  /// Sprawdza pola. Zwraca (czas, dystans) albo null, gdy coś jest błędne.
+  (int, double?)? _validate() {
+    final minutes = int.tryParse(duration.text.trim());
+    _durationError = minutes == null || minutes < 1 || minutes > maxMinutes
+        ? tr('Podaj czas w pełnych minutach (1–{0})', [maxMinutes])
+        : null;
+    double? km;
+    _distanceError = null;
+    if (disc.hasDistance && distance.text.trim().isNotEmpty) {
+      km = parseNum(distance.text);
+      if (km == null || km <= 0 || km > maxKm(disc)) {
+        _distanceError = tr('Podaj dystans od 0,1 do {0} km', [fmtNum(maxKm(disc))]);
+      }
+    }
+    setState(() {});
+    if (_durationError != null || _distanceError != null) return null;
+    return (minutes!, km);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -86,7 +119,10 @@ class _TrainingFormState extends State<_TrainingForm> {
               ? null
               : () async {
                   if (await confirmDelete(context, 'trening')) {
-                    await _store.deleteTraining(widget.existing!);
+                    if (!context.mounted) return;
+                    if (!await saveGuarded(context, () => _store.deleteTraining(widget.existing!))) {
+                      return;
+                    }
                     if (context.mounted) Navigator.pop(context);
                   }
                 },
@@ -125,7 +161,7 @@ class _TrainingFormState extends State<_TrainingForm> {
               child: TextField(
                 controller: duration,
                 keyboardType: TextInputType.number,
-                decoration: InputDecoration(labelText: tr('Czas (min)')),
+                decoration: InputDecoration(labelText: tr('Czas (min)'), errorText: _durationError, errorMaxLines: 2),
               ),
             ),
             if (disc.hasDistance) ...[
@@ -134,7 +170,7 @@ class _TrainingFormState extends State<_TrainingForm> {
                 child: TextField(
                   controller: distance,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: InputDecoration(labelText: tr('Dystans (km)')),
+                  decoration: InputDecoration(labelText: tr('Dystans (km)'), errorText: _distanceError, errorMaxLines: 2),
                 ),
               ),
             ],
@@ -181,27 +217,33 @@ class _TrainingFormState extends State<_TrainingForm> {
           const SizedBox(height: 10),
         ],
         FilledButton(
-          onPressed: () async {
-            final t = TrainingSession(
-              id: widget.existing?.id ?? newId(),
-              discipline: disc,
-              date: date,
-              durationMin: int.tryParse(duration.text.trim()) ?? 0,
-              distanceKm: disc.hasDistance ? parseNum(distance.text) : null,
-              rpe: rpe.round(),
-              notes: notes.text.trim(),
-              done: done,
-              trackRef: widget.existing?.trackRef,
-              movingSec: widget.existing?.movingSec,
-              maxSpeedKmh: widget.existing?.maxSpeedKmh,
-              bestKmSec: widget.existing?.bestKmSec,
-            );
-            await _store.upsertTraining(t);
-            if (context.mounted) {
-              Navigator.pop(context);
-              toast(context, done ? tr('Trening zapisany') : tr('Trening zaplanowany'));
-            }
-          },
+          onPressed: _saving
+              ? null
+              : () async {
+                  final v = _validate();
+                  if (v == null) return;
+                  final t = TrainingSession(
+                    id: _id,
+                    discipline: disc,
+                    date: date,
+                    durationMin: v.$1,
+                    distanceKm: disc.hasDistance ? v.$2 : null,
+                    rpe: rpe.round(),
+                    notes: notes.text.trim(),
+                    done: done,
+                    trackRef: widget.existing?.trackRef,
+                    movingSec: widget.existing?.movingSec,
+                    maxSpeedKmh: widget.existing?.maxSpeedKmh,
+                    bestKmSec: widget.existing?.bestKmSec,
+                  );
+                  setState(() => _saving = true);
+                  final ok = await saveGuarded(context, () => _store.upsertTraining(t));
+                  if (!context.mounted) return;
+                  setState(() => _saving = false);
+                  if (!ok) return; // formularz zostaje – można ponowić z tym samym ID
+                  Navigator.pop(context);
+                  toast(context, done ? tr('Trening zapisany') : tr('Trening zaplanowany'));
+                },
           child: Text(tr('Zapisz')),
         ),
       ],
@@ -281,7 +323,10 @@ class _HealthFormState extends State<_HealthForm> {
               ? null
               : () async {
                   if (await confirmDelete(context, 'wpis')) {
-                    await _store.deleteHealth(widget.existing!);
+                    if (!context.mounted) return;
+                    if (!await saveGuarded(context, () => _store.deleteHealth(widget.existing!))) {
+                      return;
+                    }
                     if (context.mounted) Navigator.pop(context);
                   }
                 },
@@ -368,7 +413,8 @@ class _HealthFormState extends State<_HealthForm> {
               toast(context, tr('Wpisz nazwę lub preparat'));
               return;
             }
-            await _store.upsertHealth(
+            if (!context.mounted) return;
+            if (!await saveGuarded(context, () => _store.upsertHealth(
               HealthRecord(
                 id: widget.existing?.id ?? newId(),
                 category: cat,
@@ -378,7 +424,9 @@ class _HealthFormState extends State<_HealthForm> {
                 notes: notes.text.trim(),
                 remind: remind,
               ),
-            );
+            ))) {
+              return;
+            }
             if (context.mounted) {
               Navigator.pop(context);
               toast(context, tr('Zapisano'));
@@ -438,7 +486,10 @@ class _EventFormState extends State<_EventForm> {
               ? null
               : () async {
                   if (await confirmDelete(context, 'wydarzenie')) {
-                    await _store.deleteEvent(widget.existing!);
+                    if (!context.mounted) return;
+                    if (!await saveGuarded(context, () => _store.deleteEvent(widget.existing!))) {
+                      return;
+                    }
                     if (context.mounted) Navigator.pop(context);
                   }
                 },
@@ -488,7 +539,8 @@ class _EventFormState extends State<_EventForm> {
               toast(context, tr('Wpisz tytuł'));
               return;
             }
-            await _store.upsertEvent(
+            if (!context.mounted) return;
+            if (!await saveGuarded(context, () => _store.upsertEvent(
               CalendarEvent(
                 id: widget.existing?.id ?? newId(),
                 type: type,
@@ -497,7 +549,9 @@ class _EventFormState extends State<_EventForm> {
                 notes: notes.text.trim(),
                 remind: remind,
               ),
-            );
+            ))) {
+              return;
+            }
             if (context.mounted) {
               Navigator.pop(context);
               toast(context, tr('Dodano do kalendarza'));
@@ -550,7 +604,10 @@ class _WeightFormState extends State<_WeightForm> {
               toast(context, tr('Podaj poprawną wagę'));
               return;
             }
-            await _store.addWeight(WeightEntry(id: newId(), date: date, kg: v));
+            if (!context.mounted) return;
+            if (!await saveGuarded(context, () => _store.addWeight(WeightEntry(id: newId(), date: date, kg: v)))) {
+              return;
+            }
             if (context.mounted) Navigator.pop(context);
           },
           child: Text(tr('Zapisz')),

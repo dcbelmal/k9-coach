@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../dogs/dog_profiles.dart';
+import '../storage/dog_doc_guard.dart';
 
 /// Postępy w przewodnikach treningowych (0 = nie zaczęte, 1 = w trakcie, 2 = opanowane).
 class GuideStore extends ChangeNotifier {
@@ -15,22 +16,21 @@ class GuideStore extends ChangeNotifier {
 
   final Map<String, int> progress = {};
 
+  final guard = DogDocGuard(_key, 'Przewodniki');
+
+  static Map<String, int> _parse(String? raw) {
+    if (raw == null) return {};
+    final j = jsonDecode(raw) as Map<String, dynamic>;
+    return {for (final e in j.entries) e.key: e.value as int};
+  }
+
   Future<void> load() async {
     _prefs = await SharedPreferences.getInstance();
-    final raw = _prefs!.getString(dogKey(_key));
-    progress.clear();
-    if (raw == null) {
-      notifyListeners();
-      return;
-    }
-    try {
-      final j = jsonDecode(raw) as Map<String, dynamic>;
-      progress
-        ..clear()
-        ..addAll({for (final e in j.entries) if (e.value is int) e.key: e.value as int});
-    } catch (e) {
-      debugPrint('Przewodniki: błąd odczytu $e');
-    }
+    var x = <String, int>{};
+    await guard.load(_prefs!, DogProfiles.instance.activeId, (raw) => x = _parse(raw));
+    progress
+      ..clear()
+      ..addAll(x);
     notifyListeners();
   }
 
@@ -42,15 +42,15 @@ class GuideStore extends ChangeNotifier {
     } else {
       progress[id] = s;
     }
-    notifyListeners();
     _prefs ??= await SharedPreferences.getInstance();
-    await _prefs!.setString(dogKey(_key), jsonEncode(progress));
-  }
-
-  Future<void> reset() async {
-    progress.clear();
-    notifyListeners();
-    _prefs ??= await SharedPreferences.getInstance();
-    await _prefs!.remove(dogKey(_key));
+    try {
+      await guard.write(_prefs!, () => jsonEncode(progress), (last) {
+        progress
+          ..clear()
+          ..addAll(_parse(last));
+      });
+    } finally {
+      notifyListeners();
+    }
   }
 }

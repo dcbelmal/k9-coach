@@ -1,6 +1,9 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+
+import '../storage/dog_doc_guard.dart';
+import '../storage/safe_prefs.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../dogs/dog_profiles.dart';
@@ -24,35 +27,45 @@ class HeatStore extends ChangeNotifier {
   List<HeatCycle> cycles = [];
   bool remind = true;
 
+  List<dynamic> _bad = [];
+  final guard = DogDocGuard(_key, 'Cykl i cieczka');
+
+  static (List<HeatCycle>, bool, List<dynamic>) _parse(String? raw) {
+    if (raw == null) return ([], true, []);
+    final j = jsonDecode(raw) as Map<String, dynamic>;
+    final (ok, bad) = readList(j['cycles'], HeatCycle.fromJson);
+    return (ok, j['remind'] as bool? ?? true, bad);
+  }
+
+  void _apply((List<HeatCycle>, bool, List<dynamic>) x) {
+    cycles = x.$1;
+    remind = x.$2;
+    _bad = x.$3;
+    _sort();
+  }
+
   Future<void> load() async {
     _prefs = await SharedPreferences.getInstance();
-    final raw = _prefs!.getString(dogKey(_key));
-    cycles = [];
-    remind = true;
-    if (raw == null) {
-      notifyListeners();
-      return;
-    }
-    try {
-      final j = jsonDecode(raw) as Map<String, dynamic>;
-      cycles = [for (final e in (j['cycles'] as List? ?? [])) HeatCycle.fromJson(e)];
-      remind = j['remind'] ?? true;
-      _sort();
-    } catch (e) {
-      debugPrint('Cieczka: błąd odczytu $e');
-    }
+    var x = _parse(null);
+    await guard.load(_prefs!, DogProfiles.instance.activeId, (raw) => x = _parse(raw));
+    _apply(x);
     notifyListeners();
   }
 
   void _sort() => cycles.sort((a, b) => b.start.compareTo(a.start));
 
-  Future<void> _save() async {
+  Future<void> _save({bool reschedule = true}) async {
     _sort();
-    notifyListeners();
     _prefs ??= await SharedPreferences.getInstance();
-    await _prefs!.setString(
-        dogKey(_key), jsonEncode({'cycles': cycles.map((c) => c.toJson()).toList(), 'remind': remind}));
-    await Notifications.instance.reschedule(AppStore.instance);
+    try {
+      await guard.write(
+          _prefs!,
+          () => jsonEncode({'cycles': [...cycles.map((c) => c.toJson()), ..._bad], 'remind': remind}),
+          (last) => _apply(_parse(last)));
+    } finally {
+      notifyListeners();
+    }
+    if (reschedule) await Notifications.instance.reschedule(AppStore.instance);
   }
 
   HeatStatus get status => HeatLogic.status(cycles, DateTime.now());
@@ -119,10 +132,6 @@ class HeatStore extends ChangeNotifier {
           notes: tr('Pierwsza cieczka')),
       HeatCycle(id: 'hc2', start: s1, end: s1.add(const Duration(days: 20))),
     ];
-    _sort();
-    notifyListeners();
-    _prefs ??= await SharedPreferences.getInstance();
-    await _prefs!.setString(
-        dogKey(_key), jsonEncode({'cycles': cycles.map((c) => c.toJson()).toList(), 'remind': remind}));
+    await _save(reschedule: false);
   }
 }

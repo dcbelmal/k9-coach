@@ -1,5 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 
+import '../gps/draft_recovery.dart';
 import '../theme.dart';
 import 'forms.dart';
 import 'health.dart';
@@ -18,8 +19,21 @@ void openTrainingTab(int segment) {
   goToTab(1);
 }
 
-class Shell extends StatelessWidget {
+class Shell extends StatefulWidget {
   const Shell({super.key});
+
+  @override
+  State<Shell> createState() => _ShellState();
+}
+
+class _ShellState extends State<Shell> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) offerDraftRecovery(context);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {

@@ -145,11 +145,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
 Future<void> pickDogPhoto(BuildContext context, Dog dog) async {
   try {
     final img = await ImagePicker().pickImage(
-        source: ImageSource.gallery, maxWidth: 1200, maxHeight: 1200, imageQuality: 82);
+        source: ImageSource.gallery, maxWidth: 900, maxHeight: 900, imageQuality: 80);
     if (img == null) return;
     final bytes = await img.readAsBytes();
     dog.photoBase64 = base64Encode(bytes);
-    await AppStore.instance.saveDog(dog);
+    if (!context.mounted) return;
+    if (!await saveGuarded(context, () => AppStore.instance.saveDog(dog))) return;
   } catch (e) {
     if (context.mounted) toast(context, tr('Nie udało się wczytać zdjęcia'));
   }
@@ -263,7 +264,8 @@ class _DogNotesEditorState extends State<DogNotesEditor> {
       FilledButton(
         onPressed: () async {
           widget.dog.notes = c.text;
-          await AppStore.instance.saveDog(widget.dog);
+          if (!context.mounted) return;
+          if (!await saveGuarded(context, () => AppStore.instance.saveDog(widget.dog))) return;
           if (context.mounted) toast(context, tr('Notatki zapisane'));
         },
         child: Text(tr('Zapisz notatki')),
@@ -323,13 +325,14 @@ class _Settings extends StatelessWidget {
           onTap: () async {
             final name = s.dog?.name ?? '';
             if (await confirmDelete(context, tr('{0} – profil, treningi i wszystkie wpisy', [name]))) {
-              await DogProfiles.instance.deleteActive();
+              if (!context.mounted) return;
+              await saveGuarded(context, DogProfiles.instance.deleteActive);
             }
           },
         ),
         Padding(
           padding: EdgeInsets.symmetric(vertical: 10),
-          child: Text(tr('Valkor Coach · wersja {0} · dane zapisane tylko na tym telefonie', ['0.11']),
+          child: Text(tr('Valkor Coach · wersja {0} · dane zapisane tylko na tym telefonie', ['0.12']),
               textAlign: TextAlign.center, style: TextStyle(color: K9.faint, fontSize: 11.5)),
         ),
       ]),
@@ -472,7 +475,8 @@ class _DogEditScreenState extends State<DogEditScreen> {
               ..chip = chip.text.trim()
               ..pedigree = pedigree.text.trim()
               ..weeklyKmGoal = parseNum(weekly.text) ?? 30;
-            await AppStore.instance.saveDog(d);
+            if (!context.mounted) return;
+            if (!await saveGuarded(context, () => AppStore.instance.saveDog(d))) return;
             await syncNutritionFromDog(d);
             if (isNew) await Notifications.instance.requestPermission();
             if (context.mounted && Navigator.of(context).canPop()) Navigator.pop(context);
@@ -487,7 +491,7 @@ class _DogEditScreenState extends State<DogEditScreen> {
 Future<void> pickDogPhotoInto(BuildContext context, Dog dog) async {
   try {
     final img = await ImagePicker().pickImage(
-        source: ImageSource.gallery, maxWidth: 1200, maxHeight: 1200, imageQuality: 82);
+        source: ImageSource.gallery, maxWidth: 900, maxHeight: 900, imageQuality: 80);
     if (img == null) return;
     dog.photoBase64 = base64Encode(await img.readAsBytes());
   } catch (_) {

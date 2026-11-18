@@ -1,6 +1,9 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+
+import '../storage/dog_doc_guard.dart';
+import '../storage/safe_prefs.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../dogs/dog_profiles.dart';
@@ -24,36 +27,47 @@ class BreedingStore extends ChangeNotifier {
   List<Mating> matings = [];
   bool remind = true;
 
+  List<dynamic> _bad = [];
+  final guard = DogDocGuard(_key, 'Hodowla');
+
+  static (List<Mating>, bool, List<dynamic>) _parse(String? raw) {
+    if (raw == null) return ([], true, []);
+    final j = jsonDecode(raw) as Map<String, dynamic>;
+    final (ok, bad) = readList(j['matings'], Mating.fromJson);
+    return (ok, j['remind'] as bool? ?? true, bad);
+  }
+
+  void _apply((List<Mating>, bool, List<dynamic>) x) {
+    matings = x.$1;
+    remind = x.$2;
+    _bad = x.$3;
+    _sort();
+  }
+
   Future<void> load() async {
     _prefs = await SharedPreferences.getInstance();
-    final raw = _prefs!.getString(dogKey(_key));
-    matings = [];
-    remind = true;
-    if (raw == null) {
-      notifyListeners();
-      return;
-    }
-    try {
-      final j = jsonDecode(raw) as Map<String, dynamic>;
-      matings = [for (final e in (j['matings'] as List? ?? [])) Mating.fromJson(e)];
-      remind = j['remind'] ?? true;
-      _sort();
-    } catch (e) {
-      debugPrint('Hodowla: błąd odczytu $e');
-    }
+    var x = _parse(null);
+    await guard.load(_prefs!, DogProfiles.instance.activeId, (raw) => x = _parse(raw));
+    _apply(x);
     notifyListeners();
   }
 
   void _sort() => matings.sort((a, b) => b.first.compareTo(a.first));
 
   Future<void> _write() async {
+    _sort();
     _prefs ??= await SharedPreferences.getInstance();
-    await _prefs!.setString(dogKey(_key), jsonEncode({'matings': matings.map((m) => m.toJson()).toList(), 'remind': remind}));
+    try {
+      await guard.write(
+          _prefs!,
+          () => jsonEncode({'matings': [...matings.map((m) => m.toJson()), ..._bad], 'remind': remind}),
+          (last) => _apply(_parse(last)));
+    } finally {
+      notifyListeners();
+    }
   }
 
   Future<void> _save() async {
-    _sort();
-    notifyListeners();
     await _write();
     await Notifications.instance.reschedule(AppStore.instance);
   }

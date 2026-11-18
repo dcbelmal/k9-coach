@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../theme.dart';
 import '../widgets/common.dart';
+import '../build_config.dart';
 import 'billing.dart';
 import 'module_store.dart';
 import '../l10n/l10n.dart';
@@ -76,7 +77,12 @@ class PremiumScreen extends StatelessWidget {
             ]),
           ),
           gap12,
-          if (b.live) ..._storeSection(context, m, b) else ..._testSection(context, m, b),
+          if (b.live)
+            ..._storeSection(context, m, b)
+          else if (isBetaBuild)
+            ..._testSection(context, m, b)
+          else
+            ..._unavailableSection(),
           gap12,
           Text(tr(freeForever), style: const TextStyle(color: K9.faint, fontSize: 12)),
         ]),
@@ -122,6 +128,22 @@ class PremiumScreen extends StatelessWidget {
     ];
   }
 
+  /// Wersja produkcyjna bez działającej sprzedaży: bez przełącznika testowego.
+  List<Widget> _unavailableSection() => [
+        K9Card(
+          child: Row(children: [
+            Icon(Icons.info_outline_rounded, color: K9.blue),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                tr('Zakup Premium nie jest jeszcze dostępny. Wszystkie bezpłatne funkcje działają bez ograniczeń.'),
+                style: TextStyle(color: K9.muted, fontSize: 13),
+              ),
+            ),
+          ]),
+        ),
+      ];
+
   List<Widget> _testSection(BuildContext context, ModuleStore m, Billing b) => [
         K9Card(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -132,9 +154,7 @@ class PremiumScreen extends StatelessWidget {
             ]),
             const SizedBox(height: 8),
             Text(
-              b.supported
-                  ? tr('Zakup zadziała, gdy aplikacja będzie pobrana ze Sklepu Google Play. Ta wersja jest z GitHuba, więc na razie Premium włączysz testowo poniżej.')
-                  : tr('Zakup działa w aplikacji na Androida ze Sklepu Google Play.'),
+              tr('To jest wersja testowa (beta). Płatności są wyłączone, a Premium włączysz za darmo poniżej.'),
               style: const TextStyle(color: K9.muted, fontSize: 13),
             ),
           ]),
@@ -145,7 +165,7 @@ class PremiumScreen extends StatelessWidget {
             contentPadding: EdgeInsets.zero,
             value: m.premium,
             onChanged: (v) async {
-              await m.setPremium(v);
+              if (!await saveGuarded(context, () => m.setPremium(v))) return;
               if (context.mounted) toast(context, v ? tr('Premium włączone') : tr('Premium wyłączone'));
             },
             title: Text(tr('Włącz Premium (wersja testowa)'), style: TextStyle(fontWeight: FontWeight.w700)),

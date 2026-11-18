@@ -139,7 +139,8 @@ class _ZkwpCalendarState extends State<ZkwpCalendar> {
           ? tr('Z kalendarza FCI: {0}, {1} – wystawa międzynarodowa CACIB', [countryByCode(z.country).label, z.city])
           : tr('Z terminarza ZKwP: {0} – {1}', [z.place, z.description]),
     );
-    await _s.upsertShow(e);
+    if (!context.mounted) return;
+    if (!await saveGuarded(context, () => _s.upsertShow(e))) return;
     if (mounted) toast(context, tr('Dodano do moich wystaw. Uzupełnij termin zgłoszeń, a przypomnę o nim.'));
   }
 

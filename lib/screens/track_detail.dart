@@ -103,7 +103,8 @@ class _TrackDetailScreenState extends State<TrackDetailScreen> {
                 icon: const Icon(Icons.delete_outline_rounded),
                 onPressed: () async {
                   if (await confirmDelete(context, tr('ten trening'))) {
-                    await s.deleteTraining(t);
+                    if (!context.mounted) return;
+                    if (!await saveGuarded(context, () => s.deleteTraining(t))) return;
                     if (context.mounted) Navigator.pop(context);
                   }
                 },

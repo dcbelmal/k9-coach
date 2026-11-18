@@ -50,12 +50,20 @@ class _DogWizardScreenState extends State<DogWizardScreen> {
       ..heightCm = parseNum(height.text);
   }
 
+  /// Zapis profilu. Przy błędzie formularz zostaje wypełniony i można ponowić.
   Future<void> _save() async {
     setState(() => saving = true);
     _collect();
-    await ModuleStore.instance.resetOverrides();
-    await AppStore.instance.saveDog(d);
-    await syncNutritionFromDog(d);
+    final ok = await saveGuarded(context, () async {
+      await AppStore.instance.saveDog(d);
+      await ModuleStore.instance.resetOverrides();
+      await syncNutritionFromDog(d);
+    });
+    if (!mounted) return;
+    if (!ok) {
+      setState(() => saving = false);
+      return;
+    }
     await Notifications.instance.requestPermission();
     if (mounted && Navigator.of(context).canPop()) Navigator.pop(context);
   }

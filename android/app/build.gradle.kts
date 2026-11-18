@@ -31,15 +31,22 @@ android {
     }
 
     // Stały klucz podpisu: każda nowa wersja instaluje się na poprzednią bez utraty danych.
-    // Hasło jest w sekrecie GitHub KEYSTORE_PASSWORD (zmienna środowiskowa przy budowie).
+    // Wersja release jest podpisywana WYŁĄCZNIE tym kluczem – bez niego budowa
+    // kończy się błędem (nigdy nie podpisujemy release kluczem debug).
+    //   KEYSTORE_PASSWORD – hasło (sekret GitHub),
+    //   KEYSTORE_PATH     – opcjonalnie ścieżka do pliku .p12 dostarczonego przez CI
+    //                       z sekretu KEYSTORE_BASE64; bez niej: android/app/valkor-release.p12.
     val keystorePassword = System.getenv("KEYSTORE_PASSWORD")
+    val keystoreFile = System.getenv("KEYSTORE_PATH")?.takeIf { it.isNotBlank() }?.let { file(it) }
+        ?: file("valkor-release.p12")
+    val releaseSigningReady = !keystorePassword.isNullOrEmpty() && keystoreFile.isFile
     signingConfigs {
-        if (!keystorePassword.isNullOrEmpty()) {
+        if (releaseSigningReady) {
             create("valkor") {
-                storeFile = file("valkor-release.p12")
+                storeFile = keystoreFile
                 storeType = "PKCS12"
                 storePassword = keystorePassword
-                keyAlias = "valkor"
+                keyAlias = System.getenv("KEY_ALIAS")?.takeIf { it.isNotBlank() } ?: "valkor"
                 keyPassword = keystorePassword
             }
         }
@@ -47,10 +54,23 @@ android {
 
     buildTypes {
         release {
-            // Bez hasła (np. lokalnie) podpisujemy kluczem debug, jak wcześniej.
-            signingConfig = if (!keystorePassword.isNullOrEmpty()) signingConfigs.getByName("valkor")
-                else signingConfigs.getByName("debug")
+            signingConfig = if (releaseSigningReady) signingConfigs.getByName("valkor") else null
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+        }
+    }
+
+    // Czytelny błąd zamiast niepodpisanego albo źle podpisanego APK.
+    gradle.taskGraph.whenReady {
+        val wantsRelease = allTasks.any { t ->
+            t.project == project && t.name.contains("Release") &&
+                (t.name.startsWith("assemble") || t.name.startsWith("bundle") || t.name.startsWith("package"))
+        }
+        if (wantsRelease && !releaseSigningReady) {
+            throw GradleException(
+                "Brak klucza podpisu wersji release. Ustaw KEYSTORE_PASSWORD (i opcjonalnie KEYSTORE_PATH) " +
+                    "albo zbuduj wersję testową: flutter build apk --debug. " +
+                    "Release nigdy nie jest podpisywany kluczem debug, bo taki APK nie zainstaluje się na poprzednią wersję."
+            )
         }
     }
 }

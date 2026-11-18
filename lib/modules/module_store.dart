@@ -1,6 +1,10 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+
+import '../build_config.dart';
+import '../storage/dog_doc_guard.dart';
+import '../storage/safe_prefs.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../dogs/dog_profiles.dart';
@@ -35,53 +39,70 @@ class ModuleStore extends ChangeNotifier {
   final Map<AppModule, bool> overrides = {};
 
   /// Premium: subskrypcja Google Play albo przełącznik testowy (patrz Billing).
-  bool premium = false;
+  bool _premium = false;
+
+  /// Premium aktywne: w becie także testowo, w wersji produkcyjnej wyłącznie
+  /// z potwierdzonego zakupu Google Play (stary przełącznik testowy nie działa).
+  bool get premium => _premium && (isBetaBuild || premiumSource == PremiumSource.play);
   PremiumSource premiumSource = PremiumSource.test;
+
+  final guard = DogDocGuard(_key, 'Moduły');
+
+  static Map<AppModule, bool> _parse(String? raw) {
+    final out = <AppModule, bool>{};
+    if (raw == null) return out;
+    final j = jsonDecode(raw) as Map<String, dynamic>;
+    final o = (j['overrides'] as Map?) ?? {};
+    for (final e in o.entries) {
+      final m = AppModule.values.asNameMap()[e.key];
+      if (m != null && e.value is bool) out[m] = e.value as bool;
+    }
+    return out;
+  }
 
   Future<void> load() async {
     _prefs = await SharedPreferences.getInstance();
-    overrides.clear();
     // Starsze wersje trzymały Premium razem z modułami pierwszego psa.
     final rawPremium = _prefs!.getString(_premiumKey) ?? _prefs!.getString(_key);
     if (rawPremium != null) {
       try {
         final j = jsonDecode(rawPremium) as Map<String, dynamic>;
-        premium = j['premium'] ?? false;
+        _premium = j['premium'] as bool? ?? false;
         premiumSource = PremiumSource.values.asNameMap()[j['premiumSource']] ?? PremiumSource.test;
       } catch (e) {
-        debugPrint('Premium: błąd odczytu $e');
+        logError('Premium: odczyt', e);
       }
     }
-    final raw = _prefs!.getString(dogKey(_key));
-    if (raw == null) {
-      notifyListeners();
-      return;
-    }
-    try {
-      final j = jsonDecode(raw) as Map<String, dynamic>;
-      final o = (j['overrides'] as Map?) ?? {};
-      for (final e in o.entries) {
-        final m = AppModule.values.asNameMap()[e.key];
-        if (m != null && e.value is bool) overrides[m] = e.value as bool;
-      }
-    } catch (e) {
-      debugPrint('Moduły: błąd odczytu $e');
-    }
+    var x = <AppModule, bool>{};
+    await guard.load(_prefs!, DogProfiles.instance.activeId, (raw) => x = _parse(raw));
+    overrides
+      ..clear()
+      ..addAll(x);
     notifyListeners();
   }
 
-  Future<void> _save() async {
-    notifyListeners();
+  Future<void> _savePremium() async {
     _prefs ??= await SharedPreferences.getInstance();
-    await _prefs!.setString(
-        _premiumKey, jsonEncode({'premium': premium, 'premiumSource': premiumSource.name}));
-    await _prefs!.setString(
-        dogKey(_key),
-        jsonEncode({
-          'premium': premium,
-          'premiumSource': premiumSource.name,
-          'overrides': {for (final e in overrides.entries) e.key.name: e.value},
-        }));
+    await SafePrefs.setString(
+        _prefs!, _premiumKey, jsonEncode({'premium': _premium, 'premiumSource': premiumSource.name}));
+  }
+
+  Future<void> _save() async {
+    _prefs ??= await SharedPreferences.getInstance();
+    try {
+      await guard.write(
+          _prefs!,
+          () => jsonEncode({
+                'premium': _premium,
+                'premiumSource': premiumSource.name,
+                'overrides': {for (final e in overrides.entries) e.key.name: e.value},
+              }),
+          (last) => overrides
+            ..clear()
+            ..addAll(_parse(last)));
+    } finally {
+      notifyListeners();
+    }
   }
 
   /// Czy moduł ma już dane użytkownika – wtedy nie chowamy go automatycznie.
@@ -131,15 +152,19 @@ class ModuleStore extends ChangeNotifier {
   }
 
   Future<void> setPremium(bool on, {PremiumSource source = PremiumSource.test}) async {
-    if (premium == on && premiumSource == source) return;
-    premium = on;
+    if (source == PremiumSource.test && !isBetaBuild) return; // brak trybu testowego w produkcji
+    if (_premium == on && premiumSource == source) return;
+    final old = (_premium, premiumSource);
+    _premium = on;
     premiumSource = source;
-    await _save();
-  }
-
-  Future<void> reset() async {
-    // Usunięcie psa czyści tylko jego moduły; Premium dotyczy całej aplikacji.
-    overrides.clear();
-    await _save();
+    try {
+      await _savePremium();
+    } catch (e) {
+      _premium = old.$1;
+      premiumSource = old.$2;
+      rethrow;
+    } finally {
+      notifyListeners();
+    }
   }
 }

@@ -5,6 +5,7 @@ import 'package:material_ui/material_ui.dart';
 import '../../models.dart';
 import '../../theme.dart';
 import '../../widgets/common.dart';
+import '../energy.dart';
 import '../nutrition_models.dart';
 import '../nutrition_store.dart';
 import 'products_screen.dart';
@@ -30,6 +31,10 @@ class _TreatTrainingScreenState extends State<TreatTrainingScreen> {
   Timer? timer;
   final counts = <String, double>{};
   final selected = <String>[];
+
+  /// Stałe ID treningu: ponowienie zapisu nie tworzy drugiego treningu ani drugiej porcji.
+  late final String _id = newId();
+  bool _saving = false;
 
   @override
   void initState() {
@@ -117,25 +122,35 @@ class _TreatTrainingScreenState extends State<TreatTrainingScreen> {
         ]),
       ),
     );
-    if (ok != true || !mounted) return;
-    timer?.cancel();
+    if (ok != true || !mounted || _saving) return;
+    final typed = int.tryParse(duration.text.trim());
+    if (typed == null || typed < 1 || typed > 24 * 60) {
+      toast(context, tr('Podaj czas w pełnych minutach (1–{0})', [24 * 60]));
+      return;
+    }
     final t = TrainingSession(
-      id: newId(),
+      id: _id,
       discipline: disc,
       date: started ?? DateTime.now(),
-      durationMin: int.tryParse(duration.text.trim()) ?? mins,
+      durationMin: typed,
       rpe: rpe.round(),
       notes: _summary(),
     );
-    final plan = await _n.saveTrainingWithTreats(t, Map.of(counts));
+    DailyPlan? plan;
+    setState(() => _saving = true);
+    final saved = await saveGuarded(context, () async => plan = await _n.saveTrainingWithTreats(t, Map.of(counts)));
     if (!mounted) return;
+    setState(() => _saving = false);
+    if (!saved) return; // licznik i czas zostają – można ponowić
+    timer?.cancel();
+    final pl = plan;
     await showDialog(
       context: context,
       builder: (c) => AlertDialog(
         title: Text(tr('Trening zapisany')),
-        content: Text(plan == null
+        content: Text(pl == null
             ? tr('Nagrody zapisane w dzienniku.')
-            : tr('Nagrody: {0} kcal.\nPozostało na dziś: {1} kcal.\nProponowana porcja karmy na resztę dnia: {2} g.', [kcal.round(), plan.remainingKcal.round(), plan.remainingGrams.round()])),
+            : tr('Nagrody: {0} kcal.\nPozostało na dziś: {1} kcal.\nProponowana porcja karmy na resztę dnia: {2} g.', [kcal.round(), pl.remainingKcal.round(), pl.remainingGrams.round()])),
         actions: [TextButton(onPressed: () => Navigator.pop(c), child: Text(tr('OK')))],
       ),
     );
@@ -236,7 +251,7 @@ class _TreatTrainingScreenState extends State<TreatTrainingScreen> {
                 ? FilledButton.icon(
                     onPressed: _start, icon: const Icon(Icons.play_arrow_rounded), label: Text(tr('Rozpocznij trening')))
                 : FilledButton.icon(
-                    onPressed: _finish, icon: const Icon(Icons.stop_rounded), label: Text(tr('Zakończ i zapisz'))),
+                    onPressed: _saving ? null : _finish, icon: const Icon(Icons.stop_rounded), label: Text(tr('Zakończ i zapisz'))),
           ),
         ),
       ),

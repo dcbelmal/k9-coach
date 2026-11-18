@@ -489,7 +489,8 @@ class _ProductFormState extends State<_ProductForm> {
             ? null
             : () async {
                 if (await confirmDelete(context, widget.existing!.title)) {
-                  await _n.deleteProduct(widget.existing!);
+                  if (!context.mounted) return;
+                  if (!await saveGuarded(context, () => _n.deleteProduct(widget.existing!))) return;
                   if (context.mounted) Navigator.pop(context);
                 }
               },
@@ -613,11 +614,13 @@ class _ProductFormState extends State<_ProductForm> {
             toast(context, tr('Wpisz nazwę produktu'));
             return;
           }
-          await _n.upsertProduct(p);
+          if (!context.mounted) return;
+          if (!await saveGuarded(context, () => _n.upsertProduct(p))) return;
           if (makeMain && p.type.isMainFood && _n.settings.mainProductId != p.id) {
             final s = _n.settings;
             s.mainProductId = p.id;
-            await _n.saveSettings(s, reason: 'nowa karma główna');
+            if (!context.mounted) return;
+            if (!await saveGuarded(context, () => _n.saveSettings(s, reason: 'nowa karma główna'))) return;
           }
           if (context.mounted) Navigator.pop(context, p);
         },

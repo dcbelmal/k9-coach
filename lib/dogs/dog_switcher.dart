@@ -23,6 +23,8 @@ Future<void> showDogSwitcher(BuildContext context) async {
             const SizedBox(height: 4),
             Text(tr('Każdy pies ma osobne treningi, zdrowie, żywienie i moduły.'),
                 style: const TextStyle(color: K9.muted, fontSize: 13)),
+            const SizedBox(height: 6),
+            Text(tr(oneOwnerNotice), style: const TextStyle(color: K9.faint, fontSize: 12)),
             gap12,
             for (final (id, dog) in dogs) ...[
               _DogTile(dog: dog, active: id == p.activeId, onTap: () => Navigator.pop(c, id)),
@@ -152,3 +154,7 @@ class DogSwitchButton extends StatelessWidget {
     );
   }
 }
+
+/// Model dostępu w tej wersji (wyświetlany przy liście psów i w ustawieniach).
+const oneOwnerNotice =
+    'Wersja testowa: jeden opiekun na jednym koncie użytkownika telefonu, z dowolną liczbą psów. Każdy, kto może otworzyć aplikację na tym telefonie, widzi i może zmieniać wszystkie psy. Dane są tylko w tym telefonie, bez konta i bez chmury.';

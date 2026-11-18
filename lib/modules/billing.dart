@@ -4,8 +4,10 @@ import 'package:flutter/foundation.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:in_app_purchase_android/in_app_purchase_android.dart';
 
+import '../build_config.dart';
 import 'module_store.dart';
 import '../l10n/l10n.dart';
+import '../storage/safe_prefs.dart';
 
 /// Jeden plan subskrypcji (np. miesięczny, roczny) z cenami ze Sklepu Google Play.
 class PremiumPlan {
@@ -47,7 +49,8 @@ class Billing extends ChangeNotifier {
 
   static const productId = 'valkor_premium';
 
-  bool get supported => !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+  /// Płatności działają tylko na Androidzie i tylko w wariancie z włączoną sprzedażą.
+  bool get supported => salesEnabled && !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
   bool initialized = false;
   bool storeAvailable = false;
@@ -66,7 +69,7 @@ class Billing extends ChangeNotifier {
     try {
       final iap = InAppPurchase.instance;
       _sub = iap.purchaseStream.listen(_onPurchases, onError: (Object e) {
-        message = tr('Błąd płatności: {0}', [e]);
+        message = tr('Płatność nie powiodła się. Spróbuj ponownie.');
         busy = false;
         notifyListeners();
       });
@@ -76,7 +79,7 @@ class Billing extends ChangeNotifier {
       plans = _plans(r.productDetails);
       if (live) await _refreshEntitlement();
     } catch (e) {
-      debugPrint('Płatności niedostępne: $e');
+      logError('Płatności niedostępne', e);
     } finally {
       notifyListeners();
     }
@@ -124,12 +127,18 @@ class Billing extends ChangeNotifier {
     final addition = InAppPurchase.instance.getPlatformAddition<InAppPurchaseAndroidPlatformAddition>();
     final r = await addition.queryPastPurchases();
     if (r.error != null) return; // brak sieci itp. – zostawiamy ostatni znany stan
-    final active = r.pastPurchases.any((p) => p.productID == productId && p.status != PurchaseStatus.error);
+    // Aktywne są tylko zakupy potwierdzone (purchased/restored). Zakup oczekujący
+    // nie daje Premium; subskrypcja anulowana po końcu okresu lub wygasła nie
+    // jest zwracana przez Google Play, więc Premium wyłącza się samo.
+    final active = r.pastPurchases.any((p) => p.productID == productId && isActiveStatus(p.status));
     for (final p in r.pastPurchases) {
       if (p.pendingCompletePurchase) await InAppPurchase.instance.completePurchase(p);
     }
     await ModuleStore.instance.setPremium(active, source: PremiumSource.play);
   }
+
+  /// Status zakupu, który przyznaje Premium.
+  static bool isActiveStatus(PurchaseStatus s) => s == PurchaseStatus.purchased || s == PurchaseStatus.restored;
 
   Future<void> buy(PremiumPlan plan) async {
     if (!live || busy) return;
@@ -165,13 +174,14 @@ class Billing extends ChangeNotifier {
       if (p.productID != productId) continue;
       switch (p.status) {
         case PurchaseStatus.pending:
-          message = 'Płatność w toku – Premium włączy się po jej potwierdzeniu.';
+          // Nie przyznajemy Premium przed potwierdzeniem płatności.
+          message = tr('Płatność w toku – Premium włączy się po jej potwierdzeniu.');
         case PurchaseStatus.purchased || PurchaseStatus.restored:
           await ModuleStore.instance.setPremium(true, source: PremiumSource.play);
-          message = 'Dziękujemy! Premium jest aktywne.';
+          message = tr('Dziękujemy! Premium jest aktywne.');
           busy = false;
         case PurchaseStatus.error:
-          message = 'Płatność nie powiodła się. Spróbuj ponownie.';
+          message = tr('Płatność nie powiodła się. Spróbuj ponownie.');
           busy = false;
         case PurchaseStatus.canceled:
           message = null;

@@ -1,7 +1,7 @@
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
+import '../../storage/safe_prefs.dart';
 
 bool get supported => Platform.isAndroid || Platform.isIOS;
 
@@ -14,7 +14,7 @@ Future<String?> readFile(String path) async {
     // potem oryginalny odczyt ML Kit jako zapas.
     return '${_rows(res)}\n\n${res.text}';
   } catch (e) {
-    debugPrint('OCR: $e');
+    logError('OCR', e);
     return null;
   } finally {
     await r.close();
