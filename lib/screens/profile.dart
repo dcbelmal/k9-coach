@@ -149,7 +149,8 @@ Future<void> pickDogPhoto(BuildContext context, Dog dog) async {
     if (img == null) return;
     final bytes = await img.readAsBytes();
     dog.photoBase64 = base64Encode(bytes);
-    await AppStore.instance.saveDog(dog);
+    if (!context.mounted) return;
+    if (!await saveGuarded(context, () => AppStore.instance.saveDog(dog))) return;
   } catch (e) {
     if (context.mounted) toast(context, tr('Nie udało się wczytać zdjęcia'));
   }
@@ -263,7 +264,8 @@ class _DogNotesEditorState extends State<DogNotesEditor> {
       FilledButton(
         onPressed: () async {
           widget.dog.notes = c.text;
-          await AppStore.instance.saveDog(widget.dog);
+          if (!context.mounted) return;
+          if (!await saveGuarded(context, () => AppStore.instance.saveDog(widget.dog))) return;
           if (context.mounted) toast(context, tr('Notatki zapisane'));
         },
         child: Text(tr('Zapisz notatki')),
@@ -323,7 +325,8 @@ class _Settings extends StatelessWidget {
           onTap: () async {
             final name = s.dog?.name ?? '';
             if (await confirmDelete(context, tr('{0} – profil, treningi i wszystkie wpisy', [name]))) {
-              await DogProfiles.instance.deleteActive();
+              if (!context.mounted) return;
+              await saveGuarded(context, DogProfiles.instance.deleteActive);
             }
           },
         ),
@@ -472,7 +475,8 @@ class _DogEditScreenState extends State<DogEditScreen> {
               ..chip = chip.text.trim()
               ..pedigree = pedigree.text.trim()
               ..weeklyKmGoal = parseNum(weekly.text) ?? 30;
-            await AppStore.instance.saveDog(d);
+            if (!context.mounted) return;
+            if (!await saveGuarded(context, () => AppStore.instance.saveDog(d))) return;
             await syncNutritionFromDog(d);
             if (isNew) await Notifications.instance.requestPermission();
             if (context.mounted && Navigator.of(context).canPop()) Navigator.pop(context);

@@ -6,19 +6,16 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:material_ui/material_ui.dart' show Icons, Color;
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'breeding/breeding_store.dart';
 import 'champ_rules.dart';
 import 'dogs/dog_profiles.dart';
 import 'files/file_store.dart';
-import 'guides/guide_store.dart';
-import 'gallery/gallery_store.dart';
 import 'gps/demo_track.dart';
 import 'heat/heat_store.dart';
 import 'models.dart';
 import 'models_ext.dart';
-import 'modules/module_store.dart';
 import 'notifications.dart';
 import 'nutrition/nutrition_store.dart';
+import 'storage/safe_prefs.dart';
 import 'l10n/l10n.dart';
 
 DateTime dayOnly(DateTime d) => DateTime(d.year, d.month, d.day);
@@ -44,12 +41,88 @@ class PeriodStats {
   const PeriodStats(this.count, this.km, this.minutes);
 }
 
+/// Komplet danych jednego psa w postaci zapisu (klucz k9coach_data_v1[@id]).
+///
+/// Odczyt jest ostrożny: wpis, którego nie da się odczytać (np. z nieznaną
+/// dyscypliną), nie jest kasowany – trafia do [unreadable] i przy kolejnym
+/// zapisie wraca do pliku bez zmian. Pola nieznane tej wersji trafiają do [extra].
+class DogDataDoc {
+  /// Wersja schematu. 1 = zapisy bez pola `schema` (do 0.11.0), 2 = od 0.12.0.
+  static const schemaVersion = 2;
+  static const sections = ['weights', 'health', 'trainings', 'events', 'shows', 'documents', 'gear', 'goals'];
+
+  Dog? dog;
+  List<WeightEntry> weights = [];
+  List<HealthRecord> health = [];
+  List<TrainingSession> trainings = [];
+  List<CalendarEvent> events = [];
+  List<ShowEntry> shows = [];
+  List<DogDocument> documents = [];
+  List<GearItem> gear = [];
+  List<Goal> goals = [];
+  final Map<String, List<dynamic>> unreadable = {};
+  final Map<String, dynamic> extra = {};
+
+  int get unreadableCount => unreadable.values.fold(0, (a, l) => a + l.length);
+
+  /// Rzuca wyjątek, gdy całego zapisu nie da się bezpiecznie użyć
+  /// (uszkodzony JSON, nowszy schemat, nieczytelny profil psa).
+  static DogDataDoc decode(String raw) {
+    final j = jsonDecode(raw);
+    if (j is! Map) throw const FormatException('root');
+    final m = Map<String, dynamic>.from(j);
+    final schema = m['schema'];
+    if (schema != null && (schema is! int || schema > schemaVersion)) {
+      throw const FormatException('schema');
+    }
+    final d = DogDataDoc();
+    d.dog = m['dog'] == null ? null : Dog.fromJson(Map<String, dynamic>.from(m['dog'] as Map));
+    void sec<T>(String name, List<T> into, T Function(Map<String, dynamic>) parse) {
+      final (ok, bad) = readList(m[name], parse);
+      into.addAll(ok);
+      if (bad.isNotEmpty) d.unreadable[name] = bad;
+    }
+
+    sec('weights', d.weights, WeightEntry.fromJson);
+    sec('health', d.health, HealthRecord.fromJson);
+    sec('trainings', d.trainings, TrainingSession.fromJson);
+    sec('events', d.events, CalendarEvent.fromJson);
+    sec('shows', d.shows, ShowEntry.fromJson);
+    sec('documents', d.documents, DogDocument.fromJson);
+    sec('gear', d.gear, GearItem.fromJson);
+    sec('goals', d.goals, Goal.fromJson);
+    for (final e in m.entries) {
+      if (e.key != 'dog' && e.key != 'schema' && !sections.contains(e.key)) d.extra[e.key] = e.value;
+    }
+    return d;
+  }
+
+  Map<String, dynamic> toJson() {
+    List<dynamic> sec(String name, List<dynamic> items) =>
+        [for (final e in items) e.toJson(), ...?unreadable[name]];
+    return {
+      ...extra,
+      'schema': schemaVersion,
+      'dog': dog?.toJson(),
+      'weights': sec('weights', weights),
+      'health': sec('health', health),
+      'trainings': sec('trainings', trainings),
+      'events': sec('events', events),
+      'shows': sec('shows', shows),
+      'documents': sec('documents', documents),
+      'gear': sec('gear', gear),
+      'goals': sec('goals', goals),
+    };
+  }
+}
+
 /// Cały stan aplikacji, zapisywany lokalnie na telefonie.
 class AppStore extends ChangeNotifier {
   AppStore._();
   static final AppStore instance = AppStore._();
 
-  static const _key = 'k9coach_data_v1';
+  static const baseKey = 'k9coach_data_v1';
+  static const _key = baseKey;
   late SharedPreferences _prefs;
 
   Dog? dog;
@@ -62,57 +135,226 @@ class AppStore extends ChangeNotifier {
   List<GearItem> gear = [];
   List<Goal> goals = [];
 
-  Future<void> load() async {
+  /// Pies, którego dane są teraz w pamięci.
+  String get ownerId => _owner;
+  String _owner = DogProfiles.mainId;
+
+  /// true = danych tego psa nie dało się odczytać, zapis jest zablokowany.
+  bool locked = false;
+
+  /// Liczba wpisów zachowanych bez odczytu (wracają do zapisu bez zmian).
+  int get unreadableCount => _doc.unreadableCount;
+
+  DogDataDoc _doc = DogDataDoc();
+  String? _lastGoodRaw;
+  final _queue = SerialQueue();
+
+  static String keyForDog(String id) => '$_key${DogProfiles.suffixFor(id)}';
+
+  Future<void> load() => _queue.run(_load);
+
+  Future<void> _load() async {
     _prefs = await SharedPreferences.getInstance();
-    dog = null;
-    weights = [];
-    health = [];
-    trainings = [];
-    events = [];
-    shows = [];
-    documents = [];
-    gear = [];
-    goals = [];
-    final raw = _prefs.getString(dogKey(_key));
-    if (raw == null) {
-      notifyListeners();
-      return;
+    final owner = DogProfiles.instance.activeId;
+    final key = keyForDog(owner);
+    final raw = _prefs.getString(key);
+    // Najpierw odczyt do modelu tymczasowego – stan aplikacji podmieniamy dopiero potem.
+    var doc = DogDataDoc();
+    var lock = false;
+    String? reason;
+    if (raw != null) {
+      try {
+        doc = DogDataDoc.decode(raw);
+      } catch (e) {
+        logError('Odczyt danych psa', e);
+        lock = true;
+        reason = e.runtimeType.toString();
+      }
     }
-    try {
-      final j = jsonDecode(raw) as Map<String, dynamic>;
-      dog = j['dog'] == null ? null : Dog.fromJson(j['dog']);
-      weights = [for (final e in (j['weights'] as List? ?? [])) WeightEntry.fromJson(e)];
-      health = [for (final e in (j['health'] as List? ?? [])) HealthRecord.fromJson(e)];
-      trainings = [for (final e in (j['trainings'] as List? ?? [])) TrainingSession.fromJson(e)];
-      events = [for (final e in (j['events'] as List? ?? [])) CalendarEvent.fromJson(e)];
-      shows = [for (final e in (j['shows'] as List? ?? [])) ShowEntry.fromJson(e)];
-      documents = [for (final e in (j['documents'] as List? ?? [])) DogDocument.fromJson(e)];
-      gear = [for (final e in (j['gear'] as List? ?? [])) GearItem.fromJson(e)];
-      goals = [for (final e in (j['goals'] as List? ?? [])) Goal.fromJson(e)];
-    } catch (e) {
-      debugPrint('Błąd odczytu danych: $e');
+    String? backup;
+    if (raw != null && (lock || doc.unreadableCount > 0)) {
+      backup = await SafePrefs.preserve(_prefs, key, raw);
+    }
+    _owner = owner;
+    locked = lock;
+    _lastGoodRaw = lock ? null : raw;
+    _apply(doc);
+    if (lock || doc.unreadableCount > 0) {
+      DataHealth.instance.report(StoreIssue(
+          key: key,
+          store: tr('Profil, treningi i zdrowie'),
+          locked: lock,
+          unreadable: doc.unreadableCount,
+          backupKey: backup,
+          reason: reason ?? ''));
+    } else {
+      DataHealth.instance.clear(key);
     }
     notifyListeners();
   }
 
-  Future<void> _save() async {
-    _sort();
-    notifyListeners();
-    if (dog != null) await DogProfiles.instance.registerActive();
-    await _prefs.setString(
-        dogKey(_key),
-        jsonEncode({
-          'dog': dog?.toJson(),
-          'weights': weights.map((e) => e.toJson()).toList(),
-          'health': health.map((e) => e.toJson()).toList(),
-          'trainings': trainings.map((e) => e.toJson()).toList(),
-          'events': events.map((e) => e.toJson()).toList(),
-          'shows': shows.map((e) => e.toJson()).toList(),
-          'documents': documents.map((e) => e.toJson()).toList(),
-          'gear': gear.map((e) => e.toJson()).toList(),
-          'goals': goals.map((e) => e.toJson()).toList(),
-        }));
-    await Notifications.instance.reschedule(this);
+  void _apply(DogDataDoc d) {
+    _doc = d;
+    dog = d.dog;
+    weights = d.weights;
+    health = d.health;
+    trainings = d.trainings;
+    events = d.events;
+    shows = d.shows;
+    documents = d.documents;
+    gear = d.gear;
+    goals = d.goals;
+  }
+
+  DogDataDoc _snapshot() => _doc
+    ..dog = dog
+    ..weights = weights
+    ..health = health
+    ..trainings = trainings
+    ..events = events
+    ..shows = shows
+    ..documents = documents
+    ..gear = gear
+    ..goals = goals;
+
+  void _restore() {
+    var d = DogDataDoc();
+    if (!locked && _lastGoodRaw != null) {
+      try {
+        d = DogDataDoc.decode(_lastGoodRaw!);
+      } catch (_) {}
+    }
+    _apply(d);
+  }
+
+  /// Zmiana + trwały zapis jako jedna operacja. Stan w pamięci zmienia się
+  /// na stałe dopiero po potwierdzonym zapisie; przy błędzie wraca poprzedni.
+  Future<void> _commit(void Function() change) => _queue.run(() async {
+        if (locked) throw StorageLockedException(keyForDog(_owner));
+        change();
+        _sort();
+        final encoded = jsonEncode(_snapshot().toJson());
+        try {
+          await SafePrefs.setString(_prefs, keyForDog(_owner), encoded);
+        } catch (e) {
+          _restore();
+          notifyListeners();
+          rethrow;
+        }
+        _lastGoodRaw = encoded;
+        notifyListeners();
+        // Indeks psów dopiero po zapisie profilu: przerwanie między krokami
+        // naprawia DogProfiles.load (pies z danymi wraca na listę).
+        if (dog != null && DogProfiles.instance.activeId == _owner) await DogProfiles.instance.registerActive();
+        await Notifications.instance.reschedule(this);
+      });
+
+  Future<void> _save() => _commit(() {});
+
+  /// Zmiana danych psa, który nie jest teraz w pamięci (np. trening GPS
+  /// rozpoczęty dla psa A i kończony po przełączeniu na B).
+  Future<void> _commitFor(String dogId, void Function(DogDataDoc d) change) => _queue.run(() async {
+        if (dogId == _owner) {
+          if (locked) throw StorageLockedException(keyForDog(_owner));
+          final d = _snapshot();
+          change(d);
+          _apply(d);
+          _sort();
+          final encoded = jsonEncode(_snapshot().toJson());
+          try {
+            await SafePrefs.setString(_prefs, keyForDog(_owner), encoded);
+          } catch (e) {
+            _restore();
+            notifyListeners();
+            rethrow;
+          }
+          _lastGoodRaw = encoded;
+          notifyListeners();
+          await Notifications.instance.reschedule(this);
+          return;
+        }
+        final key = keyForDog(dogId);
+        final raw = _prefs.getString(key);
+        if (raw == null) throw StorageLockedException(key);
+        final DogDataDoc d;
+        try {
+          d = DogDataDoc.decode(raw);
+        } catch (_) {
+          throw StorageLockedException(key);
+        }
+        change(d);
+        await SafePrefs.setString(_prefs, key, jsonEncode(d.toJson()));
+      });
+
+  /// Trening zapisany zawsze u wskazanego psa (bezpieczne przy ponowieniu – upsert po ID).
+  Future<void> upsertTrainingFor(String dogId, TrainingSession t) => _commitFor(dogId, (d) {
+        d.trainings.removeWhere((e) => e.id == t.id);
+        d.trainings.add(t);
+      });
+
+  /// Czy pies ma już trening o tym ID (szukane w zapisie, także innego psa).
+  bool hasTrainingFor(String dogId, String id) {
+    if (dogId == _owner) return trainings.any((t) => t.id == id);
+    final raw = _prefs.getString(keyForDog(dogId));
+    if (raw == null) return false;
+    try {
+      return DogDataDoc.decode(raw).trainings.any((t) => t.id == id);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Odzysk: zapis tylko poprawnie odczytanych wpisów (oryginał zostaje w kopii).
+  /// Zwraca false, gdy nie udało się zachować kopii oryginału.
+  Future<bool> salvage() => _queue.run(() async {
+        final key = keyForDog(_owner);
+        final raw = _prefs.getString(key);
+        if (raw != null && await SafePrefs.preserve(_prefs, key, raw) == null) return false;
+        final d = raw == null ? DogDataDoc() : salvageDoc(raw);
+        await SafePrefs.setString(_prefs, key, jsonEncode(d.toJson()));
+        locked = false;
+        _lastGoodRaw = jsonEncode(d.toJson());
+        _apply(d);
+        DataHealth.instance.clear(key);
+        notifyListeners();
+        return true;
+      });
+
+  /// Wydobywa z uszkodzonego zapisu wszystko, co da się odczytać.
+  static DogDataDoc salvageDoc(String raw) {
+    try {
+      return DogDataDoc.decode(raw);
+    } catch (_) {}
+    final d = DogDataDoc();
+    dynamic j;
+    try {
+      j = jsonDecode(raw);
+    } catch (_) {
+      return d;
+    }
+    if (j is! Map) return d;
+    try {
+      if (j['dog'] is Map) d.dog = Dog.fromJson(Map<String, dynamic>.from(j['dog'] as Map));
+    } catch (_) {}
+    List<T> ok<T>(String name, T Function(Map<String, dynamic>) parse) {
+      try {
+        final (list, bad) = readList(j[name], parse);
+        if (bad.isNotEmpty) d.unreadable[name] = bad;
+        return list;
+      } catch (_) {
+        return [];
+      }
+    }
+
+    d.weights = ok('weights', WeightEntry.fromJson);
+    d.health = ok('health', HealthRecord.fromJson);
+    d.trainings = ok('trainings', TrainingSession.fromJson);
+    d.events = ok('events', CalendarEvent.fromJson);
+    d.shows = ok('shows', ShowEntry.fromJson);
+    d.documents = ok('documents', DogDocument.fromJson);
+    d.gear = ok('gear', GearItem.fromJson);
+    d.goals = ok('goals', Goal.fromJson);
+    return d;
   }
 
   void _sort() {
@@ -127,70 +369,41 @@ class AppStore extends ChangeNotifier {
 
   // --- Pies -----------------------------------------------------------------
 
-  Future<void> saveDog(Dog d) async {
-    final oldWeight = dog?.weightKg;
-    dog = d;
-    if (d.weightKg != null && d.weightKg != oldWeight) {
-      final today = dayOnly(DateTime.now());
-      weights.removeWhere((w) => sameDay(w.date, today));
-      weights.add(WeightEntry(id: newId(), date: today, kg: d.weightKg!));
-    }
-    await _save();
-  }
+  Future<void> saveDog(Dog d) => _commit(() {
+        final oldWeight = dog?.weightKg;
+        dog = d;
+        if (d.weightKg != null && d.weightKg != oldWeight) {
+          final today = dayOnly(DateTime.now());
+          weights.removeWhere((w) => sameDay(w.date, today));
+          weights.add(WeightEntry(id: newId(), date: today, kg: d.weightKg!));
+        }
+      });
 
-  Future<void> addWeight(WeightEntry w) async {
-    weights.removeWhere((e) => sameDay(e.date, w.date));
-    weights.add(w);
-    _sort();
-    if (dog != null && weights.isNotEmpty) dog!.weightKg = weights.last.kg;
-    await _save();
-  }
+  Future<void> addWeight(WeightEntry w) => _commit(() {
+        weights.removeWhere((e) => sameDay(e.date, w.date));
+        weights.add(w);
+        _sort();
+        if (dog != null && weights.isNotEmpty) dog!.weightKg = weights.last.kg;
+      });
 
-  Future<void> deleteWeight(WeightEntry w) async {
-    weights.removeWhere((e) => e.id == w.id);
-    if (dog != null && weights.isNotEmpty) dog!.weightKg = weights.last.kg;
-    await _save();
-  }
+  Future<void> deleteWeight(WeightEntry w) => _commit(() {
+        weights.removeWhere((e) => e.id == w.id);
+        if (dog != null && weights.isNotEmpty) dog!.weightKg = weights.last.kg;
+      });
 
-  Future<void> resetAll() async {
-    dog = null;
-    weights = [];
-    health = [];
-    trainings = [];
-    events = [];
-    for (final d in documents) {
-      for (final i in d.images) {
-        await FileStore.delete(i);
-      }
-    }
-    for (final g in gear) {
-      if (g.photo != null) await FileStore.delete(g.photo!);
-    }
-    shows = [];
-    documents = [];
-    gear = [];
-    goals = [];
-    await NutritionStore.instance.reset();
-    await ModuleStore.instance.reset();
-    await HeatStore.instance.reset();
-    await GalleryStore.instance.reset();
-    await BreedingStore.instance.reset();
-    await GuideStore.instance.reset();
-    await _save();
-  }
+  /// Usuwa wybranego psa razem z jego plikami (patrz DogProfiles.deleteActive).
+  Future<void> resetAll() => DogProfiles.instance.deleteActive();
 
   // --- Zdrowie --------------------------------------------------------------
 
-  Future<void> upsertHealth(HealthRecord r) async {
-    health.removeWhere((e) => e.id == r.id);
-    health.add(r);
-    await _save();
-  }
+  Future<void> upsertHealth(HealthRecord r) => _commit(() {
+        health.removeWhere((e) => e.id == r.id);
+        health.add(r);
+      });
 
-  Future<void> deleteHealth(HealthRecord r) async {
-    health.removeWhere((e) => e.id == r.id);
-    await _save();
-  }
+  Future<void> deleteHealth(HealthRecord r) => _commit(() {
+        health.removeWhere((e) => e.id == r.id);
+      });
 
   /// Najnowszy wpis dla kategorii (decyduje o kolejnym terminie).
   HealthRecord? latestFor(HealthCategory c) {
@@ -213,16 +426,15 @@ class AppStore extends ChangeNotifier {
 
   // --- Trening --------------------------------------------------------------
 
-  Future<void> upsertTraining(TrainingSession t) async {
-    trainings.removeWhere((e) => e.id == t.id);
-    trainings.add(t);
-    await _save();
-  }
+  Future<void> upsertTraining(TrainingSession t) => _commit(() {
+        trainings.removeWhere((e) => e.id == t.id);
+        trainings.add(t);
+      });
 
+  /// Plik trasy usuwamy dopiero po zapisaniu zmiany (gdy zapis się nie uda, trasa zostaje).
   Future<void> deleteTraining(TrainingSession t) async {
-    if (t.trackRef != null) await FileStore.delete(t.trackRef!);
-    trainings.removeWhere((e) => e.id == t.id);
-    await _save();
+    await _commit(() => trainings.removeWhere((e) => e.id == t.id));
+    if (t.trackRef != null) await FileStore.deleteIfUnreferenced(t.trackRef!);
   }
 
   Iterable<TrainingSession> get doneTrainings => trainings.where((t) => t.done);
@@ -277,16 +489,14 @@ class AppStore extends ChangeNotifier {
 
   // --- Kalendarz -----------------------------------------------------------
 
-  Future<void> upsertEvent(CalendarEvent e) async {
-    events.removeWhere((x) => x.id == e.id);
-    events.add(e);
-    await _save();
-  }
+  Future<void> upsertEvent(CalendarEvent e) => _commit(() {
+        events.removeWhere((x) => x.id == e.id);
+        events.add(e);
+      });
 
-  Future<void> deleteEvent(CalendarEvent e) async {
-    events.removeWhere((x) => x.id == e.id);
-    await _save();
-  }
+  Future<void> deleteEvent(CalendarEvent e) => _commit(() {
+        events.removeWhere((x) => x.id == e.id);
+      });
 
   List<AgendaItem> agendaFor(DateTime day) =>
       agendaBetween(dayOnly(day), dayOnly(day).add(const Duration(days: 1)));
@@ -374,53 +584,45 @@ class AppStore extends ChangeNotifier {
 
   // --- Wystawy, dokumenty, sprzęt, cele ------------------------------------
 
-  Future<void> upsertShow(ShowEntry e) async {
-    shows.removeWhere((x) => x.id == e.id);
-    shows.add(e);
-    await _save();
-  }
+  Future<void> upsertShow(ShowEntry e) => _commit(() {
+        shows.removeWhere((x) => x.id == e.id);
+        shows.add(e);
+      });
 
-  Future<void> deleteShow(ShowEntry e) async {
-    shows.removeWhere((x) => x.id == e.id);
-    await _save();
-  }
+  Future<void> deleteShow(ShowEntry e) => _commit(() {
+        shows.removeWhere((x) => x.id == e.id);
+      });
 
-  Future<void> upsertDocument(DogDocument e) async {
-    documents.removeWhere((x) => x.id == e.id);
-    documents.add(e);
-    await _save();
-  }
+  Future<void> upsertDocument(DogDocument e) => _commit(() {
+        documents.removeWhere((x) => x.id == e.id);
+        documents.add(e);
+      });
 
   Future<void> deleteDocument(DogDocument e) async {
+    await _commit(() => documents.removeWhere((x) => x.id == e.id));
     for (final i in e.images) {
-      await FileStore.delete(i);
+      await FileStore.deleteIfUnreferenced(i);
     }
-    documents.removeWhere((x) => x.id == e.id);
-    await _save();
   }
 
-  Future<void> upsertGear(GearItem e) async {
-    gear.removeWhere((x) => x.id == e.id);
-    gear.add(e);
-    await _save();
-  }
+  Future<void> upsertGear(GearItem e) => _commit(() {
+        gear.removeWhere((x) => x.id == e.id);
+        gear.add(e);
+      });
 
   Future<void> deleteGear(GearItem e) async {
-    if (e.photo != null) await FileStore.delete(e.photo!);
-    gear.removeWhere((x) => x.id == e.id);
-    await _save();
+    await _commit(() => gear.removeWhere((x) => x.id == e.id));
+    if (e.photo != null) await FileStore.deleteIfUnreferenced(e.photo!);
   }
 
-  Future<void> upsertGoal(Goal e) async {
-    goals.removeWhere((x) => x.id == e.id);
-    goals.add(e);
-    await _save();
-  }
+  Future<void> upsertGoal(Goal e) => _commit(() {
+        goals.removeWhere((x) => x.id == e.id);
+        goals.add(e);
+      });
 
-  Future<void> deleteGoal(Goal e) async {
-    goals.removeWhere((x) => x.id == e.id);
-    await _save();
-  }
+  Future<void> deleteGoal(Goal e) => _commit(() {
+        goals.removeWhere((x) => x.id == e.id);
+      });
 
   bool get workingTrialPassed => goals.any((g) =>
       g.type == GoalType.exam && g.done && RegExp(r'IGP|IPO|FH|HWT', caseSensitive: false).hasMatch(g.title));

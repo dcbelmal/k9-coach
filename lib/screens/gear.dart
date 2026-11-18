@@ -189,7 +189,8 @@ class _GearFormState extends State<_GearForm> {
               ? null
               : () async {
                   if (await confirmDelete(context, tr('sprzęt'))) {
-                    await _s.deleteGear(widget.existing!);
+                    if (!context.mounted) return;
+                    if (!await saveGuarded(context, () => _s.deleteGear(widget.existing!))) return;
                     if (context.mounted) Navigator.pop(context);
                   }
                 }),
@@ -316,7 +317,8 @@ class _GearFormState extends State<_GearForm> {
             ..replaceAfterMonths = int.tryParse(months.text.trim())
             ..maxKm = parseNum(maxKm.text)
             ..notes = notes.text.trim();
-          await _s.upsertGear(g);
+          if (!context.mounted) return;
+          if (!await saveGuarded(context, () => _s.upsertGear(g))) return;
           if (context.mounted) Navigator.pop(context);
         },
         child: Text(tr('Zapisz')),

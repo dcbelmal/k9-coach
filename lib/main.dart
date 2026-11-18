@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:ui' show PlatformDispatcher;
+
 import 'package:flutter/services.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:material_ui/material_ui.dart';
@@ -8,15 +11,19 @@ import 'files/file_store.dart';
 import 'guides/guide_store.dart';
 import 'modules/billing.dart';
 import 'gallery/gallery_store.dart';
+import 'gps/online_services.dart';
 import 'heat/heat_store.dart';
 import 'modules/module_store.dart';
 import 'notifications.dart';
 import 'nutrition/nutrition_store.dart';
 import 'screens/onboarding.dart';
+import 'screens/recovery.dart';
 import 'screens/shell.dart';
 import 'screens/splash.dart';
+import 'storage/safe_prefs.dart';
 import 'store.dart';
 import 'theme.dart';
+import 'widgets/common.dart';
 import 'l10n/l10n.dart';
 
 Future<void> main() async {
@@ -32,6 +39,15 @@ Future<void> main() async {
   await initializeDateFormatting();
   await FileStore.init();
   await Notifications.instance.init();
+  // Błąd zapisu zgłoszony poza formularzem: komunikat zamiast cichej awarii.
+  PlatformDispatcher.instance.onError = (e, _) {
+    if (!isStorageError(e)) return false;
+    appMessenger.currentState
+      ?..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(storageErrorMessage(e))));
+    return true;
+  };
+  await OnlineConsent.instance.load();
   await DogProfiles.instance.load();
   await AppStore.instance.load();
   await NutritionStore.instance.load();
@@ -41,6 +57,11 @@ Future<void> main() async {
   await BreedingStore.instance.load();
   await GuideStore.instance.load();
   runApp(const K9CoachApp());
+  // Pliki po starszych wersjach bez właściciela (raz na uruchomienie, w tle).
+  unawaited(DogProfiles.instance.sweepOrphanFiles().catchError((Object e) {
+    logError('Sprzątanie plików', e);
+    return 0;
+  }));
   Billing.instance.init(); // w tle – nie blokuje startu aplikacji
 }
 
@@ -55,6 +76,7 @@ class K9CoachApp extends StatelessWidget {
       builder: (context, _) => MaterialApp(
         key: ValueKey(L10n.instance.code),
         title: 'Valkor Coach',
+        scaffoldMessengerKey: appMessenger,
         debugShowCheckedModeBanner: false,
         theme: K9.theme(),
         darkTheme: K9.theme(),
@@ -100,6 +122,8 @@ class _BootState extends State<_Boot> {
         duration: const Duration(milliseconds: 400),
         child: _splash
             ? const SplashScreen(key: ValueKey('splash'))
+            : AppStore.instance.locked
+            ? const RecoveryScreen(key: ValueKey('recovery'), standalone: true)
             : AppStore.instance.dog == null
             ? const OnboardingScreen(key: ValueKey('onb'))
             : Shell(key: ValueKey('shell-${DogProfiles.instance.activeId}')),

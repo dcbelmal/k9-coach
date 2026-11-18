@@ -2,6 +2,9 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
+
+import '../storage/dog_doc_guard.dart';
+import '../storage/safe_prefs.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../dogs/dog_profiles.dart';
@@ -59,6 +62,15 @@ class NutritionStore extends ChangeNotifier {
 
   AppStore get app => AppStore.instance;
 
+  final guard = DogDocGuard(_key, 'Żywienie');
+
+  /// Wpisy, których nie udało się odczytać (wracają do zapisu bez zmian).
+  Map<String, List<dynamic>> _bad = {};
+
+  /// Dziennik: treningi z nagrodami, których zapis w historii nie został potwierdzony.
+  Map<String, Map<String, dynamic>> _pendingTrainings = {};
+  Map<String, dynamic> _extra = {};
+
   Future<void> load() async {
     _prefs = await SharedPreferences.getInstance();
     // Każda zmiana psa lub treningów przelicza dzisiejszą dawkę.
@@ -70,64 +82,77 @@ class NutritionStore extends ChangeNotifier {
       });
     }
     _planCache = null;
-    final raw = _prefs!.getString(dogKey(_key));
-    try {
-      _fromJson(raw == null ? const {} : jsonDecode(raw) as Map<String, dynamic>);
-    } catch (e) {
-      debugPrint('Błąd odczytu żywienia: $e');
-    }
+    var x = _NutState.parse(null);
+    await guard.load(_prefs!, DogProfiles.instance.activeId, (raw) => x = _NutState.parse(raw));
+    _apply(x);
     notifyListeners();
+    await _completePending();
   }
 
   bool _listening = false;
 
-  void _fromJson(Map<String, dynamic> j) {
-    products = [for (final e in (j['products'] as List? ?? [])) FoodProduct.fromJson(e)];
-    bags = [for (final e in (j['bags'] as List? ?? [])) FoodBag.fromJson(e)];
-    entries = [for (final e in (j['entries'] as List? ?? [])) FeedingEntry.fromJson(e)];
-    supplements = [for (final e in (j['supplements'] as List? ?? [])) SupplementPlan.fromJson(e)];
-    doseHistory = [for (final e in (j['doses'] as List? ?? [])) DoseChange.fromJson(e)];
-    targetByDay = {
-      for (final e in ((j['targets'] as Map?) ?? {}).entries) e.key as String: (e.value as num).toDouble()
-    };
-    settings = j['settings'] == null ? NutritionSettings() : NutritionSettings.fromJson(j['settings']);
-    lastSync = j['lastSync'] == null ? null : DateTime.parse(j['lastSync']);
+  void _apply(_NutState x) {
+    products = x.products;
+    bags = x.bags;
+    entries = x.entries;
+    supplements = x.supplements;
+    doseHistory = x.doses;
+    targetByDay = x.targets;
+    settings = x.settings;
+    lastSync = x.lastSync;
+    _bad = x.bad;
+    _pendingTrainings = x.pending;
+    _extra = x.extra;
   }
 
-  Map<String, dynamic> toJson() => {
-        'version': 1,
-        'products': products.map((e) => e.toJson()).toList(),
-        'bags': bags.map((e) => e.toJson()).toList(),
-        'entries': entries.map((e) => e.toJson()).toList(),
-        'supplements': supplements.map((e) => e.toJson()).toList(),
-        'doses': doseHistory.map((e) => e.toJson()).toList(),
-        'targets': targetByDay,
-        'settings': settings.toJson(),
-        'lastSync': lastSync?.toIso8601String(),
-      };
+  Map<String, dynamic> toJson() {
+    List<dynamic> sec(String name, List<dynamic> items) => [for (final e in items) e.toJson(), ...?_bad[name]];
+    return {
+      ..._extra,
+      'version': 1,
+      'products': sec('products', products),
+      'bags': sec('bags', bags),
+      'entries': sec('entries', entries),
+      'supplements': sec('supplements', supplements),
+      'doses': sec('doses', doseHistory),
+      'targets': targetByDay,
+      'settings': settings.toJson(),
+      'lastSync': lastSync?.toIso8601String(),
+      if (_pendingTrainings.isNotEmpty) 'pendingTrainings': _pendingTrainings,
+    };
+  }
 
   Future<void> _save({bool reschedule = true}) async {
     entries.sort((a, b) => b.date.compareTo(a.date));
     products.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
     _planCache = null;
-    notifyListeners();
     _prefs ??= await SharedPreferences.getInstance();
-    await _prefs!.setString(dogKey(_key), jsonEncode(toJson()));
+    try {
+      await guard.write(_prefs!, () => jsonEncode(toJson()), (last) => _apply(_NutState.parse(last)));
+    } finally {
+      _planCache = null;
+      notifyListeners();
+    }
     if (reschedule) await Notifications.instance.reschedule(app);
   }
 
-  Future<void> reset() async {
-    for (final p in products) {
-      if (p.photo != null) await FileStore.delete(p.photo!);
+  /// Dokańcza zapis treningów z nagrodami przerwany przed potwierdzeniem w historii.
+  Future<void> _completePending() async {
+    if (_pendingTrainings.isEmpty || guard.locked) return;
+    for (final e in _pendingTrainings.entries.toList()) {
+      try {
+        final t = TrainingSession.fromJson(Map<String, dynamic>.from(e.value['training'] as Map));
+        await app.upsertTrainingFor(e.value['dog'] as String? ?? guard.owner, t);
+        _pendingTrainings.remove(e.key);
+      } catch (err) {
+        logError('Żywienie: dokończenie treningu', err);
+      }
     }
-    products = [];
-    bags = [];
-    entries = [];
-    supplements = [];
-    doseHistory = [];
-    targetByDay = {};
-    settings = NutritionSettings();
-    await _save(reschedule: false);
+    try {
+      await _save(reschedule: false);
+    } catch (err) {
+      logError('Żywienie: zapis dziennika', err);
+    }
   }
 
   // --- Produkty ------------------------------------------------------------
@@ -162,11 +187,11 @@ class NutritionStore extends ChangeNotifier {
   }
 
   Future<void> deleteProduct(FoodProduct p) async {
-    if (p.photo != null) await FileStore.delete(p.photo!);
     products.removeWhere((e) => e.id == p.id);
     bags.removeWhere((b) => b.productId == p.id && b.active);
     if (settings.mainProductId == p.id) settings.mainProductId = null;
     await _save();
+    if (p.photo != null) await FileStore.deleteIfUnreferenced(p.photo!);
   }
 
   // --- Główna karma i magazyn ----------------------------------------------
@@ -385,7 +410,7 @@ class NutritionStore extends ChangeNotifier {
         targetByDay.remove(x);
       }
     }
-    _save(reschedule: false);
+    _save(reschedule: false).catchError((Object e) => logError('Żywienie: cel dnia', e));
   }
 
   /// Statystyki dzień po dniu (najstarszy pierwszy).
@@ -413,30 +438,40 @@ class NutritionStore extends ChangeNotifier {
   // --- Nagrody w treningu ---------------------------------------------------
 
   /// Zapisuje trening oraz zużyte nagrody (zmniejszają porcję karmy).
-  Future<DailyPlan?> saveTrainingWithTreats(TrainingSession t, Map<String, double> piecesByProduct) async {
-    final before = plan?.dailyGrams;
-    await app.upsertTraining(t);
-    final list = <FeedingEntry>[];
-    piecesByProduct.forEach((pid, pcs) {
-      if (pcs <= 0) return;
-      final p = product(pid);
-      final e = p?.pieceGrams == null
-          ? entryFor(p, FeedKind.treat, grams: pcs, date: t.date, trainingId: t.id)
-          : entryFor(p, FeedKind.treat, pieces: pcs, date: t.date, trainingId: t.id);
-      list.add(e);
-    });
-    if (list.isNotEmpty) {
-      await upsertEntries(list);
-    } else {
-      _planCache = null;
-      notifyListeners();
-    }
-    final after = plan?.dailyGrams;
-    if (before != null && after != null) {
-      _logDose(before, after, tr('trening {0}', [t.discipline.label]));
+  ///
+  /// Odporne na przerwanie i ponowienie:
+  /// 1. jeden zapis żywienia: nagrody ze stałymi ID (`treat_<trening>_<produkt>`)
+  ///    oraz wpis w dzienniku z treścią treningu,
+  /// 2. zapis treningu w historii psa (upsert po ID – bez duplikatów),
+  /// 3. usunięcie wpisu z dziennika. Po restarcie krok 2 dokańcza [load].
+  Future<DailyPlan?> saveTrainingWithTreats(TrainingSession t, Map<String, double> piecesByProduct,
+      {String? dogId}) {
+    final owner = dogId ?? DogProfiles.instance.activeId;
+    return DogProfiles.instance.track(() async {
+      final before = plan?.dailyGrams;
+      final existed = app.hasTrainingFor(owner, t.id);
+      final list = <FeedingEntry>[];
+      piecesByProduct.forEach((pid, pcs) {
+        if (pcs <= 0) return;
+        final p = product(pid);
+        final e = p?.pieceGrams == null
+            ? entryFor(p, FeedKind.treat, grams: pcs, date: t.date, trainingId: t.id)
+            : entryFor(p, FeedKind.treat, pieces: pcs, date: t.date, trainingId: t.id);
+        list.add(e.copyWithId('treat_${t.id}_$pid'));
+      });
+      entries.removeWhere((e) => e.trainingId == t.id);
+      entries.addAll(list);
+      _pendingTrainings[t.id] = {'dog': owner, 'training': t.toJson()};
       await _save(reschedule: false);
-    }
-    return plan;
+      await app.upsertTrainingFor(owner, t);
+      _pendingTrainings.remove(t.id);
+      final after = plan?.dailyGrams;
+      if (!existed && before != null && after != null) {
+        _logDose(before, after, tr('trening {0}', [t.discipline.label]));
+      }
+      await _save(reschedule: false);
+      return plan;
+    });
   }
 
   List<FeedingEntry> treatsForTraining(String trainingId) =>
@@ -550,5 +585,55 @@ class NutritionStore extends ChangeNotifier {
     doseHistory = [];
     targetByDay = {};
     await _save();
+  }
+}
+
+/// Odczyt zapisu żywienia do zmiennych tymczasowych.
+class _NutState {
+  List<FoodProduct> products = [];
+  List<FoodBag> bags = [];
+  List<FeedingEntry> entries = [];
+  List<SupplementPlan> supplements = [];
+  List<DoseChange> doses = [];
+  Map<String, double> targets = {};
+  NutritionSettings settings = NutritionSettings();
+  DateTime? lastSync;
+  final Map<String, List<dynamic>> bad = {};
+  Map<String, Map<String, dynamic>> pending = {};
+  final Map<String, dynamic> extra = {};
+
+  static const _known = {
+    'version', 'products', 'bags', 'entries', 'supplements', 'doses', 'targets', 'settings', 'lastSync', //
+    'pendingTrainings',
+  };
+
+  static _NutState parse(String? raw) {
+    final x = _NutState();
+    if (raw == null) return x;
+    final j = jsonDecode(raw) as Map<String, dynamic>;
+    List<T> sec<T>(String name, T Function(Map<String, dynamic>) f) {
+      final (ok, b) = readList(j[name], f);
+      if (b.isNotEmpty) x.bad[name] = b;
+      return ok;
+    }
+
+    x.products = sec('products', FoodProduct.fromJson);
+    x.bags = sec('bags', FoodBag.fromJson);
+    x.entries = sec('entries', FeedingEntry.fromJson);
+    x.supplements = sec('supplements', SupplementPlan.fromJson);
+    x.doses = sec('doses', DoseChange.fromJson);
+    x.targets = {
+      for (final e in ((j['targets'] as Map?) ?? {}).entries) e.key as String: (e.value as num).toDouble()
+    };
+    x.settings = j['settings'] == null ? NutritionSettings() : NutritionSettings.fromJson(j['settings']);
+    x.lastSync = j['lastSync'] == null ? null : DateTime.parse(j['lastSync']);
+    x.pending = {
+      for (final e in ((j['pendingTrainings'] as Map?) ?? {}).entries)
+        e.key as String: Map<String, dynamic>.from(e.value as Map)
+    };
+    for (final e in j.entries) {
+      if (!_known.contains(e.key)) x.extra[e.key] = e.value;
+    }
+    return x;
   }
 }

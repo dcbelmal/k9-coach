@@ -469,7 +469,8 @@ class _MatingFormState extends State<_MatingForm> {
             ? null
             : () async {
                 if (await confirmDelete(context, tr('krycie z {0}{1}', [fmtDate(e.first), e.litter != null ? tr(' (razem z miotem)') : '']))) {
-                  await BreedingStore.instance.delete(e);
+                  if (!context.mounted) return;
+                  if (!await saveGuarded(context, () => BreedingStore.instance.delete(e))) return;
                   if (context.mounted) Navigator.pop(context);
                 }
               },
@@ -528,7 +529,8 @@ class _MatingFormState extends State<_MatingForm> {
             status: e?.status ?? PregnancyStatus.waiting,
             litter: e?.litter,
           );
-          await BreedingStore.instance.upsert(m);
+          if (!context.mounted) return;
+          if (!await saveGuarded(context, () => BreedingStore.instance.upsert(m))) return;
           if (context.mounted) Navigator.pop(context);
         },
         child: Text(tr('Zapisz')),

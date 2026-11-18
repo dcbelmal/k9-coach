@@ -369,7 +369,8 @@ class _AiCard extends StatelessWidget {
                           final s = _n.settings;
                           final next = (s.adjustPct + a.adjustPct!).clamp(-30, 30).toDouble();
                           s.adjustPct = next.abs() < 0.5 ? 0 : next;
-                          await _n.saveSettings(s, reason: 'rekomendacja AI');
+                          if (!context.mounted) return;
+                          if (!await saveGuarded(context, () => _n.saveSettings(s, reason: 'rekomendacja AI'))) return;
                           if (context.mounted) toast(context, tr('Dawka zaktualizowana'));
                         },
                         icon: const Icon(Icons.check_rounded, size: 18),
@@ -630,7 +631,8 @@ class SupplementsScreen extends StatelessWidget {
                               ? _n.entryFor(p, FeedKind.supplement, pieces: 1)
                               : _n.entryFor(p, FeedKind.supplement, grams: 1);
                           e.label = s.name;
-                          await _n.addEntry(e);
+                          if (!context.mounted) return;
+                          if (!await saveGuarded(context, () => _n.addEntry(e))) return;
                         },
                         child: Text(tr('Podano')),
                       ),

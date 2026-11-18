@@ -6,40 +6,87 @@ import 'package:path_provider/path_provider.dart';
 
 late Directory _dir;
 
+/// Dozwolona nazwa pliku w katalogu aplikacji (bez ukośników i „..”).
+final _safeName = RegExp(r'^[A-Za-z0-9][A-Za-z0-9_.-]{0,120}$');
+
 Future<void> init() async {
   final base = await getApplicationDocumentsDirectory();
-  _dir = Directory('${base.path}/k9_files');
+  await initAt('${base.path}/k9_files');
+}
+
+Future<void> initAt(String path) async {
+  _dir = Directory(path);
   if (!_dir.existsSync()) _dir.createSync(recursive: true);
+}
+
+/// Plik dla referencji `file:<nazwa>` albo null, gdy referencja jest nieprawidłowa
+/// lub wskazuje poza katalog aplikacji.
+File? _fileFor(String ref) {
+  if (!ref.startsWith('file:')) return null;
+  final name = ref.substring(5);
+  if (!_safeName.hasMatch(name) || name.contains('..')) return null;
+  return File('${_dir.path}/$name');
+}
+
+bool isValidRef(String ref) => _fileFor(ref) != null;
+
+/// Zapis przez plik tymczasowy i zmianę nazwy – przerwanie nie zostawia połowy pliku.
+Future<void> _atomicWrite(File f, Future<void> Function(File tmp) write) async {
+  final tmp = File('${f.path}.tmp');
+  try {
+    await write(tmp);
+    await tmp.rename(f.path);
+  } catch (e) {
+    try {
+      if (tmp.existsSync()) await tmp.delete();
+    } catch (_) {}
+    rethrow;
+  }
 }
 
 Future<String> save(Uint8List bytes) async {
   final name = '${DateTime.now().microsecondsSinceEpoch}.jpg';
-  await File('${_dir.path}/$name').writeAsBytes(bytes);
+  await _atomicWrite(File('${_dir.path}/$name'), (t) => t.writeAsBytes(bytes, flush: true));
   return 'file:$name';
 }
 
 Future<void> delete(String ref) async {
-  if (!ref.startsWith('file:')) return;
-  final f = File('${_dir.path}/${ref.substring(5)}');
-  if (f.existsSync()) await f.delete();
+  final f = _fileFor(ref);
+  if (f != null && f.existsSync()) await f.delete();
 }
 
 Widget image(String ref, BoxFit fit) {
-  if (ref.startsWith('file:')) {
-    return Image.file(File('${_dir.path}/${ref.substring(5)}'), fit: fit,
-        errorBuilder: (_, _, _) => const Center(child: Icon(Icons.broken_image_outlined)));
+  final f = _fileFor(ref);
+  if (f != null) {
+    return Image.file(f, fit: fit, errorBuilder: (_, _, _) => const Center(child: Icon(Icons.broken_image_outlined)));
   }
   return const Center(child: Icon(Icons.broken_image_outlined));
 }
 
-Future<String> saveText(String text) async {
-  final name = 'trk_${DateTime.now().microsecondsSinceEpoch}.json';
-  await File('${_dir.path}/$name').writeAsString(text);
-  return 'file:$name';
+/// Zapis tekstu. Z [name] zapis jest powtarzalny: ta sama nazwa nadpisuje ten sam plik.
+Future<String> saveText(String text, {String? name}) async {
+  final n = name ?? 'trk_${DateTime.now().microsecondsSinceEpoch}.json';
+  if (!_safeName.hasMatch(n)) throw ArgumentError('name');
+  await _atomicWrite(File('${_dir.path}/$n'), (t) => t.writeAsString(text, flush: true));
+  return 'file:$n';
 }
 
 Future<String?> readText(String ref) async {
-  if (!ref.startsWith('file:')) return null;
-  final f = File('${_dir.path}/${ref.substring(5)}');
-  return f.existsSync() ? f.readAsString() : null;
+  final f = _fileFor(ref);
+  return f != null && f.existsSync() ? f.readAsString() : null;
 }
+
+/// Pliki w katalogu aplikacji: (referencja, czas modyfikacji).
+Future<List<(String, DateTime)>> listFiles() async {
+  final out = <(String, DateTime)>[];
+  if (!_dir.existsSync()) return out;
+  for (final e in _dir.listSync(followLinks: false)) {
+    if (e is! File) continue;
+    final name = e.uri.pathSegments.last;
+    if (!_safeName.hasMatch(name) || name.endsWith('.tmp')) continue;
+    out.add(('file:$name', e.statSync().modified));
+  }
+  return out;
+}
+
+bool get hasFiles => true;

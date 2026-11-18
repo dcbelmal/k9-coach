@@ -4,8 +4,11 @@ import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:material_ui/material_ui.dart';
 
-import '../files/file_store.dart';
+import '../gps/gps_drafts.dart';
+import '../gps/online_services.dart';
 import '../gps/recorder.dart';
+import '../storage/safe_prefs.dart';
+import 'forms.dart';
 import '../gps/records.dart';
 import '../gps/track.dart';
 import '../gps/weather.dart';
@@ -37,18 +40,14 @@ Future<void> openGpsWith(NavigatorState nav, {Discipline? discipline, TrainingSe
   return nav.push(MaterialPageRoute(builder: (_) => const GpsScreen()));
 }
 
-/// Mapa OpenStreetMap (bez klucza i opłat).
-TileLayer osmTiles() => TileLayer(
-  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-  userAgentPackageName: 'pl.k9coach.app',
-  maxZoom: 19,
-);
+/// Mapa OpenStreetMap (bez klucza i opłat) – kafle tylko po zgodzie użytkownika.
+Widget osmTiles() => mapTiles();
 
 /// Podpis źródła mapy (wymagany przez OpenStreetMap).
 class OsmCredit extends StatelessWidget {
   const OsmCredit({super.key});
   @override
-  Widget build(BuildContext context) => Align(
+  Widget build(BuildContext context) => OnlineConsent.instance.map != true ? const SizedBox.shrink() : Align(
     alignment: Alignment.bottomRight,
     child: Container(
       margin: const EdgeInsets.all(6),
@@ -73,19 +72,28 @@ class _GpsScreenState extends State<GpsScreen> {
   bool checking = true;
   LatLng? here;
   Weather? weather;
-  bool weatherLoading = true;
+  bool weatherLoading = false;
+
+  /// Użytkownik wybrał trening bez GPS (np. po odmowie dostępu do lokalizacji).
+  bool noGps = false;
 
   @override
   void initState() {
     super.initState();
     _rec.addListener(_onRec);
+    OnlineConsent.instance.addListener(_onConsent);
     _prepare();
   }
 
   @override
   void dispose() {
     _rec.removeListener(_onRec);
+    OnlineConsent.instance.removeListener(_onConsent);
     super.dispose();
+  }
+
+  void _onConsent() {
+    if (mounted) setState(() {});
   }
 
   void _onRec() {
@@ -96,37 +104,58 @@ class _GpsScreenState extends State<GpsScreen> {
     }
   }
 
+  /// Otwarcie ekranu: tylko sprawdzenie stanu uprawnień – bez pytania o zgodę,
+  /// bez pobierania pozycji i bez żadnych żądań do sieci, dopóki użytkownik
+  /// nie wybierze pogody lub mapy online albo nie naciśnie Start.
   Future<void> _prepare() async {
-    final err = await TrackRecorder.ensurePermission();
-    if (!mounted) return;
-    setState(() {
-      permError = err;
-      checking = false;
-    });
-    if (err != null) {
-      setState(() => weatherLoading = false);
-      return;
-    }
+    var granted = false;
     try {
-      final p =
-          await Geolocator.getLastKnownPosition() ??
-          await Geolocator.getCurrentPosition(
-            locationSettings: const LocationSettings(
-              accuracy: LocationAccuracy.medium,
-              timeLimit: Duration(seconds: 15),
-            ),
-          );
-      if (!mounted) return;
+      if (!kIsWeb && await GpsServices.serviceEnabled()) {
+        final p = await GpsServices.checkPermission();
+        granted = p == LocationPermission.whileInUse || p == LocationPermission.always;
+      }
+    } catch (_) {}
+    if (!mounted) return;
+    setState(() => checking = false);
+    final c = OnlineConsent.instance;
+    if (granted && (c.weather == true || c.map == true)) await _locate();
+  }
+
+  /// Pozycja na mapie i pogoda – wyłącznie po zgodzie użytkownika.
+  Future<void> _locate() async {
+    final c = OnlineConsent.instance;
+    if (c.weather == true) setState(() => weatherLoading = true);
+    final p = await GpsServices.position();
+    if (!mounted) return;
+    if (p != null) {
       setState(() => here = LatLng(p.latitude, p.longitude));
       if (mapReady) map.move(here!, 15);
-      final w = await fetchWeather(p.latitude, p.longitude);
-      if (mounted) setState(() => weather = w);
-    } catch (_) {}
+      if (c.weather == true) {
+        final w = await GpsServices.weather(p.latitude, p.longitude);
+        if (mounted) setState(() => weather = w);
+      }
+    }
     if (mounted) setState(() => weatherLoading = false);
   }
 
+  Future<void> _setConsent({bool? weatherOn, bool? mapOn}) async {
+    try {
+      await OnlineConsent.instance.set(weather: weatherOn, map: mapOn);
+    } catch (e) {
+      if (mounted) toast(context, storageErrorMessage(e));
+      return;
+    }
+    if (weatherOn == false) setState(() => weather = null);
+    if (weatherOn == true || mapOn == true) {
+      final err = await TrackRecorder.ensurePermission();
+      if (!mounted) return;
+      setState(() => permError = err);
+      if (err == null) await _locate();
+    }
+  }
+
   Future<void> _start() async {
-    _rec.useGps = _rec.discipline.hasDistance;
+    _rec.useGps = _rec.discipline.hasDistance && !noGps;
     if (_rec.useGps) {
       final err = await TrackRecorder.ensurePermission();
       if (err != null) {
@@ -184,39 +213,45 @@ class _GpsScreenState extends State<GpsScreen> {
       if (mounted) Navigator.pop(context);
     }
     if (choice != 1) return;
-    final startedAt = _rec.startedAt ?? DateTime.now();
-    final disc = _rec.discipline;
-    final plan = _rec.plan;
     final gps = _rec.useGps;
     final goalMin = _rec.targetMin;
     final track = await _rec.stop();
-    final secs = _rec.seconds;
-    final meters = track.meters;
-    final splits = track.splits().where((s) => s.meters >= 1000).toList();
-    final best = splits.isEmpty ? null : splits.map((s) => s.seconds).reduce((a, b) => a < b ? a : b);
-    String? ref;
-    if (gps && track.points.length > 1) ref = await FileStore.saveText(track.encode());
-    final t = TrainingSession(
-      id: plan?.id ?? newId(),
-      discipline: disc,
-      date: startedAt,
-      durationMin: (secs / 60).round().clamp(1, 100000),
-      distanceKm: gps ? double.parse((meters / 1000).toStringAsFixed(2)) : null,
-      rpe: plan?.rpe ?? 5,
-      notes: plan?.notes ?? '',
-      trackRef: ref,
-      movingSec: secs.round(),
-      maxSpeedKmh: gps ? double.parse(track.maxSpeedKmh().toStringAsFixed(1)) : null,
-      bestKmSec: gps ? best?.round() : null,
-    );
-    final recs = gps ? Records.newRecords(AppStore.instance.trainings, t) : <String>[];
-    await AppStore.instance.upsertTraining(t);
+    await _rec.flushDrafts();
+    final draft = _rec.draft();
+    final recs = gps ? Records.newRecords(AppStore.instance.trainings, draft.toTraining()) : <String>[];
+    // Zapis do historii psa, dla którego trening rozpoczęto. Ponowienie po błędzie
+    // nie tworzy drugiego treningu ani drugiej trasy (stałe ID).
+    TrainingSession? t;
+    while (t == null) {
+      try {
+        t = await GpsDrafts.finalize(draft);
+      } catch (e) {
+        if (!mounted) return;
+        final again = await showDialog<bool>(
+          context: context,
+          builder: (c) => AlertDialog(
+            title: Text(tr('Nie udało się zapisać treningu')),
+            content: Text('${storageErrorMessage(e)}\n\n${tr('Trening jest zachowany w szkicu. Możesz spróbować teraz albo odzyskać go po ponownym uruchomieniu aplikacji.')}'),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(c, false), child: Text(tr('Później'))),
+              FilledButton(onPressed: () => Navigator.pop(c, true), child: Text(tr('Spróbuj ponownie'))),
+            ],
+          ),
+        );
+        if (again != true) {
+          _rec.plan = null;
+          if (mounted) Navigator.pop(context);
+          return;
+        }
+      }
+    }
+    _rec.sessionId = null;
     _rec.plan = null;
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
         builder: (_) => TrackDetailScreen(
-          training: t,
+          training: t!,
           track: gps ? track : null,
           newRecords: recs,
           fresh: true,
@@ -324,7 +359,7 @@ class _GpsScreenState extends State<GpsScreen> {
 
   Widget _setup() {
     final discs = Discipline.values;
-    final gps = _rec.discipline.hasDistance;
+    final gps = _rec.discipline.hasDistance && !noGps;
     final plan = _rec.plan;
     final goals = {0, 15, 20, 30, 45, 60, if (_rec.targetMin > 0) _rec.targetMin}.toList()..sort();
     final rec = Records.of(AppStore.instance.trainings, _rec.discipline);
@@ -373,27 +408,50 @@ class _GpsScreenState extends State<GpsScreen> {
               ),
             ),
           ),
-        if (permError != null && gps)
+        if (permError != null && _rec.discipline.hasDistance)
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: K9Card(
               color: K9.cardHi,
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Icon(Icons.location_off_rounded, color: K9.yellow),
-                  const SizedBox(width: 10),
-                  Expanded(child: Text(permError!, style: const TextStyle(fontSize: 13))),
-                  if (!checking && !kIsWeb)
-                    TextButton(
-                      onPressed: () async {
-                        await Geolocator.openAppSettings();
-                      },
-                      child: Text(tr('Ustawienia')),
-                    ),
+                  Row(
+                    children: [
+                      const Icon(Icons.location_off_rounded, color: K9.yellow),
+                      const SizedBox(width: 10),
+                      Expanded(child: Text(permError!, style: const TextStyle(fontSize: 13))),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      if (!checking && !kIsWeb)
+                        TextButton(onPressed: () => Geolocator.openAppSettings(), child: Text(tr('Ustawienia'))),
+                      TextButton(
+                        onPressed: () => setState(() {
+                          noGps = true;
+                          permError = null;
+                        }),
+                        child: Text(tr('Trening bez GPS (tylko czas)')),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          final nav = Navigator.of(context);
+                          final d = _rec.discipline;
+                          nav.pop();
+                          openTrainingForm(nav.context, discipline: d);
+                        },
+                        child: Text(tr('Wpisz trening ręcznie')),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
           ),
+        if (gps) ...[_onlineCard(), gap12],
         if (gps) ...[_map(height: 200), gap16],
         SectionTitle(tr('Dyscyplina')),
         Wrap(
@@ -407,7 +465,9 @@ class _GpsScreenState extends State<GpsScreen> {
           Padding(
             padding: EdgeInsets.only(top: 6),
             child: Text(
-              tr('Bez GPS – liczę tylko czas treningu.'),
+              noGps && _rec.discipline.hasDistance
+                  ? tr('Trening bez GPS – liczę tylko czas. Trasa nie zostanie zapisana.')
+                  : tr('Bez GPS – liczę tylko czas treningu.'),
               style: TextStyle(color: K9.yellow, fontSize: 12.5),
             ),
           ),
@@ -427,7 +487,7 @@ class _GpsScreenState extends State<GpsScreen> {
           style: TextStyle(color: K9.faint, fontSize: 12),
         ),
         gap16,
-        if (gps) ...[_weatherCard(), gap12],
+        if (gps && OnlineConsent.instance.weather == true) ...[_weatherCard(), gap12],
         K9Card(
           child: Column(
             children: [
@@ -486,6 +546,47 @@ class _GpsScreenState extends State<GpsScreen> {
           style: TextStyle(color: K9.faint, fontSize: 12),
         ),
       ],
+    );
+  }
+
+  /// Wybór usług online. Bez zgody nagrywanie działa lokalnie, a do sieci nie
+  /// trafiają współrzędne ani obszar mapy.
+  Widget _onlineCard() {
+    final c = OnlineConsent.instance;
+    return K9Card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.privacy_tip_outlined, color: K9.blue),
+              const SizedBox(width: 10),
+              Expanded(child: Text(tr('Usługi online (opcjonalne)'), style: TextStyle(fontWeight: FontWeight.w700))),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            tr('Trasa nagrywa się tylko w telefonie. Pogoda i mapa wymagają internetu: serwis pogodowy Open-Meteo otrzyma przybliżone współrzędne (ok. 100 m), a dostawca mapy OpenStreetMap pozna oglądany obszar. Obie usługi widzą też adres IP telefonu.'),
+            style: const TextStyle(color: K9.muted, fontSize: 12.5),
+          ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: c.weather == true,
+            activeTrackColor: K9.orange,
+            onChanged: (v) => _setConsent(weatherOn: v),
+            title: Text(tr('Pogoda online'), style: TextStyle(fontWeight: FontWeight.w600)),
+            subtitle: Text(tr('Ostrzeżenie przed upałem przed biegiem'), style: TextStyle(color: K9.muted, fontSize: 12)),
+          ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: c.map == true,
+            activeTrackColor: K9.orange,
+            onChanged: (v) => _setConsent(mapOn: v),
+            title: Text(tr('Mapa online'), style: TextStyle(fontWeight: FontWeight.w600)),
+            subtitle: Text(tr('Bez mapy trasa jest rysowana na pustym tle'), style: TextStyle(color: K9.muted, fontSize: 12)),
+          ),
+        ],
+      ),
     );
   }
 

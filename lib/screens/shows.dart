@@ -422,7 +422,8 @@ class _ShowFormState extends State<_ShowForm> {
               ? null
               : () async {
                   if (await confirmDelete(context, tr('wystawę'))) {
-                    await _s.deleteShow(widget.existing!);
+                    if (!context.mounted) return;
+                    if (!await saveGuarded(context, () => _s.deleteShow(widget.existing!))) return;
                     if (context.mounted) Navigator.pop(context);
                   }
                 }),
@@ -534,7 +535,8 @@ class _ShowFormState extends State<_ShowForm> {
             ..placement = int.tryParse(placement.text.trim())
             ..notes = notes.text.trim();
           if (e.hasResult && e.status != ShowStatus.cancelled) e.status = ShowStatus.done;
-          await _s.upsertShow(e);
+          if (!context.mounted) return;
+          if (!await saveGuarded(context, () => _s.upsertShow(e))) return;
           if (context.mounted) {
             Navigator.pop(context);
             toast(context, tr('Zapisano'));

@@ -233,6 +233,21 @@ class FeedingEntry {
     DateTime? updatedAt,
   }) : updatedAt = updatedAt ?? DateTime.now();
 
+  /// Ten sam wpis z innym ID (np. stałym, żeby ponowienie zapisu nie dublowało wpisu).
+  FeedingEntry copyWithId(String newId) => FeedingEntry(
+        id: newId,
+        date: date,
+        kind: kind,
+        productId: productId,
+        label: label,
+        grams: grams,
+        pieces: pieces,
+        kcal: kcal,
+        trainingId: trainingId,
+        notes: notes,
+        updatedAt: updatedAt,
+      );
+
   Map<String, dynamic> toJson() => {
         'id': id,
         'date': date.toIso8601String(),

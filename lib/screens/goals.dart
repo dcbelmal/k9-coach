@@ -172,7 +172,8 @@ class _GoalFormState extends State<_GoalForm> {
               ? null
               : () async {
                   if (await confirmDelete(context, 'cel')) {
-                    await _s.deleteGoal(widget.existing!);
+                    if (!context.mounted) return;
+                    if (!await saveGuarded(context, () => _s.deleteGoal(widget.existing!))) return;
                     if (context.mounted) Navigator.pop(context);
                   }
                 }),
@@ -250,7 +251,8 @@ class _GoalFormState extends State<_GoalForm> {
             ..target = parseNum(target.text);
           if (g.type != GoalType.title) g.championship = null;
           if (g.type == GoalType.weight && g.startValue == null) g.startValue = _s.dog?.weightKg;
-          await _s.upsertGoal(g);
+          if (!context.mounted) return;
+          if (!await saveGuarded(context, () => _s.upsertGoal(g))) return;
           if (context.mounted) Navigator.pop(context);
         },
         child: Text(tr('Zapisz')),

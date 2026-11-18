@@ -267,7 +267,10 @@ class _HeatFormState extends State<_HeatForm> {
             ? null
             : () async {
                 if (await confirmDelete(context, tr('wpis cieczki'))) {
-                  await HeatStore.instance.delete(e);
+                  if (!context.mounted) return;
+                  if (!await saveGuarded(context, () => HeatStore.instance.delete(e))) {
+                    return;
+                  }
                   if (context.mounted) Navigator.pop(context);
                 }
               },
@@ -288,12 +291,15 @@ class _HeatFormState extends State<_HeatForm> {
             toast(context, tr('Koniec nie może być przed początkiem'));
             return;
           }
-          await HeatStore.instance.upsert(HeatCycle(
+          if (!context.mounted) return;
+          if (!await saveGuarded(context, () => HeatStore.instance.upsert(HeatCycle(
             id: e?.id ?? newId(),
             start: dayOnly(start),
             end: end == null ? null : dayOnly(end!),
             notes: notes.text.trim(),
-          ));
+          )))) {
+            return;
+          }
           if (context.mounted) Navigator.pop(context);
         },
         child: Text(tr('Zapisz')),
