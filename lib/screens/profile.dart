@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:image_picker/image_picker.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../breeds/breed_screen.dart';
 import '../champ_rules.dart';
 import '../models.dart';
 import '../notifications.dart';
@@ -102,6 +103,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 _ => DogNotesEditor(key: const ValueKey(2), dog: dog),
               },
             ),
+            if (currentDogBreed != null) ...[
+              gap12,
+              K9Card(
+                onTap: () => openBreed(context, currentDogBreed!),
+                child: const Row(children: [
+                  IconBadge(Icons.menu_book_rounded, K9.orange),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text('O rasie', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                      SizedBox(height: 2),
+                      Text('Wzorzec FCI, masa, ruch, sporty i badania',
+                          style: TextStyle(color: K9.muted, fontSize: 13)),
+                    ]),
+                  ),
+                  Icon(Icons.chevron_right_rounded, color: K9.faint),
+                ]),
+              ),
+            ],
             const SizedBox(height: 24),
             const AllModulesCard(),
             const SizedBox(height: 16),
@@ -291,7 +311,7 @@ class _Settings extends StatelessWidget {
         ),
         const Padding(
           padding: EdgeInsets.symmetric(vertical: 10),
-          child: Text('Valkor Coach · wersja 0.8 · dane zapisane tylko na tym telefonie',
+          child: Text('Valkor Coach · wersja 0.9 · dane zapisane tylko na tym telefonie',
               textAlign: TextAlign.center, style: TextStyle(color: K9.faint, fontSize: 11.5)),
         ),
       ]),

@@ -5,6 +5,7 @@ import '../store.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import '../models_ext.dart';
+import '../breeding/breeding_screen.dart';
 import '../heat/heat_screen.dart';
 import '../modules/module_store.dart';
 import '../modules/modules.dart';
@@ -51,6 +52,8 @@ class HomeScreen extends StatelessWidget {
                   const FadeSlideIn(index: 2, child: HeatHomeCard()),
                   gap12,
                 ],
+                if (ms.isEnabled(AppModule.breeding) && dog.female)
+                  const FadeSlideIn(index: 2, child: PregnancyHomeCard()),
                 if (ms.isEnabled(AppModule.feeding)) ...[
                   const FadeSlideIn(index: 3, child: NutritionHomeCard()),
                   gap12,

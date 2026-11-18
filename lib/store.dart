@@ -6,8 +6,10 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:material_ui/material_ui.dart' show Icons, Color;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'breeding/breeding_store.dart';
 import 'champ_rules.dart';
 import 'files/file_store.dart';
+import 'guides/guide_store.dart';
 import 'gallery/gallery_store.dart';
 import 'gps/demo_track.dart';
 import 'heat/heat_store.dart';
@@ -156,6 +158,8 @@ class AppStore extends ChangeNotifier {
     await ModuleStore.instance.reset();
     await HeatStore.instance.reset();
     await GalleryStore.instance.reset();
+    await BreedingStore.instance.reset();
+    await GuideStore.instance.reset();
     await _save();
   }
 

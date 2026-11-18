@@ -3,6 +3,7 @@ name: Zbuduj aplikację
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -39,10 +40,13 @@ jobs:
         with:
           name: Valkor-Coach-Android
           path: build/app/outputs/flutter-apk/app-release.apk
-      - run: |
+      # Wersję „najnowsza” publikujemy tylko z gałęzi main (PR tylko sprawdza, czy się buduje).
+      - if: github.ref == 'refs/heads/main'
+        run: |
           cp build/app/outputs/flutter-apk/app-release.apk Valkor-Coach.apk
           cp build/app/outputs/flutter-apk/app-release.apk K9-Coach.apk
-      - uses: softprops/action-gh-release@v2
+      - if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: najnowsza
           name: Valkor Coach – najnowsza wersja
