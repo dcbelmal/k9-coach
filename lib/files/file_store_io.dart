@@ -4,7 +4,8 @@ import 'dart:typed_data';
 import 'package:material_ui/material_ui.dart';
 import 'package:path_provider/path_provider.dart';
 
-late Directory _dir;
+Directory? _base;
+Directory get _dir => _base ?? (throw StateError('FileStore.init'));
 
 /// Dozwolona nazwa pliku w katalogu aplikacji (bez ukośników i „..”).
 final _safeName = RegExp(r'^[A-Za-z0-9][A-Za-z0-9_.-]{0,120}$');
@@ -15,14 +16,15 @@ Future<void> init() async {
 }
 
 Future<void> initAt(String path) async {
-  _dir = Directory(path);
-  if (!_dir.existsSync()) _dir.createSync(recursive: true);
+  final d = Directory(path);
+  if (!d.existsSync()) d.createSync(recursive: true);
+  _base = d;
 }
 
 /// Plik dla referencji `file:<nazwa>` albo null, gdy referencja jest nieprawidłowa
 /// lub wskazuje poza katalog aplikacji.
 File? _fileFor(String ref) {
-  if (!ref.startsWith('file:')) return null;
+  if (_base == null || !ref.startsWith('file:')) return null;
   final name = ref.substring(5);
   if (!_safeName.hasMatch(name) || name.contains('..')) return null;
   return File('${_dir.path}/$name');
@@ -79,7 +81,7 @@ Future<String?> readText(String ref) async {
 /// Pliki w katalogu aplikacji: (referencja, czas modyfikacji).
 Future<List<(String, DateTime)>> listFiles() async {
   final out = <(String, DateTime)>[];
-  if (!_dir.existsSync()) return out;
+  if (_base == null || !_dir.existsSync()) return out;
   for (final e in _dir.listSync(followLinks: false)) {
     if (e is! File) continue;
     final name = e.uri.pathSegments.last;

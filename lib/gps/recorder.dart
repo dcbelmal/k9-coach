@@ -10,6 +10,7 @@ import '../dogs/dog_profiles.dart';
 import '../models.dart';
 import '../storage/safe_prefs.dart';
 import 'gps_drafts.dart';
+import 'online_services.dart';
 import '../notifications.dart';
 import '../theme.dart' show fmtKm;
 import 'track.dart';
@@ -110,9 +111,9 @@ class TrackRecorder extends ChangeNotifier {
   /// Sprawdza GPS i uprawnienia. Zwraca komunikat błędu albo null.
   static Future<String?> ensurePermission() async {
     if (kIsWeb) return tr('Trening GPS działa tylko w aplikacji na telefonie.');
-    if (!await Geolocator.isLocationServiceEnabled()) return tr('Włącz lokalizację (GPS) w telefonie.');
-    var p = await Geolocator.checkPermission();
-    if (p == LocationPermission.denied) p = await Geolocator.requestPermission();
+    if (!await GpsServices.serviceEnabled()) return tr('Włącz lokalizację (GPS) w telefonie.');
+    var p = await GpsServices.checkPermission();
+    if (p == LocationPermission.denied) p = await GpsServices.requestPermission();
     if (p == LocationPermission.denied) return tr('Bez dostępu do lokalizacji nie da się nagrać trasy.');
     if (p == LocationPermission.deniedForever) {
       return tr('Dostęp do lokalizacji jest zablokowany. Włącz go w ustawieniach telefonu dla Valkor Coach.');

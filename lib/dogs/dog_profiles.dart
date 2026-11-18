@@ -340,7 +340,7 @@ class DogProfiles extends ChangeNotifier {
 
   /// Raz na uruchomienie: pliki po starszych wersjach bez żadnego właściciela.
   Future<int> sweepOrphanFiles() async {
-    final p = _prefs ??= await SharedPreferences.getInstance();
+    final p = await SharedPreferences.getInstance();
     return FileRefs.sweepOrphans(p, indexReadable: indexReadable, perDogBases: perDogKeys);
   }
 

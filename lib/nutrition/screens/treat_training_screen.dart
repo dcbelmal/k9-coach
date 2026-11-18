@@ -143,13 +143,14 @@ class _TreatTrainingScreenState extends State<TreatTrainingScreen> {
     setState(() => _saving = false);
     if (!saved) return; // licznik i czas zostają – można ponowić
     timer?.cancel();
+    final pl = plan;
     await showDialog(
       context: context,
       builder: (c) => AlertDialog(
         title: Text(tr('Trening zapisany')),
-        content: Text(plan == null
+        content: Text(pl == null
             ? tr('Nagrody zapisane w dzienniku.')
-            : tr('Nagrody: {0} kcal.\nPozostało na dziś: {1} kcal.\nProponowana porcja karmy na resztę dnia: {2} g.', [kcal.round(), plan.remainingKcal.round(), plan.remainingGrams.round()])),
+            : tr('Nagrody: {0} kcal.\nPozostało na dziś: {1} kcal.\nProponowana porcja karmy na resztę dnia: {2} g.', [kcal.round(), pl.remainingKcal.round(), pl.remainingGrams.round()])),
         actions: [TextButton(onPressed: () => Navigator.pop(c), child: Text(tr('OK')))],
       ),
     );

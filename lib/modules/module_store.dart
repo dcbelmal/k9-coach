@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
+import '../build_config.dart';
 import '../storage/dog_doc_guard.dart';
 import '../storage/safe_prefs.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -38,7 +39,11 @@ class ModuleStore extends ChangeNotifier {
   final Map<AppModule, bool> overrides = {};
 
   /// Premium: subskrypcja Google Play albo przełącznik testowy (patrz Billing).
-  bool premium = false;
+  bool _premium = false;
+
+  /// Premium aktywne: w becie także testowo, w wersji produkcyjnej wyłącznie
+  /// z potwierdzonego zakupu Google Play (stary przełącznik testowy nie działa).
+  bool get premium => _premium && (isBetaBuild || premiumSource == PremiumSource.play);
   PremiumSource premiumSource = PremiumSource.test;
 
   final guard = DogDocGuard(_key, 'Moduły');
@@ -62,7 +67,7 @@ class ModuleStore extends ChangeNotifier {
     if (rawPremium != null) {
       try {
         final j = jsonDecode(rawPremium) as Map<String, dynamic>;
-        premium = j['premium'] as bool? ?? false;
+        _premium = j['premium'] as bool? ?? false;
         premiumSource = PremiumSource.values.asNameMap()[j['premiumSource']] ?? PremiumSource.test;
       } catch (e) {
         logError('Premium: odczyt', e);
@@ -79,7 +84,7 @@ class ModuleStore extends ChangeNotifier {
   Future<void> _savePremium() async {
     _prefs ??= await SharedPreferences.getInstance();
     await SafePrefs.setString(
-        _prefs!, _premiumKey, jsonEncode({'premium': premium, 'premiumSource': premiumSource.name}));
+        _prefs!, _premiumKey, jsonEncode({'premium': _premium, 'premiumSource': premiumSource.name}));
   }
 
   Future<void> _save() async {
@@ -88,7 +93,7 @@ class ModuleStore extends ChangeNotifier {
       await guard.write(
           _prefs!,
           () => jsonEncode({
-                'premium': premium,
+                'premium': _premium,
                 'premiumSource': premiumSource.name,
                 'overrides': {for (final e in overrides.entries) e.key.name: e.value},
               }),
@@ -147,14 +152,15 @@ class ModuleStore extends ChangeNotifier {
   }
 
   Future<void> setPremium(bool on, {PremiumSource source = PremiumSource.test}) async {
-    if (premium == on && premiumSource == source) return;
-    final old = (premium, premiumSource);
-    premium = on;
+    if (source == PremiumSource.test && !isBetaBuild) return; // brak trybu testowego w produkcji
+    if (_premium == on && premiumSource == source) return;
+    final old = (_premium, premiumSource);
+    _premium = on;
     premiumSource = source;
     try {
       await _savePremium();
     } catch (e) {
-      premium = old.$1;
+      _premium = old.$1;
       premiumSource = old.$2;
       rethrow;
     } finally {

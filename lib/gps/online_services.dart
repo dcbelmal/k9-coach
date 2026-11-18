@@ -62,6 +62,7 @@ class OnlineConsent extends ChangeNotifier {
 class GpsServices {
   static Future<LocationPermission> Function() checkPermission = Geolocator.checkPermission;
   static Future<bool> Function() serviceEnabled = Geolocator.isLocationServiceEnabled;
+  static Future<LocationPermission> Function() requestPermission = Geolocator.requestPermission;
   static Future<Position?> Function() position = _position;
   static Future<Weather?> Function(double lat, double lng) weather = fetchWeather;
 
@@ -89,6 +90,7 @@ class GpsServices {
   static void reset() {
     checkPermission = Geolocator.checkPermission;
     serviceEnabled = Geolocator.isLocationServiceEnabled;
+    requestPermission = Geolocator.requestPermission;
     position = _position;
     weather = fetchWeather;
     tiles = _osmTiles;

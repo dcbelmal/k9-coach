@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Zasady kopii danych (Android 12 i nowsze).
+  Kopia w chmurze Google: WYŁĄCZONA. Profile psów, dokumenty, zdjęcia i trasy GPS
+  nie trafiają na konto Google.
+  Przeniesienie na nowy telefon (kabel / bezpośrednio telefon–telefon): WŁĄCZONE,
+  bo brak sekcji device-transfer oznacza przeniesienie wszystkich danych aplikacji.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="external" path="." />
+    </cloud-backup>
+</data-extraction-rules>

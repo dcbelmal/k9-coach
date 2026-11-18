@@ -63,14 +63,33 @@ class SafePrefs {
   static const recoveryPrefix = 'valkor_recovery_v1|';
 
   /// Zapis, który traktuje zarówno `false`, jak i wyjątek jako błąd.
+  ///
+  /// SharedPreferences zmienia swoją pamięć podręczną jeszcze przed zapisem na
+  /// dysk – po błędzie przywracamy w niej poprzednią wartość, żeby aplikacja
+  /// nie pokazywała danych, których nie ma w pamięci telefonu.
   static Future<void> setString(SharedPreferences p, String key, String value) async {
+    final prev = p.get(key);
     bool ok;
+    Object? error;
     try {
       ok = await p.setString(key, value);
     } catch (e) {
-      throw StorageWriteException(key, e);
+      ok = false;
+      error = e;
     }
-    if (!ok) throw StorageWriteException(key);
+    if (ok) return;
+    await _restoreCache(p, key, prev);
+    throw StorageWriteException(key, error);
+  }
+
+  static Future<void> _restoreCache(SharedPreferences p, String key, Object? prev) async {
+    try {
+      if (prev is String) {
+        await p.setString(key, prev);
+      } else if (prev == null) {
+        await p.remove(key);
+      }
+    } catch (_) {}
   }
 
   static Future<void> remove(SharedPreferences p, String key) async {

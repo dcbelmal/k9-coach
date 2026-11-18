@@ -145,7 +145,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 Future<void> pickDogPhoto(BuildContext context, Dog dog) async {
   try {
     final img = await ImagePicker().pickImage(
-        source: ImageSource.gallery, maxWidth: 1200, maxHeight: 1200, imageQuality: 82);
+        source: ImageSource.gallery, maxWidth: 900, maxHeight: 900, imageQuality: 80);
     if (img == null) return;
     final bytes = await img.readAsBytes();
     dog.photoBase64 = base64Encode(bytes);
@@ -332,7 +332,7 @@ class _Settings extends StatelessWidget {
         ),
         Padding(
           padding: EdgeInsets.symmetric(vertical: 10),
-          child: Text(tr('Valkor Coach · wersja {0} · dane zapisane tylko na tym telefonie', ['0.11']),
+          child: Text(tr('Valkor Coach · wersja {0} · dane zapisane tylko na tym telefonie', ['0.12']),
               textAlign: TextAlign.center, style: TextStyle(color: K9.faint, fontSize: 11.5)),
         ),
       ]),
@@ -491,7 +491,7 @@ class _DogEditScreenState extends State<DogEditScreen> {
 Future<void> pickDogPhotoInto(BuildContext context, Dog dog) async {
   try {
     final img = await ImagePicker().pickImage(
-        source: ImageSource.gallery, maxWidth: 1200, maxHeight: 1200, imageQuality: 82);
+        source: ImageSource.gallery, maxWidth: 900, maxHeight: 900, imageQuality: 80);
     if (img == null) return;
     dog.photoBase64 = base64Encode(await img.readAsBytes());
   } catch (_) {
