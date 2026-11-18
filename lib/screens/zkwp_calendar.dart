@@ -68,10 +68,10 @@ class _ZkwpCalendarState extends State<ZkwpCalendar> {
     final all = <ZkwpShow>[];
     final errs = <String>[];
     DateTime? at;
-    for (final (i, (list, when, err)) in results.indexed) {
+    for (final (i, (list, got, err)) in results.indexed) {
       all.addAll(list.where((z) => z.date.year == year));
       if (err != null) errs.add('${countryByCode(codes[i]).flag} $err');
-      if (when != null && (at == null || when.isBefore(at))) at = when;
+      if (got != null && (at == null || got.isBefore(at))) at = got;
     }
     all.sort((a, b) => a.date.compareTo(b.date));
     setState(() {
