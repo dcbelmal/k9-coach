@@ -1,5 +1,6 @@
 import 'models.dart';
 import 'models_ext.dart';
+import 'l10n/l10n.dart';
 
 /// Jeden warunek championatu.
 class Req {
@@ -62,7 +63,7 @@ bool _yearAndDay(List<ShowEntry> l) {
 double _frac(List<Req> r) => r.isEmpty ? 0 : r.where((x) => x.ok).length / r.length;
 
 String _missingJudge(Iterable<ShowEntry> l) =>
-    l.any((e) => e.judge.trim().isEmpty) ? ' (uzupełnij nazwiska sędziów)' : '';
+    l.any((e) => e.judge.trim().isEmpty) ? tr(' (uzupełnij nazwiska sędziów)') : '';
 
 ChampStatus evaluate(Championship c, List<ShowEntry> shows, {required bool workingTrialBreed, required bool workingTrialPassed, bool? plChampion}) {
   List<ShowEntry> withT(ShowTitle t) => shows.where((e) => e.titles.contains(t)).toList();
@@ -71,43 +72,43 @@ ChampStatus evaluate(Championship c, List<ShowEntry> shows, {required bool worki
       final l = withT(ShowTitle.zm);
       final j = _judges(l);
       final reqs = [
-        Req('3 × Zwycięzca Młodzieży (masz ${l.length})', l.length >= 3),
-        Req('od 3 różnych sędziów (masz $j)${_missingJudge(l)}', j >= 3),
-        Req('min. 1 na wystawie międzynarodowej, klubowej lub specjalistycznej', l.any(_bigShow)),
+        Req(tr('3 × Zwycięzca Młodzieży (masz {0})', [l.length]), l.length >= 3),
+        Req(tr('od 3 różnych sędziów (masz {0})', [j]) + _missingJudge(l), j >= 3),
+        Req(tr('min. 1 na wystawie międzynarodowej, klubowej lub specjalistycznej'), l.any(_bigShow)),
       ];
       return ChampStatus(c, reqs, (l.length.clamp(0, 3) / 3 + _frac(reqs)) / 2, '${l.length} / 3 × ZM',
-          'Trzykrotnie tytuł Zwycięzcy Młodzieży od 3 różnych sędziów, co najmniej raz na wystawie specjalistycznej, klubowej lub międzynarodowej. Bez określonego przedziału czasu.');
+          tr('Trzykrotnie tytuł Zwycięzcy Młodzieży od 3 różnych sędziów, co najmniej raz na wystawie specjalistycznej, klubowej lub międzynarodowej. Bez określonego przedziału czasu.'));
     case Championship.pl:
       final l = withT(ShowTitle.cwc);
       final j = _judges(l);
       final reqs = [
-        Req('3 × CWC (masz ${l.length})', l.length >= 3),
-        Req('od 3 różnych sędziów (masz $j)${_missingJudge(l)}', j >= 3),
-        Req('min. 1 na wystawie międzynarodowej, klubowej lub specjalistycznej', l.any(_bigShow)),
-        Req('min. 6 miesięcy między pierwszym a ostatnim CWC${l.length >= 2 ? ' (teraz ${_spanDays(l)} dni)' : ''}', _sixMonths(l)),
+        Req(tr('3 × CWC (masz {0})', [l.length]), l.length >= 3),
+        Req(tr('od 3 różnych sędziów (masz {0})', [j]) + _missingJudge(l), j >= 3),
+        Req(tr('min. 1 na wystawie międzynarodowej, klubowej lub specjalistycznej'), l.any(_bigShow)),
+        Req(tr('min. 6 miesięcy między pierwszym a ostatnim CWC') + (l.length >= 2 ? tr(' (teraz {0} dni)', [_spanDays(l)]) : ''), _sixMonths(l)),
       ];
       return ChampStatus(c, reqs, (l.length.clamp(0, 3) / 3 + _frac(reqs)) / 2, '${l.length} / 3 × CWC',
-          'Trzy CWC od trzech różnych sędziów, co najmniej jedno na wystawie międzynarodowej, klubowej lub specjalistycznej. Między pierwszym a ostatnim CWC co najmniej 6 miesięcy. CWC może otrzymać pies, który ukończył 15 miesięcy, za ocenę doskonałą i 1. lokatę w klasie pośredniej, otwartej, użytkowej lub championów.');
+          tr('Trzy CWC od trzech różnych sędziów, co najmniej jedno na wystawie międzynarodowej, klubowej lub specjalistycznej. Między pierwszym a ostatnim CWC co najmniej 6 miesięcy. CWC może otrzymać pies, który ukończył 15 miesięcy, za ocenę doskonałą i 1. lokatę w klasie pośredniej, otwartej, użytkowej lub championów.'));
     case Championship.grand:
       final l = withT(ShowTitle.cwc).where((e) => e.showClass == ShowClass.champion && e.type == ShowType.international).toList();
       final j = _judges(l);
       final reqs = [
-        Req('tytuł Champion Polski', plChampion ?? false),
-        Req('3 × CWC w klasie championów na wystawach międzynarodowych (masz ${l.length})', l.length >= 3),
-        Req('od 3 różnych sędziów (masz $j)${_missingJudge(l)}', j >= 3),
+        Req(tr('tytuł Champion Polski'), plChampion ?? false),
+        Req(tr('3 × CWC w klasie championów na wystawach międzynarodowych (masz {0})', [l.length]), l.length >= 3),
+        Req(tr('od 3 różnych sędziów (masz {0})', [j]) + _missingJudge(l), j >= 3),
       ];
       return ChampStatus(c, reqs, (l.length.clamp(0, 3) / 3 + _frac(reqs)) / 2, '${l.length} / 3 × CWC',
-          'Pies z zatwierdzonym tytułem Champion Polski zdobywa 3 CWC w klasie championów od 3 sędziów na wystawach międzynarodowych, championów lub Światowej Wystawie Ras Polskich. Odstęp czasu nie jest wymagany.');
+          tr('Pies z zatwierdzonym tytułem Champion Polski zdobywa 3 CWC w klasie championów od 3 sędziów na wystawach międzynarodowych, championów lub Światowej Wystawie Ras Polskich. Odstęp czasu nie jest wymagany.'));
     case Championship.veteran:
       final l = withT(ShowTitle.zw);
       final j = _judges(l);
       final reqs = [
-        Req('3 × Zwycięzca Weteran (masz ${l.length})', l.length >= 3),
-        Req('od 3 różnych sędziów (masz $j)${_missingJudge(l)}', j >= 3),
-        Req('min. 1 na wystawie międzynarodowej, klubowej lub specjalistycznej', l.any(_bigShow)),
+        Req(tr('3 × Zwycięzca Weteran (masz {0})', [l.length]), l.length >= 3),
+        Req(tr('od 3 różnych sędziów (masz {0})', [j]) + _missingJudge(l), j >= 3),
+        Req(tr('min. 1 na wystawie międzynarodowej, klubowej lub specjalistycznej'), l.any(_bigShow)),
       ];
       return ChampStatus(c, reqs, (l.length.clamp(0, 3) / 3 + _frac(reqs)) / 2, '${l.length} / 3 × ZW',
-          'Trzykrotnie tytuł Zwycięzca Weteran od 3 różnych sędziów, co najmniej raz na wystawie specjalistycznej, klubowej lub międzynarodowej. Liczą się wystawy od 1.01.2015.');
+          tr('Trzykrotnie tytuł Zwycięzca Weteran od 3 różnych sędziów, co najmniej raz na wystawie specjalistycznej, klubowej lub międzynarodowej. Liczą się wystawy od 1.01.2015.'));
     case Championship.inter:
       final l = withT(ShowTitle.cacib);
       final need = workingTrialBreed ? 2 : 4;
@@ -116,16 +117,16 @@ ChampStatus evaluate(Championship c, List<ShowEntry> shows, {required bool worki
       final j = _judges(l);
       final k = _countries(l);
       final reqs = [
-        Req('$need × CACIB (masz ${l.length})', l.length >= need),
-        Req('od $needJ różnych sędziów (masz $j)${_missingJudge(l)}', j >= needJ),
-        Req('w $needC różnych krajach (masz $k)', k >= needC),
-        Req('min. rok i 1 dzień między pierwszym a ostatnim CACIB', _yearAndDay(l)),
-        if (workingTrialBreed) Req('zdana próba pracy z CACT (np. IGP 1, min. 70% w każdej części)', workingTrialPassed),
+        Req(tr('{0} × CACIB (masz {1})', [need, l.length]), l.length >= need),
+        Req(tr('od {0} różnych sędziów (masz {1})', [needJ, j]) + _missingJudge(l), j >= needJ),
+        Req(tr('w {0} różnych krajach (masz {1})', [needC, k]), k >= needC),
+        Req(tr('min. rok i 1 dzień między pierwszym a ostatnim CACIB'), _yearAndDay(l)),
+        if (workingTrialBreed) Req(tr('zdana próba pracy z CACT (np. IGP 1, min. 70% w każdej części)'), workingTrialPassed),
       ];
       return ChampStatus(c, reqs, (l.length.clamp(0, need) / need + _frac(reqs)) / 2, '${l.length} / $need × CACIB',
           workingTrialBreed
-              ? 'Rasy z próbą pracy: 2 CACIB od 2 sędziów w 2 krajach, min. rok i 1 dzień między pierwszym a ostatnim, oraz zdana próba pracy z CACT (gr. I–III: IGP/IPO kl. 1, min. 70% w każdej dyscyplinie). Data próby nie ma znaczenia.'
-              : '4 CACIB od 3 różnych sędziów w 3 różnych krajach, min. rok i 1 dzień między pierwszym a ostatnim.');
+              ? tr('Rasy z próbą pracy: 2 CACIB od 2 sędziów w 2 krajach, min. rok i 1 dzień między pierwszym a ostatnim, oraz zdana próba pracy z CACT (gr. I–III: IGP/IPO kl. 1, min. 70% w każdej dyscyplinie). Data próby nie ma znaczenia.')
+              : tr('4 CACIB od 3 różnych sędziów w 3 różnych krajach, min. rok i 1 dzień między pierwszym a ostatnim.'));
   }
 }
 

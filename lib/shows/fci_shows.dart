@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../zkwp.dart';
+import '../l10n/l10n.dart';
 
 /// Opis wystawy z kalendarza FCI – FCI publikuje tylko wystawy międzynarodowe (CACIB).
 const fciShowDescription = 'międzynarodowa - CACIB';
@@ -109,7 +110,7 @@ class FciService {
           '$_cacheKey$country', jsonEncode({'at': now.toIso8601String(), 'shows': shows.map((e) => e.toJson()).toList()}));
       return (shows, now, null);
     } catch (_) {
-      return (cached ?? <ZkwpShow>[], cachedAt, 'Brak połączenia ze stroną FCI.');
+      return (cached ?? <ZkwpShow>[], cachedAt, tr('Brak połączenia ze stroną FCI.'));
     }
   }
 }

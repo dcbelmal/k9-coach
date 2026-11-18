@@ -16,8 +16,9 @@ enum ShowType {
   club('Klubowa'),
   specialty('Specjalistyczna');
 
-  final String label;
-  const ShowType(this.label);
+  final String _label;
+  String get label => tr(_label);
+  const ShowType(this._label);
 }
 
 enum ShowClass {
@@ -30,8 +31,9 @@ enum ShowClass {
   champion('Championów'),
   veteran('Weteranów');
 
-  final String label;
-  const ShowClass(this.label);
+  final String _label;
+  String get label => tr(_label);
+  const ShowClass(this._label);
 }
 
 enum ShowStatus {
@@ -41,9 +43,10 @@ enum ShowStatus {
   done('Odbyta', Color(0xFF34C759)),
   cancelled('Odwołana', Color(0xFFFF453A));
 
-  final String label;
+  final String _label;
+  String get label => tr(_label);
   final Color color;
-  const ShowStatus(this.label, this.color);
+  const ShowStatus(this._label, this.color);
 }
 
 enum ShowTitle {
@@ -61,10 +64,11 @@ enum ShowTitle {
   bog('Lokata w grupie (BOG)', 'BOG', Color(0xFFFF6B3D)),
   bis('Lokata w BIS', 'BIS', Color(0xFFFF453A));
 
-  final String label;
+  final String _label;
+  String get label => tr(_label);
   final String short;
   final Color color;
-  const ShowTitle(this.label, this.short, this.color);
+  const ShowTitle(this._label, this.short, this.color);
 }
 
 const showGrades = ['Doskonała', 'Bardzo dobra', 'Dobra', 'Dostateczna', 'Wybitnie obiecująca', 'Obiecująca', 'Dyskwalifikacja', 'Nie oceniono'];
@@ -135,7 +139,7 @@ class ShowEntry {
         entryDeadline: _d(j['deadline']),
         fee: _n(j['fee']),
         judge: j['judge'] ?? '',
-        country: j['country'] ?? tr('Polska'),
+        country: j['country'] ?? 'Polska',
         grade: j['grade'],
         placement: j['placement'],
         titles: {for (final t in (j['titles'] as List? ?? [])) ShowTitle.values.byName(t)},
@@ -151,8 +155,9 @@ enum Championship {
   veteran('Champion Polski Weteranów'),
   inter('Champion Międzynarodowy (C.I.B.)');
 
-  final String label;
-  const Championship(this.label);
+  final String _label;
+  String get label => tr(_label);
+  const Championship(this._label);
 }
 
 // ---------------------------------------------------------------------------

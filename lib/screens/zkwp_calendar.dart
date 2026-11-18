@@ -8,13 +8,9 @@ import '../store.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import '../zkwp.dart';
+import '../l10n/l10n.dart';
 
 final _s = AppStore.instance;
-
-const _monthNames = [
-  'Styczeń', 'Luty', 'Marzec', 'Kwiecień', 'Maj', 'Czerwiec',
-  'Lipiec', 'Sierpień', 'Wrzesień', 'Październik', 'Listopad', 'Grudzień',
-];
 
 /// Terminarz wystaw: kraj zamieszkania (+ kraje sąsiednie) z filtrem po grupie FCI psa.
 /// Polska – pełny terminarz ZKwP, pozostałe kraje – wystawy CACIB z kalendarza FCI.
@@ -92,13 +88,13 @@ class _ZkwpCalendarState extends State<ZkwpCalendar> {
       builder: (c) => SingleChildScrollView(
         padding: EdgeInsets.fromLTRB(12, 0, 12, 20 + MediaQuery.viewPaddingOf(c).bottom),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Padding(padding: EdgeInsets.symmetric(horizontal: 8), child: SheetTitle('Kraj zamieszkania')),
+          Padding(padding: EdgeInsets.symmetric(horizontal: 8), child: SheetTitle(tr('Kraj zamieszkania'))),
           for (final k in showCountries.where((e) => e.inFci))
             ListTile(
               title: Text(k.label),
               subtitle: (countryNeighbours[k.code] ?? const []).isEmpty
                   ? null
-                  : Text('Sąsiedzi: ${neighboursOf(k.code).map((n) => n.flag).join(' ')}',
+                  : Text(tr('Sąsiedzi: {0}', [neighboursOf(k.code).map((n) => n.flag).join(' ')]),
                       style: const TextStyle(color: K9.muted, fontSize: 12.5)),
               trailing: k.code == home ? const Icon(Icons.check_rounded, color: K9.orange) : null,
               onTap: () => Navigator.pop(c, k.code),
@@ -125,7 +121,7 @@ class _ZkwpCalendarState extends State<ZkwpCalendar> {
   }
 
   /// Miejsce zapisywane w "Moich wystawach": dla wystaw z zagranicy z nazwą kraju.
-  String _placeOf(ZkwpShow z) => z.fromFci ? '${z.city}, ${countryByCode(z.country).name}' : z.city;
+  String _placeOf(ZkwpShow z) => z.fromFci ? '${z.city}, ${countryByCode(z.country).localName}' : z.city;
 
   ShowEntry? _added(ZkwpShow z) => _s.shows
       .where((e) => sameDay(e.date, z.date) && e.place.toLowerCase() == _placeOf(z).toLowerCase() && e.type == z.type)
@@ -140,11 +136,11 @@ class _ZkwpCalendarState extends State<ZkwpCalendar> {
       type: z.type,
       showClass: _defaultClass(),
       notes: z.fromFci
-          ? 'Z kalendarza FCI: ${countryByCode(z.country).label}, ${z.city} – wystawa międzynarodowa CACIB'
-          : 'Z terminarza ZKwP: ${z.place} – ${z.description}',
+          ? tr('Z kalendarza FCI: {0}, {1} – wystawa międzynarodowa CACIB', [countryByCode(z.country).label, z.city])
+          : tr('Z terminarza ZKwP: {0} – {1}', [z.place, z.description]),
     );
     await _s.upsertShow(e);
-    if (mounted) toast(context, 'Dodano do moich wystaw. Uzupełnij termin zgłoszeń, a przypomnę o nim.');
+    if (mounted) toast(context, tr('Dodano do moich wystaw. Uzupełnij termin zgłoszeń, a przypomnę o nim.'));
   }
 
   ShowClass _defaultClass() {
@@ -197,14 +193,14 @@ class _ZkwpCalendarState extends State<ZkwpCalendar> {
         Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
           ActionChip(
             avatar: const Icon(Icons.home_rounded, size: 18, color: K9.orange),
-            label: Text('Mieszkam: ${countryByCode(home).label}'),
+            label: Text(tr('Mieszkam: {0}', [countryByCode(home).label])),
             backgroundColor: K9.cardHi,
             side: BorderSide.none,
             labelStyle: const TextStyle(color: K9.text, fontWeight: FontWeight.w600, fontSize: 13),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             onPressed: _pickCountry,
           ),
-          if (neighboursOf(home).isNotEmpty) chip('+ kraje sąsiednie', withNeighbours, () {
+          if (neighboursOf(home).isNotEmpty) chip(tr('+ kraje sąsiednie'), withNeighbours, () {
             _toggleNeighbours();
           }),
         ]),
@@ -213,7 +209,7 @@ class _ZkwpCalendarState extends State<ZkwpCalendar> {
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(children: [
-              chip('Wszystkie kraje', onlyCountry == null, () => onlyCountry = null),
+              chip(tr('Wszystkie kraje'), onlyCountry == null, () => onlyCountry = null),
               for (final c in countriesWithShows) ...[
                 const SizedBox(width: 8),
                 chip(countryByCode(c).flag, onlyCountry == c, () => onlyCountry = onlyCountry == c ? null : c),
@@ -229,14 +225,14 @@ class _ZkwpCalendarState extends State<ZkwpCalendar> {
               _load();
             }),
           const SizedBox(width: 4),
-          chip(g == null ? 'Dla mojego psa' : 'Dla mojego psa (gr. ${romanNumerals[g - 1]})', mine, () => mine = true),
-          chip('Wszystkie', !mine, () => mine = false),
-          chip('Tylko CACIB', cacibOnly, () => cacibOnly = !cacibOnly),
+          chip(g == null ? tr('Dla mojego psa') : tr('Dla mojego psa (gr. {0})', [romanNumerals[g - 1]]), mine, () => mine = true),
+          chip(tr('Wszystkie'), !mine, () => mine = false),
+          chip(tr('Tylko CACIB'), cacibOnly, () => cacibOnly = !cacibOnly),
         ]),
         if (mine && g == null)
           Padding(
             padding: const EdgeInsets.only(top: 10),
-            child: Text('Ustaw grupę FCI w profilu psa, aby widzieć też wystawy klubowe i specjalistyczne swojej grupy.',
+            child: Text(tr('Ustaw grupę FCI w profilu psa, aby widzieć też wystawy klubowe i specjalistyczne swojej grupy.'),
                 style: TextStyle(color: K9.yellow.withValues(alpha: 0.9), fontSize: 12.5)),
           ),
         gap12,
@@ -257,19 +253,19 @@ class _ZkwpCalendarState extends State<ZkwpCalendar> {
                   Expanded(
                     child: Text(
                         shows.isEmpty
-                            ? '$error\nSprawdź internet i pociągnij listę w dół.'
-                            : '$error\nPokazuję to, co udało się pobrać lub zapisaną wersję.',
+                            ? tr('{0}\nSprawdź internet i pociągnij listę w dół.', [error])
+                            : tr('{0}\nPokazuję to, co udało się pobrać lub zapisaną wersję.', [error]),
                         style: const TextStyle(fontSize: 13)),
                   ),
                 ]),
               ),
             ),
           if (!loading && shows.isNotEmpty && list.isEmpty)
-            const K9Card(child: Text('Brak nadchodzących wystaw dla tego filtra.', style: TextStyle(color: K9.muted))),
+            K9Card(child: Text(tr('Brak nadchodzących wystaw dla tego filtra.'), style: TextStyle(color: K9.muted))),
           for (final m in byMonth.keys) ...[
             Padding(
               padding: const EdgeInsets.fromLTRB(4, 10, 4, 8),
-              child: Text('${_monthNames[m - 1]} $year',
+              child: Text(fmtMonthYear(DateTime(year, m)),
                   style: const TextStyle(color: K9.muted, fontWeight: FontWeight.w700)),
             ),
             for (final (i, z) in byMonth[m]!.indexed)
@@ -281,12 +277,7 @@ class _ZkwpCalendarState extends State<ZkwpCalendar> {
             Padding(
               padding: const EdgeInsets.only(top: 14),
               child: Text(
-                  'Źródła: ${loadedCountries.contains('PL') ? 'Polska – terminarz ZKwP (zkwp.pl); ' : ''}'
-                  '${loadedCountries.any((c) => c != 'PL') ? 'inne kraje – kalendarz wystaw międzynarodowych FCI (fci.be), tylko CACIB; ' : ''}'
-                  'pobrano ${fmtDate(fetchedAt!)}, ${fmtTime(fetchedAt!)}. '
-                  'Grupy przypisuję według rodzaju wystawy: międzynarodowe i krajowe są dla wszystkich ras, '
-                  'klubowe i specjalistyczne według nazwy. Sprawdź szczegóły u organizatora.'
-                  '${withNeighbours && neighboursOf(home).any((n) => !n.inFci) ? ' ${neighboursOf(home).where((n) => !n.inFci).map((n) => n.name).join(', ')}: brak wystaw w kalendarzu FCI.' : ''}',
+                  tr('Źródła: {0}{1}pobrano {2}, {3}. Grupy przypisuję według rodzaju wystawy: międzynarodowe i krajowe są dla wszystkich ras, klubowe i specjalistyczne według nazwy. Sprawdź szczegóły u organizatora.{4}', [loadedCountries.contains('PL') ? tr('Polska – terminarz ZKwP (zkwp.pl); ') : '', loadedCountries.any((c) => c != 'PL') ? tr('inne kraje – kalendarz wystaw międzynarodowych FCI (fci.be), tylko CACIB; ') : '', fmtDate(fetchedAt!), fmtTime(fetchedAt!), withNeighbours && neighboursOf(home).any((n) => !n.inFci) ? tr(' {0}: brak wystaw w kalendarzu FCI.', [neighboursOf(home).where((n) => !n.inFci).map((n) => n.label).join(', ')]) : '']),
                   style: const TextStyle(color: K9.faint, fontSize: 11.5)),
             ),
         ],
@@ -307,7 +298,7 @@ class _ZCard extends StatelessWidget {
     final intl = z.type == ShowType.international;
     final days = z.endDate == null ? '${z.date.day}' : '${z.date.day}–${z.endDate!.day}';
     final c = countryByCode(z.country);
-    final placeText = z.fromFci || foreign ? '${c.flag} ${z.fromFci ? z.city : z.place}, ${c.name}' : z.place;
+    final placeText = z.fromFci || foreign ? '${c.flag} ${z.fromFci ? z.city : z.place}, ${c.localName}' : z.place;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: K9Card(
@@ -333,7 +324,7 @@ class _ZCard extends StatelessWidget {
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(placeText, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
               const SizedBox(height: 2),
-              Text(z.description, style: const TextStyle(color: Color(0xFFCFCFD4), fontSize: 13)),
+              Text(tr(z.description), style: const TextStyle(color: Color(0xFFCFCFD4), fontSize: 13)),
               const SizedBox(height: 6),
               Text(z.groupsLabel, style: const TextStyle(color: K9.muted, fontSize: 11.5, fontWeight: FontWeight.w600)),
             ]),
@@ -344,7 +335,7 @@ class _ZCard extends StatelessWidget {
                   child: Icon(Icons.check_circle_rounded, color: K9.green),
                 )
               : IconButton(
-                  tooltip: 'Dodaj do moich wystaw',
+                  tooltip: tr('Dodaj do moich wystaw'),
                   onPressed: onAdd,
                   icon: const Icon(Icons.add_circle_outline_rounded, color: K9.orange, size: 28),
                 ),
