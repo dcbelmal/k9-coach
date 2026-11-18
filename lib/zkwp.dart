@@ -12,8 +12,19 @@ class ZkwpShow {
   final DateTime? endDate;
   final String place; // np. "GDAŃSK (O/Gdynia)"
   final String description; // np. "międzynarodowa - CACIB · DUO CACIB"
+  /// Kod kraju ISO (PL = terminarz ZKwP, inne = kalendarz FCI).
+  final String country;
+  /// true = wystawa z kalendarza FCI (tylko miasto i data, zawsze CACIB).
+  final bool fromFci;
 
-  ZkwpShow({required this.date, this.endDate, required this.place, required this.description});
+  ZkwpShow({
+    required this.date,
+    this.endDate,
+    required this.place,
+    required this.description,
+    this.country = 'PL',
+    this.fromFci = false,
+  });
 
   String get city {
     final i = place.indexOf('(');
@@ -105,6 +116,8 @@ class ZkwpShow {
         'end': endDate?.toIso8601String(),
         'place': place,
         'desc': description,
+        if (country != 'PL') 'c': country,
+        if (fromFci) 'fci': true,
       };
 
   factory ZkwpShow.fromJson(Map<String, dynamic> j) => ZkwpShow(
@@ -112,6 +125,8 @@ class ZkwpShow {
         endDate: j['end'] == null ? null : DateTime.parse(j['end']),
         place: j['place'],
         description: j['desc'],
+        country: j['c'] ?? 'PL',
+        fromFci: j['fci'] == true,
       );
 }
 
