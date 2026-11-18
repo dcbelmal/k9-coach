@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:material_ui/material_ui.dart';
+import 'l10n/l10n.dart';
 
 String newId() =>
     '${DateTime.now().microsecondsSinceEpoch}${(DateTime.now().hashCode % 997)}';
@@ -18,9 +19,11 @@ enum DogActivity {
   high('Wysoki', 'Regularne treningi, dużo biegania'),
   veryHigh('Bardzo wysoki', 'Sport wyczynowy lub praca codziennie');
 
-  final String label;
-  final String hint;
-  const DogActivity(this.label, this.hint);
+  final String _label;
+  String get label => tr(_label);
+  final String _hint;
+  String get hint => tr(_hint);
+  const DogActivity(this._label, this._hint);
 }
 
 /// Cel użytkowania psa – decyduje o modułach treningowych.
@@ -31,9 +34,10 @@ enum DogPurpose {
   breeding('Hodowla', Icons.child_friendly_rounded),
   recreation('Rekreacja', Icons.landscape_rounded);
 
-  final String label;
+  final String _label;
+  String get label => tr(_label);
   final IconData icon;
-  const DogPurpose(this.label, this.icon);
+  const DogPurpose(this._label, this.icon);
 }
 
 class Dog {
@@ -84,10 +88,10 @@ class Dog {
   /// Czy profil ma już dane z kreatora (starsze profile ich nie mają).
   bool get profileComplete => activity != null && purpose != null;
 
-  String get sexLabel => female ? 'Suka' : 'Pies';
+  String get sexLabel => female ? tr('Suka') : tr('Pies');
   String get reproLabel => female
-      ? (neutered ? 'Wysterylizowana' : 'Niewysterylizowana')
-      : (neutered ? 'Kastrowany' : 'Niekastrowany');
+      ? (neutered ? tr('Wysterylizowana') : tr('Niewysterylizowana'))
+      : (neutered ? tr('Kastrowany') : tr('Niekastrowany'));
 
   String get ageLabel {
     if (birthDate == null) return '';
@@ -95,10 +99,10 @@ class Dog {
     var months = (now.year - birthDate!.year) * 12 + now.month - birthDate!.month;
     if (now.day < birthDate!.day) months--;
     if (months < 0) return '';
-    if (months < 24) return '$months mies.';
+    if (months < 24) return tr('{0} mies.', [months]);
     final y = months ~/ 12, m = months % 12;
-    final yl = y < 5 ? 'lata' : 'lat';
-    return m == 0 ? '$y $yl' : '$y $yl $m mies.';
+    final yl = y < 5 ? tr('lata') : tr('lat');
+    return m == 0 ? '$y $yl' : tr('{0} {1} {2} mies.', [y, yl, m]);
   }
 
   Map<String, dynamic> toJson() => {
@@ -172,10 +176,11 @@ enum HealthCategory {
   vet('Wizyty u weterynarza', Icons.local_hospital_rounded, Color(0xFFFF453A)),
   supplements('Suplementacja', Icons.spa_rounded, Color(0xFFF5A524));
 
-  final String label;
+  final String _label;
+  String get label => tr(_label);
   final IconData icon;
   final Color color;
-  const HealthCategory(this.label, this.icon, this.color);
+  const HealthCategory(this._label, this.icon, this.color);
 }
 
 class HealthRecord {
@@ -233,23 +238,24 @@ enum Discipline {
   condition('Kondycja', Icons.fitness_center_rounded, Color(0xFF30B0C7), true),
   recovery('Regeneracja', Icons.self_improvement_rounded, Color(0xFF8E8E93), true);
 
-  final String label;
+  final String _label;
+  String get label => tr(_label);
   final IconData icon;
   final Color color;
   final bool hasDistance;
-  const Discipline(this.label, this.icon, this.color, this.hasDistance);
+  const Discipline(this._label, this.icon, this.color, this.hasDistance);
 
   /// Krótkie wyjaśnienie, co wpisywać pod daną dyscypliną.
   String get description => switch (this) {
-        igp => 'Sport użytkowy: tropienie, posłuszeństwo i obrona.',
-        bhvt => 'Przygotowanie do egzaminu psa towarzyszącego.',
-        canicross => 'Bieg z psem w pasie i szelkach.',
-        bikejoring => 'Rower lub hulajnoga, pies ciągnie w szelkach.',
-        obedience => 'Precyzyjne posłuszeństwo sportowe.',
-        nosework => 'Praca węchowa i szukanie zapachów.',
-        walk => 'Zwykły spacer z psem, bez treningu.',
-        condition => 'Budowanie siły i sprawności: podbiegi, pływanie, ćwiczenia na niestabilnym podłożu, równy kłus przy rowerze.',
-        recovery => 'Lekki dzień po wysiłku: rozciąganie, masaż, bardzo spokojne rozluźnienie.',
+        igp => tr('Sport użytkowy: tropienie, posłuszeństwo i obrona.'),
+        bhvt => tr('Przygotowanie do egzaminu psa towarzyszącego.'),
+        canicross => tr('Bieg z psem w pasie i szelkach.'),
+        bikejoring => tr('Rower lub hulajnoga, pies ciągnie w szelkach.'),
+        obedience => tr('Precyzyjne posłuszeństwo sportowe.'),
+        nosework => tr('Praca węchowa i szukanie zapachów.'),
+        walk => tr('Zwykły spacer z psem, bez treningu.'),
+        condition => tr('Budowanie siły i sprawności: podbiegi, pływanie, ćwiczenia na niestabilnym podłożu, równy kłus przy rowerze.'),
+        recovery => tr('Lekki dzień po wysiłku: rozciąganie, masaż, bardzo spokojne rozluźnienie.'),
       };
 }
 
@@ -329,10 +335,11 @@ enum EventType {
   reminder('Przypomnienie', Icons.notifications_active_rounded, Color(0xFF5E8BFF)),
   other('Inne', Icons.event_rounded, Color(0xFF8E8E93));
 
-  final String label;
+  final String _label;
+  String get label => tr(_label);
   final IconData icon;
   final Color color;
-  const EventType(this.label, this.icon, this.color);
+  const EventType(this._label, this.icon, this.color);
 }
 
 class CalendarEvent {
@@ -407,7 +414,7 @@ const fciGroupNames = [
   'Charty',
 ];
 
-String fciGroupLabel(int g) => 'Grupa ${romanNumerals[g - 1]} – ${fciGroupNames[g - 1]}';
+String fciGroupLabel(int g) => tr('Grupa {0} – {1}', [romanNumerals[g - 1], tr(fciGroupNames[g - 1])]);
 
 /// Podpowiedź grupy FCI na podstawie nazwy rasy.
 int? guessFciGroup(String breed) {

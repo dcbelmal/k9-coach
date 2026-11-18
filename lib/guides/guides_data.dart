@@ -1,26 +1,37 @@
 import '../models.dart';
 import '../modules/modules.dart';
+import '../l10n/l10n.dart';
 
 /// Jedno ćwiczenie w przewodniku treningowym.
 class GuideExercise {
   final String id;
-  final String title;
-  final String goal;
-  final List<String> steps;
-  final String tip;
-  const GuideExercise(this.id, this.title, this.goal, this.steps, this.tip);
+  final String _title;
+  String get title => tr(_title);
+  final String _goal;
+  String get goal => tr(_goal);
+  final List<String> _steps;
+  List<String> get steps => trList(_steps);
+  final String _tip;
+  String get tip => tr(_tip);
+  const GuideExercise(this.id, this._title, this._goal, this._steps, this._tip);
 }
 
 /// Przewodnik treningowy dla jednego modułu.
 class Guide {
   final AppModule module;
-  final String intro;
-  final List<String> statusLabels; // [nie zaczęte, w trakcie, opanowane]
+  final String _intro;
+  final List<String> _statusLabels; // [nie zaczęte, w trakcie, opanowane]
   final Discipline? discipline; // dyscyplina do zapisu treningu
-  final String? warning;
+  final String? _warning;
   final List<GuideExercise> exercises;
-  const Guide(this.module, this.intro, this.exercises,
-      {this.statusLabels = const ['Nie zaczęte', 'Ćwiczymy', 'Opanowane'], this.discipline, this.warning});
+  const Guide(this.module, this._intro, this.exercises,
+      {List<String> statusLabels = const ['Nie zaczęte', 'Ćwiczymy', 'Opanowane'], this.discipline, String? warning})
+      : _statusLabels = statusLabels,
+        _warning = warning;
+
+  String get intro => tr(_intro);
+  List<String> get statusLabels => trList(_statusLabels);
+  String? get warning => _warning == null ? null : tr(_warning);
 }
 
 const guides = <AppModule, Guide>{

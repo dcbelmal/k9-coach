@@ -1,4 +1,5 @@
 import 'breeds.dart';
+import '../l10n/l10n.dart';
 
 /// Dane o rasie (etap 2): numer wzorca FCI, wzrost, masa, długość życia,
 /// potrzeba ruchu, pasujące sporty i zalecane badania.
@@ -13,14 +14,16 @@ class BreedInfo {
   final int lifeMin, lifeMax; // lata
   /// Potrzeba ruchu 1–5.
   final int energy;
-  final List<String> sports;
-  final List<String> tests;
+  final List<String> _sports;
+  List<String> get sports => trList(_sports);
+  final List<String> _tests;
+  List<String> get tests => trList(_tests);
   const BreedInfo(this.fciNo, this.heightMin, this.heightMax, this.weightMin, this.weightMax, this.lifeMin,
-      this.lifeMax, this.energy, this.sports, this.tests);
+      this.lifeMax, this.energy, this._sports, this._tests);
 
-  String get heightLabel => heightMin == heightMax ? '$heightMin cm' : '$heightMin–$heightMax cm';
-  String get weightLabel => '${_n(weightMin)}–${_n(weightMax)} kg';
-  String get lifeLabel => '$lifeMin–$lifeMax lat';
+  String get heightLabel => heightMin == heightMax ? tr('{0} cm', [heightMin]) : tr('{0}–{1} cm', [heightMin, heightMax]);
+  String get weightLabel => tr('{0}–{1} kg', [_n(weightMin), _n(weightMax)]);
+  String get lifeLabel => tr('{0}–{1} lat', [lifeMin, lifeMax]);
 
   /// Link do wzorca rasy (PDF na stronie FCI).
   String? fciUrl(int group) => fciNo == null
@@ -35,19 +38,19 @@ class BreedInfo {
       };
 
   String get energyLabel => switch (energy) {
-        1 => 'Niska',
-        2 => 'Umiarkowana',
-        3 => 'Średnia',
-        4 => 'Wysoka',
-        _ => 'Bardzo wysoka',
+        1 => tr('Niska'),
+        2 => tr('Umiarkowana'),
+        3 => tr('Średnia'),
+        4 => tr('Wysoka'),
+        _ => tr('Bardzo wysoka'),
       };
 
   String get energyHint => switch (energy) {
-        1 => 'Wystarczą spokojne spacery, ok. 45–60 min dziennie.',
-        2 => 'Ok. 1 h spacerów dziennie, bez forsowania w upały.',
-        3 => 'Ok. 1–1,5 h ruchu dziennie, w tym zabawa i węszenie.',
-        4 => 'Ok. 1,5–2 h ruchu dziennie i praca dla głowy.',
-        _ => 'Ponad 2 h ruchu dziennie i codzienna praca umysłowa – bez tego się nudzi.',
+        1 => tr('Wystarczą spokojne spacery, ok. 45–60 min dziennie.'),
+        2 => tr('Ok. 1 h spacerów dziennie, bez forsowania w upały.'),
+        3 => tr('Ok. 1–1,5 h ruchu dziennie, w tym zabawa i węszenie.'),
+        4 => tr('Ok. 1,5–2 h ruchu dziennie i praca dla głowy.'),
+        _ => tr('Ponad 2 h ruchu dziennie i codzienna praca umysłowa – bez tego się nudzi.'),
       };
 
   static String _n(double v) => v == v.roundToDouble() ? v.toInt().toString() : v.toString().replaceAll('.', ',');
@@ -59,8 +62,9 @@ enum BreedSize {
   large('Duża'),
   giant('Olbrzymia');
 
-  final String label;
-  const BreedSize(this.label);
+  final String _label;
+  String get label => tr(_label);
+  const BreedSize(this._label);
 
   /// Od kiedy (miesiące) można stopniowo wprowadzać bieganie przy rowerze/canicross.
   int get runningFromMonths => switch (this) {

@@ -5,6 +5,7 @@ import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:in_app_purchase_android/in_app_purchase_android.dart';
 
 import 'module_store.dart';
+import '../l10n/l10n.dart';
 
 /// Jeden plan subskrypcji (np. miesięczny, roczny) z cenami ze Sklepu Google Play.
 class PremiumPlan {
@@ -17,19 +18,19 @@ class PremiumPlan {
 
   bool get yearly => period == 'P1Y';
   String get label => switch (period) {
-        'P1Y' => 'Rocznie',
-        'P1M' => 'Miesięcznie',
-        'P3M' => 'Co 3 miesiące',
-        'P6M' => 'Co 6 miesięcy',
-        'P1W' => 'Tygodniowo',
+        'P1Y' => tr('Rocznie'),
+        'P1M' => tr('Miesięcznie'),
+        'P3M' => tr('Co 3 miesiące'),
+        'P6M' => tr('Co 6 miesięcy'),
+        'P1W' => tr('Tygodniowo'),
         _ => basePlanId,
       };
   String get perLabel => switch (period) {
-        'P1Y' => '/ rok',
-        'P1M' => '/ mies.',
-        'P3M' => '/ 3 mies.',
-        'P6M' => '/ 6 mies.',
-        'P1W' => '/ tydz.',
+        'P1Y' => tr('/ rok'),
+        'P1M' => tr('/ mies.'),
+        'P3M' => tr('/ 3 mies.'),
+        'P6M' => tr('/ 6 mies.'),
+        'P1W' => tr('/ tydz.'),
         _ => '',
       };
 }
@@ -65,7 +66,7 @@ class Billing extends ChangeNotifier {
     try {
       final iap = InAppPurchase.instance;
       _sub = iap.purchaseStream.listen(_onPurchases, onError: (Object e) {
-        message = 'Błąd płatności: $e';
+        message = tr('Błąd płatności: {0}', [e]);
         busy = false;
         notifyListeners();
       });
@@ -93,7 +94,7 @@ class Billing extends ChangeNotifier {
       final phases = o.pricingPhases;
       final regular = phases.last;
       final free = phases.where((ph) => ph.priceAmountMicros == 0).firstOrNull;
-      final trial = free == null ? null : '${_periodText(free.billingPeriod)} za darmo';
+      final trial = free == null ? null : tr('{0} za darmo', [_periodText(free.billingPeriod)]);
       final existing = out.indexWhere((e) => e.basePlanId == o.basePlanId);
       final plan = PremiumPlan(p, o.basePlanId, regular.formattedPrice, regular.billingPeriod, trial);
       if (existing < 0) {
@@ -111,10 +112,10 @@ class Billing extends ChangeNotifier {
     if (m == null) return iso;
     final n = int.parse(m.group(1)!);
     return switch (m.group(2)) {
-      'D' => '$n ${n == 1 ? 'dzień' : 'dni'}',
-      'W' => n == 1 ? '1 tydzień' : '$n tyg.',
-      'M' => n == 1 ? '1 miesiąc' : '$n mies.',
-      _ => n == 1 ? '1 rok' : '$n lat',
+      'D' => '$n ${n == 1 ? tr('dzień') : tr('dni')}',
+      'W' => n == 1 ? tr('1 tydzień') : tr('{0} tyg.', [n]),
+      'M' => n == 1 ? tr('1 miesiąc') : tr('{0} mies.', [n]),
+      _ => n == 1 ? tr('1 rok') : tr('{0} lat', [n]),
     };
   }
 
@@ -139,7 +140,7 @@ class Billing extends ChangeNotifier {
       await InAppPurchase.instance.buyNonConsumable(purchaseParam: GooglePlayPurchaseParam(productDetails: plan.details));
     } catch (e) {
       busy = false;
-      message = 'Nie udało się rozpocząć płatności.';
+      message = tr('Nie udało się rozpocząć płatności.');
       notifyListeners();
     }
   }
@@ -151,9 +152,9 @@ class Billing extends ChangeNotifier {
     notifyListeners();
     try {
       await _refreshEntitlement();
-      message = ModuleStore.instance.premium ? 'Premium przywrócone.' : 'Nie znaleziono aktywnej subskrypcji na tym koncie Google.';
+      message = ModuleStore.instance.premium ? tr('Premium przywrócone.') : tr('Nie znaleziono aktywnej subskrypcji na tym koncie Google.');
     } catch (_) {
-      message = 'Nie udało się sprawdzić zakupów.';
+      message = tr('Nie udało się sprawdzić zakupów.');
     }
     busy = false;
     notifyListeners();

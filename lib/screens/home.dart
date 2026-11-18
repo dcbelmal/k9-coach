@@ -19,6 +19,7 @@ import 'shows.dart';
 import 'forms.dart';
 import 'shell.dart';
 import 'track_detail.dart';
+import '../l10n/l10n.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -101,7 +102,7 @@ class _Hero extends StatelessWidget {
             IconButton(
               onPressed: () => showReminders(context),
               icon: const Icon(Icons.notifications_none_rounded, size: 26),
-              tooltip: 'Przypomnienia',
+              tooltip: tr('Przypomnienia'),
             ),
           ]),
         ),
@@ -134,9 +135,9 @@ class _Hero extends StatelessWidget {
               ]),
               const SizedBox(height: 14),
               Wrap(spacing: 8, runSpacing: 8, children: [
-                if (dog.weightKg != null) Pill(icon: Icons.monitor_weight_outlined, text: '${fmtNum(dog.weightKg!)} kg'),
-                if (dog.heightCm != null) Pill(icon: Icons.height_rounded, text: '${dog.heightCm!.round()} cm'),
-                if (dog.bcs != null) Pill(icon: Icons.shield_outlined, text: 'BCS ${dog.bcs}/9'),
+                if (dog.weightKg != null) Pill(icon: Icons.monitor_weight_outlined, text: tr('{0} kg', [fmtNum(dog.weightKg!)])),
+                if (dog.heightCm != null) Pill(icon: Icons.height_rounded, text: tr('{0} cm', [dog.heightCm!.round()])),
+                if (dog.bcs != null) Pill(icon: Icons.shield_outlined, text: tr('BCS {0}/9', [dog.bcs])),
               ]),
             ]),
           ),
@@ -153,12 +154,12 @@ class _Logo extends StatelessWidget {
     return Row(mainAxisSize: MainAxisSize.min, children: [
       Image.asset('assets/brand/valkor_mark.png', width: 40, filterQuality: FilterQuality.medium),
       const SizedBox(width: 10),
-      const Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-        Text('VALKOR',
+      Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+        Text(tr('VALKOR'),
             style: TextStyle(
                 fontFamily: 'Cinzel', color: K9.goldLight, fontSize: 18, fontWeight: FontWeight.w700, letterSpacing: 3, height: 1)),
         SizedBox(height: 2),
-        Text('COACH',
+        Text(tr('COACH'),
             style: TextStyle(
                 fontFamily: 'Cinzel', color: K9.goldSoft, fontSize: 10.5, fontWeight: FontWeight.w400, letterSpacing: 4.5, height: 1.1)),
       ]),
@@ -190,13 +191,13 @@ class _ReadinessCard extends StatelessWidget {
           color: c,
           center: Column(mainAxisSize: MainAxisSize.min, children: [
             Text('${r.score}', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, height: 1)),
-            const Text('forma', style: TextStyle(color: K9.muted, fontSize: 11)),
+            Text(tr('forma'), style: TextStyle(color: K9.muted, fontSize: 11)),
           ]),
         ),
         const SizedBox(width: 16),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('Wskaźnik kondycji', style: TextStyle(color: K9.muted, fontSize: 12.5)),
+            Text(tr('Wskaźnik kondycji'), style: TextStyle(color: K9.muted, fontSize: 12.5)),
             const SizedBox(height: 2),
             Text(r.label, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: c)),
             const SizedBox(height: 4),
@@ -216,12 +217,12 @@ class _Upcoming extends StatelessWidget {
   Widget build(BuildContext context) {
     return K9Card(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        SectionTitle('Najbliższe wydarzenia',
-            icon: Icons.event_note_rounded, action: 'Kalendarz', onAction: () => openCalendar(context)),
+        SectionTitle(tr('Najbliższe wydarzenia'),
+            icon: Icons.event_note_rounded, action: tr('Kalendarz'), onAction: () => openCalendar(context)),
         if (items.isEmpty)
-          const Padding(
+          Padding(
             padding: EdgeInsets.symmetric(vertical: 8),
-            child: Text('Brak zaplanowanych wydarzeń. Dodaj je przyciskiem „+”.',
+            child: Text(tr('Brak zaplanowanych wydarzeń. Dodaj je przyciskiem „+”.'),
                 style: TextStyle(color: K9.muted)),
           ),
         for (final i in items)
@@ -257,9 +258,9 @@ void showReminders(BuildContext context) {
     builder: (c) => ConstrainedBox(
       constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.7),
       child: ListView(shrinkWrap: true, padding: EdgeInsets.fromLTRB(20, 0, 20, 28 + MediaQuery.viewPaddingOf(c).bottom), children: [
-        const SheetTitle('Przypomnienia'),
+        SheetTitle(tr('Przypomnienia')),
         if (items.isEmpty)
-          const Text('Nic nie czeka w najbliższych 45 dniach.', style: TextStyle(color: K9.muted)),
+          Text(tr('Nic nie czeka w najbliższych 45 dniach.'), style: TextStyle(color: K9.muted)),
         for (final i in items)
           ListRow(
             icon: i.icon,

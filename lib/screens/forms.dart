@@ -12,6 +12,7 @@ import '../nutrition/screens/nutrition_forms.dart';
 import '../nutrition/screens/products_screen.dart';
 import '../nutrition/screens/treat_training_screen.dart';
 import 'shows.dart';
+import '../l10n/l10n.dart';
 
 final _store = AppStore.instance;
 
@@ -67,11 +68,11 @@ class _TrainingFormState extends State<_TrainingForm> {
   }
 
   String get rpeLabel => switch (rpe.round()) {
-    <= 2 => 'Bardzo lekko',
-    <= 4 => 'Lekko',
-    <= 6 => 'Umiarkowanie',
-    <= 8 => 'Ciężko',
-    _ => 'Maksymalnie',
+    <= 2 => tr('Bardzo lekko'),
+    <= 4 => tr('Lekko'),
+    <= 6 => tr('Umiarkowanie'),
+    <= 8 => tr('Ciężko'),
+    _ => tr('Maksymalnie'),
   };
 
   @override
@@ -80,7 +81,7 @@ class _TrainingFormState extends State<_TrainingForm> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         SheetTitle(
-          widget.existing == null ? 'Nowy trening' : 'Edytuj trening',
+          widget.existing == null ? tr('Nowy trening') : tr('Edytuj trening'),
           onDelete: widget.existing == null
               ? null
               : () async {
@@ -111,12 +112,12 @@ class _TrainingFormState extends State<_TrainingForm> {
         ),
         gap16,
         Segmented(
-          items: const ['Wykonany', 'Zaplanowany'],
+          items: [tr('Wykonany'), tr('Zaplanowany')],
           index: done ? 0 : 1,
           onChanged: (i) => setState(() => done = i == 0),
         ),
         gap12,
-        DateField(label: 'Data i godzina', value: date, withTime: true, onChanged: (d) => setState(() => date = d!)),
+        DateField(label: tr('Data i godzina'), value: date, withTime: true, onChanged: (d) => setState(() => date = d!)),
         gap12,
         Row(
           children: [
@@ -124,7 +125,7 @@ class _TrainingFormState extends State<_TrainingForm> {
               child: TextField(
                 controller: duration,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Czas (min)'),
+                decoration: InputDecoration(labelText: tr('Czas (min)')),
               ),
             ),
             if (disc.hasDistance) ...[
@@ -133,7 +134,7 @@ class _TrainingFormState extends State<_TrainingForm> {
                 child: TextField(
                   controller: distance,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(labelText: 'Dystans (km)'),
+                  decoration: InputDecoration(labelText: tr('Dystans (km)')),
                 ),
               ),
             ],
@@ -142,7 +143,7 @@ class _TrainingFormState extends State<_TrainingForm> {
         gap16,
         Row(
           children: [
-            const Text('Intensywność', style: TextStyle(fontWeight: FontWeight.w600)),
+            Text(tr('Intensywność'), style: TextStyle(fontWeight: FontWeight.w600)),
             const Spacer(),
             Text(
               '${rpe.round()}/10 · $rpeLabel',
@@ -163,7 +164,7 @@ class _TrainingFormState extends State<_TrainingForm> {
           controller: notes,
           maxLines: 3,
           minLines: 1,
-          decoration: const InputDecoration(labelText: 'Notatki (ćwiczenia, odczucia)'),
+          decoration: InputDecoration(labelText: tr('Notatki (ćwiczenia, odczucia)')),
         ),
         const SizedBox(height: 20),
         if (widget.existing != null && !widget.existing!.done) ...[
@@ -175,7 +176,7 @@ class _TrainingFormState extends State<_TrainingForm> {
               openGpsWith(nav, plan: plan);
             },
             icon: const Icon(Icons.play_arrow_rounded),
-            label: const Text('Rozpocznij teraz'),
+            label: Text(tr('Rozpocznij teraz')),
           ),
           const SizedBox(height: 10),
         ],
@@ -198,10 +199,10 @@ class _TrainingFormState extends State<_TrainingForm> {
             await _store.upsertTraining(t);
             if (context.mounted) {
               Navigator.pop(context);
-              toast(context, done ? 'Trening zapisany' : 'Trening zaplanowany');
+              toast(context, done ? tr('Trening zapisany') : tr('Trening zaplanowany'));
             }
           },
-          child: const Text('Zapisz'),
+          child: Text(tr('Zapisz')),
         ),
       ],
     );
@@ -275,7 +276,7 @@ class _HealthFormState extends State<_HealthForm> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         SheetTitle(
-          widget.existing == null ? 'Nowy wpis zdrowotny' : 'Edytuj wpis',
+          widget.existing == null ? tr('Nowy wpis zdrowotny') : tr('Edytuj wpis'),
           onDelete: widget.existing == null
               ? null
               : () async {
@@ -288,7 +289,7 @@ class _HealthFormState extends State<_HealthForm> {
         DropdownButtonFormField<HealthCategory>(
           initialValue: cat,
           dropdownColor: K9.cardHi,
-          decoration: const InputDecoration(labelText: 'Kategoria'),
+          decoration: InputDecoration(labelText: tr('Kategoria')),
           items: [
             for (final c in HealthCategory.values)
               DropdownMenuItem(
@@ -310,7 +311,7 @@ class _HealthFormState extends State<_HealthForm> {
         gap12,
         TextField(
           controller: title,
-          decoration: const InputDecoration(labelText: 'Nazwa / preparat'),
+          decoration: InputDecoration(labelText: tr('Nazwa / preparat')),
         ),
         const SizedBox(height: 8),
         Wrap(
@@ -319,17 +320,17 @@ class _HealthFormState extends State<_HealthForm> {
           children: [
             for (final s in _suggestions[cat]!)
               ActionChip(
-                label: Text(s, style: const TextStyle(fontSize: 12.5)),
+                label: Text(tr(s), style: const TextStyle(fontSize: 12.5)),
                 backgroundColor: K9.cardHi,
                 side: BorderSide.none,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                onPressed: () => setState(() => title.text = s),
+                onPressed: () => setState(() => title.text = tr(s)),
               ),
           ],
         ),
         gap12,
         DateField(
-          label: 'Data wykonania',
+          label: tr('Data wykonania'),
           value: date,
           onChanged: (d) => setState(() {
             date = d!;
@@ -338,7 +339,7 @@ class _HealthFormState extends State<_HealthForm> {
         ),
         gap12,
         DateField(
-          label: 'Następny termin',
+          label: tr('Następny termin'),
           value: nextDue,
           clearable: true,
           onChanged: (d) => setState(() => nextDue = d),
@@ -346,9 +347,9 @@ class _HealthFormState extends State<_HealthForm> {
         const SizedBox(height: 4),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
-          title: const Text('Przypomnij mi'),
-          subtitle: const Text(
-            '7 dni przed i w dniu terminu, o 9:00',
+          title: Text(tr('Przypomnij mi')),
+          subtitle: Text(
+            tr('7 dni przed i w dniu terminu, o 9:00'),
             style: TextStyle(color: K9.muted, fontSize: 12.5),
           ),
           value: remind,
@@ -358,13 +359,13 @@ class _HealthFormState extends State<_HealthForm> {
           controller: notes,
           maxLines: 3,
           minLines: 1,
-          decoration: const InputDecoration(labelText: 'Notatki / wynik'),
+          decoration: InputDecoration(labelText: tr('Notatki / wynik')),
         ),
         const SizedBox(height: 20),
         FilledButton(
           onPressed: () async {
             if (title.text.trim().isEmpty) {
-              toast(context, 'Wpisz nazwę lub preparat');
+              toast(context, tr('Wpisz nazwę lub preparat'));
               return;
             }
             await _store.upsertHealth(
@@ -380,10 +381,10 @@ class _HealthFormState extends State<_HealthForm> {
             );
             if (context.mounted) {
               Navigator.pop(context);
-              toast(context, 'Zapisano');
+              toast(context, tr('Zapisano'));
             }
           },
-          child: const Text('Zapisz'),
+          child: Text(tr('Zapisz')),
         ),
       ],
     );
@@ -432,7 +433,7 @@ class _EventFormState extends State<_EventForm> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         SheetTitle(
-          widget.existing == null ? 'Nowe wydarzenie' : 'Edytuj wydarzenie',
+          widget.existing == null ? tr('Nowe wydarzenie') : tr('Edytuj wydarzenie'),
           onDelete: widget.existing == null
               ? null
               : () async {
@@ -464,13 +465,13 @@ class _EventFormState extends State<_EventForm> {
         gap16,
         TextField(
           controller: title,
-          decoration: const InputDecoration(labelText: 'Tytuł'),
+          decoration: InputDecoration(labelText: tr('Tytuł')),
         ),
         gap12,
-        DateField(label: 'Data i godzina', value: date, withTime: true, onChanged: (d) => setState(() => date = d!)),
+        DateField(label: tr('Data i godzina'), value: date, withTime: true, onChanged: (d) => setState(() => date = d!)),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
-          title: const Text('Przypomnij dzień wcześniej'),
+          title: Text(tr('Przypomnij dzień wcześniej')),
           value: remind,
           onChanged: (v) => setState(() => remind = v),
         ),
@@ -478,13 +479,13 @@ class _EventFormState extends State<_EventForm> {
           controller: notes,
           maxLines: 3,
           minLines: 1,
-          decoration: const InputDecoration(labelText: 'Notatki (miejsce, sędzia, klasa)'),
+          decoration: InputDecoration(labelText: tr('Notatki (miejsce, sędzia, klasa)')),
         ),
         const SizedBox(height: 20),
         FilledButton(
           onPressed: () async {
             if (title.text.trim().isEmpty) {
-              toast(context, 'Wpisz tytuł');
+              toast(context, tr('Wpisz tytuł'));
               return;
             }
             await _store.upsertEvent(
@@ -499,10 +500,10 @@ class _EventFormState extends State<_EventForm> {
             );
             if (context.mounted) {
               Navigator.pop(context);
-              toast(context, 'Dodano do kalendarza');
+              toast(context, tr('Dodano do kalendarza'));
             }
           },
-          child: const Text('Zapisz'),
+          child: Text(tr('Zapisz')),
         ),
       ],
     );
@@ -532,27 +533,27 @@ class _WeightFormState extends State<_WeightForm> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const SheetTitle('Pomiar wagi'),
+        SheetTitle(tr('Pomiar wagi')),
         TextField(
           controller: kg,
           autofocus: true,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: const InputDecoration(labelText: 'Waga (kg)'),
+          decoration: InputDecoration(labelText: tr('Waga (kg)')),
         ),
         gap12,
-        DateField(label: 'Data', value: date, onChanged: (d) => setState(() => date = d!)),
+        DateField(label: tr('Data'), value: date, onChanged: (d) => setState(() => date = d!)),
         const SizedBox(height: 20),
         FilledButton(
           onPressed: () async {
             final v = parseNum(kg.text);
             if (v == null || v <= 0) {
-              toast(context, 'Podaj poprawną wagę');
+              toast(context, tr('Podaj poprawną wagę'));
               return;
             }
             await _store.addWeight(WeightEntry(id: newId(), date: date, kg: v));
             if (context.mounted) Navigator.pop(context);
           },
-          child: const Text('Zapisz'),
+          child: Text(tr('Zapisz')),
         ),
       ],
     );
@@ -563,26 +564,26 @@ class _WeightFormState extends State<_WeightForm> {
 Future<void> openQuickAdd(BuildContext context) {
   // Wszystkie ikony w jednym kolorze Valkor. Najczęstsze na wierzchu, reszta pod „Więcej”.
   final main = <(IconData, String, VoidCallback)>[
-    (Icons.route_rounded, 'Trening GPS', () => openGps(context)),
-    (Icons.directions_run_rounded, 'Trening', () => openTrainingForm(context)),
-    (Icons.restaurant_rounded, 'Karmienie', () => openFeedingForm(context)),
-    (Icons.vaccines_rounded, 'Zdrowie', () => openHealthForm(context)),
-    (Icons.monitor_weight_rounded, 'Waga', () => openWeightForm(context)),
-    (Icons.event_rounded, 'Wydarzenie', () => openEventForm(context)),
+    (Icons.route_rounded, tr('Trening GPS'), () => openGps(context)),
+    (Icons.directions_run_rounded, tr('Trening'), () => openTrainingForm(context)),
+    (Icons.restaurant_rounded, tr('Karmienie'), () => openFeedingForm(context)),
+    (Icons.vaccines_rounded, tr('Zdrowie'), () => openHealthForm(context)),
+    (Icons.monitor_weight_rounded, tr('Waga'), () => openWeightForm(context)),
+    (Icons.event_rounded, tr('Wydarzenie'), () => openEventForm(context)),
   ];
   final more = <(IconData, String, VoidCallback)>[
     (
       Icons.event_available_rounded,
-      'Plan treningu',
+      tr('Plan treningu'),
       () => openTrainingForm(context,
           planned: true, date: dayOnly(DateTime.now()).add(const Duration(days: 1, hours: 17)))
     ),
-    (Icons.cookie_rounded, 'Przysmak', () => openFeedingForm(context, kind: FeedKind.treat)),
-    (Icons.qr_code_scanner_rounded, 'Skanuj karmę', () => addProductFlow(context)),
-    (Icons.sports_rounded, 'Trening z nagrodami', () => openTreatTraining(context)),
-    (Icons.emoji_events_rounded, 'Wystawa', () => openShowForm(context)),
-    (Icons.description_rounded, 'Dokument', () => openDocumentForm(context)),
-    (Icons.backpack_rounded, 'Sprzęt', () => openGearForm(context)),
+    (Icons.cookie_rounded, tr('Przysmak'), () => openFeedingForm(context, kind: FeedKind.treat)),
+    (Icons.qr_code_scanner_rounded, tr('Skanuj karmę'), () => addProductFlow(context)),
+    (Icons.sports_rounded, tr('Trening z nagrodami'), () => openTreatTraining(context)),
+    (Icons.emoji_events_rounded, tr('Wystawa'), () => openShowForm(context)),
+    (Icons.description_rounded, tr('Dokument'), () => openDocumentForm(context)),
+    (Icons.backpack_rounded, tr('Sprzęt'), () => openGearForm(context)),
   ];
   var showMore = false;
   return showModalBottomSheet(
@@ -633,13 +634,13 @@ Future<void> openQuickAdd(BuildContext context) {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const SheetTitle('Dodaj'),
+                SheetTitle(tr('Dodaj')),
                 grid(main),
                 const SizedBox(height: 8),
                 TextButton.icon(
                   onPressed: () => setState(() => showMore = !showMore),
                   icon: Icon(showMore ? Icons.expand_less_rounded : Icons.expand_more_rounded),
-                  label: Text(showMore ? 'Mniej' : 'Więcej'),
+                  label: Text(showMore ? tr('Mniej') : tr('Więcej')),
                 ),
                 if (showMore)
                   K9Card(

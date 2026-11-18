@@ -11,6 +11,7 @@ import 'heat/heat_store.dart';
 import 'models_ext.dart';
 import 'nutrition/nutrition_store.dart';
 import 'store.dart';
+import 'l10n/l10n.dart';
 
 /// Lokalne przypomnienia (szczepienia, odrobaczanie, wydarzenia, treningi).
 class Notifications {
@@ -36,7 +37,7 @@ class Notifications {
     }
     try {
       await _plugin.initialize(
-        settings: const InitializationSettings(
+        settings: InitializationSettings(
           android: AndroidInitializationSettings('@drawable/ic_stat_valkor'),
           iOS: DarwinInitializationSettings(
             requestAlertPermission: false,
@@ -172,7 +173,7 @@ class Notifications {
         if (p.id != goalId) await _plugin.cancel(id: p.id);
       }
       final now = DateTime.now();
-      final name = s.dog?.name ?? 'Pies';
+      final name = s.dog?.name ?? trc('dog', 'Pies');
       final plan = <(DateTime, String, String)>[];
 
       for (final h in s.dueItems) {
@@ -180,13 +181,13 @@ class Notifications {
         final due = h.nextDue!;
         plan.add((
           DateTime(due.year, due.month, due.day, 9),
-          '${h.category.label}: dziś termin',
+          tr('{0}: dziś termin', [h.category.label]),
           '$name – ${h.title}'
         ));
         final before = due.subtract(const Duration(days: 7));
         plan.add((
           DateTime(before.year, before.month, before.day, 9),
-          '${h.category.label} za 7 dni',
+          tr('{0} za 7 dni', [h.category.label]),
           '$name – ${h.title} (${due.day}.${due.month.toString().padLeft(2, '0')})'
         ));
       }
@@ -195,7 +196,7 @@ class Notifications {
         final dayBefore = e.date.subtract(const Duration(days: 1));
         plan.add((
           DateTime(dayBefore.year, dayBefore.month, dayBefore.day, 18),
-          'Jutro: ${e.type.label}',
+          tr('Jutro: {0}', [e.type.label]),
           e.title
         ));
       }
@@ -203,7 +204,7 @@ class Notifications {
         if (t.done) continue;
         plan.add((
           t.date.subtract(const Duration(hours: 1)),
-          'Za godzinę trening ${t.discipline.label}',
+          tr('Za godzinę trening {0}', [t.discipline.label]),
           '$name${t.notes.isEmpty ? '' : ' – ${t.notes}'}'
         ));
       }
@@ -211,23 +212,23 @@ class Notifications {
       for (final sh in s.shows) {
         if (sh.status == ShowStatus.cancelled || sh.status == ShowStatus.done) continue;
         final d = sh.date.subtract(const Duration(days: 1));
-        plan.add((DateTime(d.year, d.month, d.day, 18), 'Jutro wystawa', sh.name));
+        plan.add((DateTime(d.year, d.month, d.day, 18), tr('Jutro wystawa'), sh.name));
         if (sh.entryDeadline != null && sh.status == ShowStatus.planned) {
           final dl = sh.entryDeadline!.subtract(const Duration(days: 3));
-          plan.add((DateTime(dl.year, dl.month, dl.day, 10), 'Za 3 dni mija termin zgłoszeń', sh.name));
+          plan.add((DateTime(dl.year, dl.month, dl.day, 10), tr('Za 3 dni mija termin zgłoszeń'), sh.name));
         }
       }
       for (final doc in s.documents) {
         if (!doc.remind || doc.expires == null) continue;
         final e = doc.expires!;
         final before = e.subtract(const Duration(days: 30));
-        plan.add((DateTime(before.year, before.month, before.day, 9), 'Za 30 dni wygasa dokument', '$name – ${doc.title}'));
-        plan.add((DateTime(e.year, e.month, e.day, 9), 'Dziś wygasa dokument', '$name – ${doc.title}'));
+        plan.add((DateTime(before.year, before.month, before.day, 9), tr('Za 30 dni wygasa dokument'), '$name – ${doc.title}'));
+        plan.add((DateTime(e.year, e.month, e.day, 9), tr('Dziś wygasa dokument'), '$name – ${doc.title}'));
       }
       for (final g in s.gear) {
         final r = g.replaceDate;
         if (g.retired || !g.remind || r == null) continue;
-        plan.add((DateTime(r.year, r.month, r.day, 10), 'Czas wymienić sprzęt', g.name));
+        plan.add((DateTime(r.year, r.month, r.day, 10), tr('Czas wymienić sprzęt'), g.name));
       }
 
       plan.addAll(NutritionStore.instance.notificationPlan());

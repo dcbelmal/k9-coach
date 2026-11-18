@@ -14,6 +14,7 @@ import '../theme.dart';
 import '../widgets/common.dart';
 import 'forms.dart';
 import 'gps_screen.dart';
+import '../l10n/l10n.dart';
 
 /// Otwiera trening: z trasą GPS – podsumowanie, bez trasy – formularz.
 void openTraining(BuildContext context, TrainingSession t) {
@@ -93,15 +94,15 @@ class _TrackDetailScreenState extends State<TrackDetailScreen> {
             ),
             actions: [
               IconButton(
-                tooltip: 'Edytuj',
+                tooltip: tr('Edytuj'),
                 icon: const Icon(Icons.edit_rounded),
                 onPressed: () => openTrainingForm(context, existing: t),
               ),
               IconButton(
-                tooltip: 'Usuń',
+                tooltip: tr('Usuń'),
                 icon: const Icon(Icons.delete_outline_rounded),
                 onPressed: () async {
-                  if (await confirmDelete(context, 'ten trening')) {
+                  if (await confirmDelete(context, tr('ten trening'))) {
                     await s.deleteTraining(t);
                     if (context.mounted) Navigator.pop(context);
                   }
@@ -116,8 +117,8 @@ class _TrackDetailScreenState extends State<TrackDetailScreen> {
   }
 
   Widget _body(TrainingSession t) {
-    final tr = track;
-    final splits = tr?.splits() ?? const <KmSplit>[];
+    final trk = track;
+    final splits = trk?.splits() ?? const <KmSplit>[];
     final moving = (t.movingSec ?? t.durationMin * 60).toDouble();
     final km = t.distanceKm ?? 0;
     return ListView(
@@ -139,7 +140,7 @@ class _TrackDetailScreenState extends State<TrackDetailScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Nowy rekord!', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                        Text(tr('Nowy rekord!'), style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
                         Text(widget.newRecords.join(' · '), style: const TextStyle(color: K9.yellow, fontSize: 13)),
                       ],
                     ),
@@ -168,13 +169,13 @@ class _TrackDetailScreenState extends State<TrackDetailScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              ok ? 'Założenia wykonane!' : 'Prawie się udało',
+                              ok ? tr('Założenia wykonane!') : tr('Prawie się udało'),
                               style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
                             ),
                             Text(
                               ok
-                                  ? 'Cel ${widget.goalMin} min – trening trwał ${fmtClock(moving)}.'
-                                  : 'Zrobione ${fmtClock(moving)} z ${widget.goalMin} min.',
+                                  ? tr('Cel {0} min – trening trwał {1}.', [widget.goalMin, fmtClock(moving)])
+                                  : tr('Zrobione {0} z {1} min.', [fmtClock(moving), widget.goalMin]),
                               style: TextStyle(color: c, fontSize: 13),
                             ),
                           ],
@@ -195,11 +196,11 @@ class _TrackDetailScreenState extends State<TrackDetailScreen> {
             height: 240,
             child: Center(child: CircularProgressIndicator(color: K9.orange)),
           )
-        else if (tr != null && tr.points.length > 1)
-          _RouteMap(track: tr)
+        else if (trk != null && trk.points.length > 1)
+          _RouteMap(track: trk)
         else
-          const K9Card(
-            child: Text('Nie udało się wczytać trasy.', style: TextStyle(color: K9.muted)),
+          K9Card(
+            child: Text(tr('Nie udało się wczytać trasy.'), style: TextStyle(color: K9.muted)),
           ),
         gap12,
         if (!t.hasTrack)
@@ -207,13 +208,13 @@ class _TrackDetailScreenState extends State<TrackDetailScreen> {
             child: Row(
               children: [
                 Expanded(
-                  child: StatValue(label: 'Czas', value: fmtClock(moving)),
+                  child: StatValue(label: tr('Czas'), value: fmtClock(moving)),
                 ),
                 Expanded(
-                  child: StatValue(label: 'RPE', value: '${t.rpe}'),
+                  child: StatValue(label: tr('RPE'), value: '${t.rpe}'),
                 ),
                 Expanded(
-                  child: StatValue(label: 'Dyscyplina', value: t.discipline.label),
+                  child: StatValue(label: tr('Dyscyplina'), value: t.discipline.label),
                 ),
               ],
             ),
@@ -225,13 +226,13 @@ class _TrackDetailScreenState extends State<TrackDetailScreen> {
                 Row(
                   children: [
                     Expanded(
-                      child: StatValue(label: 'Dystans', value: fmtKm(km), unit: 'km'),
+                      child: StatValue(label: tr('Dystans'), value: fmtKm(km), unit: 'km'),
                     ),
                     Expanded(
-                      child: StatValue(label: 'Czas ruchu', value: fmtClock(moving)),
+                      child: StatValue(label: tr('Czas ruchu'), value: fmtClock(moving)),
                     ),
                     Expanded(
-                      child: StatValue(label: 'Tempo śr.', value: km > 0 ? fmtPace(moving / km) : '–', unit: '/km'),
+                      child: StatValue(label: tr('Tempo śr.'), value: km > 0 ? fmtPace(moving / km) : '–', unit: '/km'),
                     ),
                   ],
                 ),
@@ -240,21 +241,21 @@ class _TrackDetailScreenState extends State<TrackDetailScreen> {
                   children: [
                     Expanded(
                       child: StatValue(
-                        label: 'Prędkość śr.',
+                        label: tr('Prędkość śr.'),
                         value: moving > 0 ? fmtNum(km / moving * 3600) : '–',
                         unit: 'km/h',
                       ),
                     ),
                     Expanded(
                       child: StatValue(
-                        label: 'Maks.',
+                        label: tr('Maks.'),
                         value: t.maxSpeedKmh == null ? '–' : fmtNum(t.maxSpeedKmh!),
                         unit: 'km/h',
                       ),
                     ),
                     Expanded(
                       child: StatValue(
-                        label: 'Najszybszy km',
+                        label: tr('Najszybszy km'),
                         value: t.bestKmSec == null ? '–' : fmtPace(t.bestKmSec!.toDouble()),
                         unit: '/km',
                       ),
@@ -268,38 +269,38 @@ class _TrackDetailScreenState extends State<TrackDetailScreen> {
           gap12,
           K9Card(
             onTap: () => openTrainingForm(context, existing: t),
-            child: const Row(
+            child: Row(
               children: [
                 Icon(Icons.tune_rounded, color: K9.orange),
                 SizedBox(width: 12),
                 Expanded(
-                  child: Text('Oceń zmęczenie (RPE) i dodaj notatkę', style: TextStyle(fontWeight: FontWeight.w600)),
+                  child: Text(tr('Oceń zmęczenie (RPE) i dodaj notatkę'), style: TextStyle(fontWeight: FontWeight.w600)),
                 ),
                 Icon(Icons.chevron_right_rounded, color: K9.orange),
               ],
             ),
           ),
         ],
-        if (tr != null) ...[
-          if (tr.speedSeries().length > 2) ...[
+        if (trk != null) ...[
+          if (trk.speedSeries().length > 2) ...[
             gap16,
-            const SectionTitle('Prędkość', icon: Icons.show_chart_rounded),
+            SectionTitle(tr('Prędkość'), icon: Icons.show_chart_rounded),
             K9Card(
-              child: SizedBox(height: 170, child: _SpeedChart(track: tr)),
+              child: SizedBox(height: 170, child: _SpeedChart(track: trk)),
             ),
           ],
           if (splits.isNotEmpty) ...[
             gap16,
-            const SectionTitle('Kilometry', icon: Icons.straighten_rounded),
+            SectionTitle(tr('Kilometry'), icon: Icons.straighten_rounded),
             K9Card(child: _Splits(splits: splits)),
           ],
-          if (tr.laps.isNotEmpty) ...[
+          if (trk.laps.isNotEmpty) ...[
             gap16,
-            const SectionTitle('Okrążenia', icon: Icons.flag_rounded),
+            SectionTitle(tr('Okrążenia'), icon: Icons.flag_rounded),
             K9Card(
               child: Column(
                 children: [
-                  for (var i = 0; i < tr.laps.length; i++)
+                  for (var i = 0; i < trk.laps.length; i++)
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 4),
                       child: Row(
@@ -309,8 +310,8 @@ class _TrackDetailScreenState extends State<TrackDetailScreen> {
                             style: const TextStyle(color: K9.muted, fontWeight: FontWeight.w700),
                           ),
                           const SizedBox(width: 12),
-                          Expanded(child: Text(fmtClock(tr.laps[i] - (i == 0 ? 0 : tr.laps[i - 1])))),
-                          Text('po ${fmtClock(tr.laps[i])}', style: const TextStyle(color: K9.faint, fontSize: 12)),
+                          Expanded(child: Text(fmtClock(trk.laps[i] - (i == 0 ? 0 : trk.laps[i - 1])))),
+                          Text(tr('po {0}', [fmtClock(trk.laps[i])]), style: const TextStyle(color: K9.faint, fontSize: 12)),
                         ],
                       ),
                     ),
@@ -410,7 +411,7 @@ class _SpeedChart extends StatelessWidget {
                 show: true,
                 alignment: Alignment.topRight,
                 style: const TextStyle(color: K9.yellow, fontSize: 10),
-                labelResolver: (_) => 'śr. ${fmtNum(avg)}',
+                labelResolver: (_) => tr('śr. {0}', [fmtNum(avg)]),
               ),
             ),
           ],
@@ -444,7 +445,7 @@ class _SpeedChart extends StatelessWidget {
             getTooltipItems: (spots) => [
               for (final p in spots)
                 LineTooltipItem(
-                  '${fmtNum(p.y)} km/h\n${fmtClock(p.x)}',
+                  tr('{0} km/h\n{1}', [fmtNum(p.y), fmtClock(p.x)]),
                   const TextStyle(color: K9.text, fontWeight: FontWeight.w600, fontSize: 12),
                 ),
             ],
@@ -485,16 +486,16 @@ class _Splits extends StatelessWidget {
     final fastest = paces.reduce(math.min);
     return Column(
       children: [
-        const Row(
+        Row(
           children: [
             SizedBox(
               width: 34,
-              child: Text('km', style: TextStyle(color: K9.faint, fontSize: 11.5)),
+              child: Text(tr('km'), style: TextStyle(color: K9.faint, fontSize: 11.5)),
             ),
             Expanded(
-              child: Text('tempo', style: TextStyle(color: K9.faint, fontSize: 11.5)),
+              child: Text(tr('tempo'), style: TextStyle(color: K9.faint, fontSize: 11.5)),
             ),
-            Text('czas', style: TextStyle(color: K9.faint, fontSize: 11.5)),
+            Text(tr('czas'), style: TextStyle(color: K9.faint, fontSize: 11.5)),
           ],
         ),
         const SizedBox(height: 6),

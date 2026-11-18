@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
 import '../models.dart';
+import '../l10n/l10n.dart';
 
 /// Sekcje, w których moduły są pokazywane na ekranie Start i w ustawieniach.
 enum ModuleSection {
@@ -10,8 +11,9 @@ enum ModuleSection {
   training('Trening'),
   more('Więcej');
 
-  final String label;
-  const ModuleSection(this.label);
+  final String _label;
+  String get label => tr(_label);
+  const ModuleSection(this._label);
 }
 
 /// Dlaczego moduł jest (albo nie jest) dostępny dla danego psa.
@@ -87,12 +89,13 @@ enum AppModule {
   breedingDocs('Dokumentacja hodowlana', Icons.folder_shared_rounded, ModuleSection.training, ModuleRule.purpose,
       [DogPurpose.breeding]);
 
-  final String label;
+  final String _label;
+  String get label => tr(_label);
   final IconData icon;
   final ModuleSection section;
   final ModuleRule rule;
   final List<DogPurpose> purposes;
-  const AppModule(this.label, this.icon, this.section, this.rule, [this.purposes = const []]);
+  const AppModule(this._label, this.icon, this.section, this.rule, [this.purposes = const []]);
 
   /// Czy moduł w ogóle może działać dla tego psa (np. cieczka nie dla psa).
   /// Takiego modułu nie da się włączyć ręcznie.
@@ -113,11 +116,11 @@ enum AppModule {
 
   /// Krótki opis reguły do ustawień.
   String ruleLabel(Dog dog) => switch (rule) {
-        ModuleRule.always => 'Dla wszystkich psów',
+        ModuleRule.always => tr('Dla wszystkich psów'),
         ModuleRule.intactFemale => dog.female
-            ? (dog.neutered ? 'Ukryty: suka wysterylizowana' : 'Dla suk niesterylizowanych')
-            : 'Tylko dla suk',
-        ModuleRule.premium => 'Premium',
-        ModuleRule.purpose => 'Cel: ${purposes.map((p) => p.label).join(', ')}',
+            ? (dog.neutered ? tr('Ukryty: suka wysterylizowana') : tr('Dla suk niesterylizowanych'))
+            : tr('Tylko dla suk'),
+        ModuleRule.premium => tr('Premium'),
+        ModuleRule.purpose => tr('Cel: {0}', [purposes.map((p) => p.label).join(', ')]),
       };
 }

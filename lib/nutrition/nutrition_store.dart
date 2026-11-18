@@ -10,6 +10,7 @@ import '../notifications.dart';
 import '../store.dart';
 import 'energy.dart';
 import 'nutrition_models.dart';
+import '../l10n/l10n.dart';
 
 /// Prognoza zużycia worka karmy.
 class StockForecast {
@@ -327,8 +328,8 @@ class NutritionStore extends ChangeNotifier {
     if (doseHistory.length > 200) doseHistory.removeLast();
     Notifications.instance.showNow(
       Notifications.doseChangeId,
-      'Zmiana dawki karmy',
-      '${app.dog?.name ?? 'Pies'}: ${from.round()} g → ${to.round()} g na dzień ($reason)',
+      tr('Zmiana dawki karmy'),
+      tr('{0}: {1} g → {2} g na dzień ({3})', [app.dog?.name ?? trc('dog', 'Pies'), from.round(), to.round(), reason]),
     );
   }
 
@@ -424,7 +425,7 @@ class NutritionStore extends ChangeNotifier {
     }
     final after = plan?.dailyGrams;
     if (before != null && after != null) {
-      _logDose(before, after, 'trening ${t.discipline.label}');
+      _logDose(before, after, tr('trening {0}', [t.discipline.label]));
       await _save(reschedule: false);
     }
     return plan;
@@ -439,16 +440,16 @@ class NutritionStore extends ChangeNotifier {
   List<(DateTime, String, String)> notificationPlan() {
     final out = <(DateTime, String, String)>[];
     if (!settings.stockReminders) return out;
-    final name = app.dog?.name ?? 'Pies';
+    final name = app.dog?.name ?? trc('dog', 'Pies');
     for (final b in activeBags) {
       final f = forecast(b);
       if (f.emptyDate == null || f.product == null) continue;
       final buy = f.buyDate!;
-      out.add((DateTime(buy.year, buy.month, buy.day, 10), 'Czas kupić nowy worek',
-          '$name: ${f.product!.title} skończy się ok. ${f.emptyDate!.day}.${f.emptyDate!.month.toString().padLeft(2, '0')}'));
+      out.add((DateTime(buy.year, buy.month, buy.day, 10), tr('Czas kupić nowy worek'),
+          tr('{0}: {1} skończy się ok. {2}.{3}', [name, f.product!.title, f.emptyDate!.day, f.emptyDate!.month.toString().padLeft(2, '0')])));
       final e = f.emptyDate!.subtract(const Duration(days: 1));
-      out.add((DateTime(e.year, e.month, e.day, 19), 'Kończy się karma',
-          '$name: w worku zostało na ok. 1 dzień (${f.product!.title})'));
+      out.add((DateTime(e.year, e.month, e.day, 19), tr('Kończy się karma'),
+          tr('{0}: w worku zostało na ok. 1 dzień ({1})', [name, f.product!.title])));
     }
     return out;
   }
@@ -456,19 +457,19 @@ class NutritionStore extends ChangeNotifier {
   /// Codzienne, powtarzalne przypomnienia (godzina, tytuł, treść).
   List<(int, int, String, String)> dailyReminders() {
     final out = <(int, int, String, String)>[];
-    final name = app.dog?.name ?? 'Pies';
+    final name = app.dog?.name ?? trc('dog', 'Pies');
     final p = plan;
-    final food = mainProduct?.title ?? 'karma';
+    final food = mainProduct?.title ?? tr('karma');
     if (settings.feedReminders) {
       final total = p?.dailyGrams ?? 0;
       final m = total * settings.morningShare, e = total - m;
-      out.add((settings.morningHour, settings.morningMinute, 'Poranne karmienie',
-          total > 0 ? '$name: ok. ${m.round()} g ($food)' : 'Pora nakarmić psa: $name'));
-      out.add((settings.eveningHour, settings.eveningMinute, 'Wieczorne karmienie',
-          total > 0 ? '$name: ok. ${e.round()} g, sprawdź porcję po przysmakach' : 'Pora nakarmić psa: $name'));
+      out.add((settings.morningHour, settings.morningMinute, tr('Poranne karmienie'),
+          total > 0 ? tr('{0}: ok. {1} g ({2})', [name, m.round(), food]) : tr('Pora nakarmić psa: {0}', [name])));
+      out.add((settings.eveningHour, settings.eveningMinute, tr('Wieczorne karmienie'),
+          total > 0 ? tr('{0}: ok. {1} g, sprawdź porcję po przysmakach', [name, e.round()]) : tr('Pora nakarmić psa: {0}', [name])));
     }
     for (final s in supplements.where((s) => s.active).take(6)) {
-      out.add((s.hour, s.minute, 'Suplement: ${s.name}', '$name${s.dose.isEmpty ? '' : ' – ${s.dose}'}'));
+      out.add((s.hour, s.minute, tr('Suplement: {0}', [s.name]), '$name${s.dose.isEmpty ? '' : ' – ${s.dose}'}'));
     }
     return out;
   }
@@ -481,8 +482,8 @@ class NutritionStore extends ChangeNotifier {
     products = [
       FoodProduct(
           id: 'np1',
-          name: 'Sport 30/20',
-          brand: 'Brit Premium',
+          name: tr('Sport 30/20'),
+          brand: tr('Brit Premium'),
           type: ProductType.dry,
           kcalPer100g: 395,
           proteinPct: 30,
@@ -491,12 +492,12 @@ class NutritionStore extends ChangeNotifier {
           ashPct: 7.5,
           moisturePct: 10,
           packageGrams: 12000,
-          composition: 'Kurczak (40%), ryż, tłuszcz drobiowy, łosoś, drożdże, olej z łososia…',
+          composition: tr('Kurczak (40%), ryż, tłuszcz drobiowy, łosoś, drożdże, olej z łososia…'),
           favorite: true),
       FoodProduct(
           id: 'np2',
-          name: 'Jagnięcina z ryżem (puszka)',
-          brand: 'Rocco',
+          name: tr('Jagnięcina z ryżem (puszka)'),
+          brand: tr('Rocco'),
           type: ProductType.wet,
           kcalPer100g: 110,
           proteinPct: 10,
@@ -505,16 +506,16 @@ class NutritionStore extends ChangeNotifier {
           packageGrams: 400),
       FoodProduct(
           id: 'np3',
-          name: 'Kostki treningowe wołowe',
-          brand: 'Trainer',
+          name: tr('Kostki treningowe wołowe'),
+          brand: tr('Trainer'),
           type: ProductType.treat,
           kcalPer100g: 340,
           pieceGrams: 1.5,
           packageGrams: 200,
           favorite: true),
-      FoodProduct(id: 'np4', name: 'Suszona wątróbka', brand: '', type: ProductType.treat, kcalPer100g: 380, pieceGrams: 2),
+      FoodProduct(id: 'np4', name: tr('Suszona wątróbka'), brand: '', type: ProductType.treat, kcalPer100g: 380, pieceGrams: 2),
       FoodProduct(
-          id: 'np5', name: 'Antiflexi', brand: 'Biofaktor', type: ProductType.supplement, kcalPer100g: 250, pieceGrams: 2),
+          id: 'np5', name: tr('Antiflexi'), brand: tr('Biofaktor'), type: ProductType.supplement, kcalPer100g: 250, pieceGrams: 2),
     ];
     settings = NutritionSettings(mainProductId: 'np1', goal: NutritionGoal.gain, activity: ActivityLevel.high);
     bags = [
@@ -526,18 +527,18 @@ class NutritionStore extends ChangeNotifier {
       final day = today.subtract(Duration(days: d));
       final m = 150 + rnd.nextInt(20).toDouble(), e = 160 + rnd.nextInt(30).toDouble();
       entries.add(FeedingEntry(
-          id: 'nm$d', date: day.add(const Duration(hours: 7)), kind: FeedKind.morning, productId: 'np1', label: 'Brit Premium Sport 30/20', grams: m, kcal: m * 3.95));
+          id: 'nm$d', date: day.add(const Duration(hours: 7)), kind: FeedKind.morning, productId: 'np1', label: tr('Brit Premium Sport 30/20'), grams: m, kcal: m * 3.95));
       entries.add(FeedingEntry(
-          id: 'ne$d', date: day.add(const Duration(hours: 18)), kind: FeedKind.evening, productId: 'np1', label: 'Brit Premium Sport 30/20', grams: e, kcal: e * 3.95));
+          id: 'ne$d', date: day.add(const Duration(hours: 18)), kind: FeedKind.evening, productId: 'np1', label: tr('Brit Premium Sport 30/20'), grams: e, kcal: e * 3.95));
       final pcs = (rnd.nextInt(25) + 5).toDouble();
       entries.add(FeedingEntry(
-          id: 'nt$d', date: day.add(const Duration(hours: 17)), kind: FeedKind.treat, productId: 'np3', label: 'Trainer Kostki treningowe wołowe', grams: pcs * 1.5, pieces: pcs, kcal: pcs * 1.5 * 3.4));
+          id: 'nt$d', date: day.add(const Duration(hours: 17)), kind: FeedKind.treat, productId: 'np3', label: tr('Trainer Kostki treningowe wołowe'), grams: pcs * 1.5, pieces: pcs, kcal: pcs * 1.5 * 3.4));
       entries.add(FeedingEntry(
-          id: 'ns$d', date: day.add(const Duration(hours: 8)), kind: FeedKind.supplement, productId: 'np5', label: 'Antiflexi', grams: 2, pieces: 1, kcal: 5));
+          id: 'ns$d', date: day.add(const Duration(hours: 8)), kind: FeedKind.supplement, productId: 'np5', label: tr('Antiflexi'), grams: 2, pieces: 1, kcal: 5));
     }
     entries.add(FeedingEntry(
-        id: 'nm0', date: today.add(const Duration(hours: 7)), kind: FeedKind.morning, productId: 'np1', label: 'Brit Premium Sport 30/20', grams: 160, kcal: 160 * 3.95));
-    supplements = [SupplementPlan(id: 'ns1', name: 'Antiflexi', dose: '1 tabletka', productId: 'np5', hour: 8)];
+        id: 'nm0', date: today.add(const Duration(hours: 7)), kind: FeedKind.morning, productId: 'np1', label: tr('Brit Premium Sport 30/20'), grams: 160, kcal: 160 * 3.95));
+    supplements = [SupplementPlan(id: 'ns1', name: tr('Antiflexi'), dose: tr('1 tabletka'), productId: 'np5', hour: 8)];
     doseHistory = [];
     targetByDay = {};
     await _save();

@@ -4,6 +4,7 @@ import 'package:material_ui/material_ui.dart';
 import '../files/file_store.dart';
 import '../theme.dart';
 import 'common.dart';
+import '../l10n/l10n.dart';
 
 /// Pyta: aparat czy galeria, zapisuje zdjęcie i zwraca jego identyfikator.
 Future<String?> pickPhoto(BuildContext context) async {
@@ -20,13 +21,13 @@ Future<String?> pickPhoto(BuildContext context) async {
             ListRow(
               icon: Icons.photo_camera_rounded,
               color: K9.orange,
-              title: 'Zrób zdjęcie',
+              title: tr('Zrób zdjęcie'),
               onTap: () => Navigator.pop(c, ImageSource.camera),
             ),
             ListRow(
               icon: Icons.photo_library_rounded,
               color: K9.blue,
-              title: 'Wybierz z galerii',
+              title: tr('Wybierz z galerii'),
               onTap: () => Navigator.pop(c, ImageSource.gallery),
             ),
           ],
@@ -40,7 +41,7 @@ Future<String?> pickPhoto(BuildContext context) async {
     if (img == null) return null;
     return await FileStore.save(await img.readAsBytes());
   } catch (_) {
-    if (context.mounted) toast(context, 'Nie udało się dodać zdjęcia');
+    if (context.mounted) toast(context, tr('Nie udało się dodać zdjęcia'));
     return null;
   }
 }

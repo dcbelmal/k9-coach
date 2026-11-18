@@ -6,6 +6,7 @@ import '../theme.dart';
 import '../widgets/common.dart';
 import 'guide_store.dart';
 import 'guides_data.dart';
+import '../l10n/l10n.dart';
 
 void openGuide(BuildContext context, AppModule m) =>
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => GuideScreen(module: m)));
@@ -34,7 +35,7 @@ class GuideScreen extends StatelessWidget {
         foregroundColor: Colors.black,
         onPressed: () => openTrainingForm(context, discipline: g.discipline),
         icon: const Icon(Icons.add_rounded),
-        label: const Text('Zapisz trening', style: TextStyle(fontWeight: FontWeight.w700)),
+        label: Text(tr('Zapisz trening'), style: TextStyle(fontWeight: FontWeight.w700)),
       ),
       body: ListenableBuilder(
         listenable: st,

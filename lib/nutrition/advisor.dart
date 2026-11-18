@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 import '../theme.dart';
 import 'nutrition_models.dart';
 import 'nutrition_store.dart';
+import '../l10n/l10n.dart';
 
 /// Rekomendacja z panelu AI. [adjustPct] – proponowana zmiana dawki do zatwierdzenia.
 class Advice {
@@ -28,18 +29,18 @@ class NutritionAdvisor {
 
     if ((dog.weightKg ?? 0) <= 0) {
       return [
-        const Advice(Icons.monitor_weight_rounded, K9.yellow, 'Uzupełnij wagę psa',
-            'Bez aktualnej masy ciała nie policzę dawki. Dodaj ważenie w profilu lub dzienniku.')
+        Advice(Icons.monitor_weight_rounded, K9.yellow, tr('Uzupełnij wagę psa'),
+            tr('Bez aktualnej masy ciała nie policzę dawki. Dodaj ważenie w profilu lub dzienniku.'))
       ];
     }
     if (n.mainProduct == null) {
-      out.add(const Advice(Icons.qr_code_scanner_rounded, K9.orange, 'Dodaj karmę główną',
-          'Zeskanuj worek albo wpisz karmę ręcznie, a przeliczę kalorie na gramy.'));
+      out.add(Advice(Icons.qr_code_scanner_rounded, K9.orange, tr('Dodaj karmę główną'),
+          tr('Zeskanuj worek albo wpisz karmę ręcznie, a przeliczę kalorie na gramy.')));
     } else if (n.mainProduct!.kcalPer100g == null) {
-      out.add(Advice(Icons.info_outline_rounded, K9.yellow, 'Brak kaloryczności z etykiety',
+      out.add(Advice(Icons.info_outline_rounded, K9.yellow, tr('Brak kaloryczności z etykiety'),
           n.mainProduct!.kcalEstimated
-              ? 'Kaloryczność karmy jest szacowana ze składu. Wpisz kcal/100 g z worka dla dokładniejszej dawki.'
-              : 'Używam średniej wartości 370 kcal/100 g. Wpisz kcal z etykiety karmy.'));
+              ? tr('Kaloryczność karmy jest szacowana ze składu. Wpisz kcal/100 g z worka dla dokładniejszej dawki.')
+              : tr('Używam średniej wartości 370 kcal/100 g. Wpisz kcal z etykiety karmy.')));
     }
 
     // --- Trend wagi (ostatnie 4 tygodnie) ---
@@ -48,8 +49,8 @@ class NutritionAdvisor {
       ..sort((a, b) => a.date.compareTo(b.date));
     final lastWeigh = app.weights.isEmpty ? null : app.weights.last.date;
     if (lastWeigh == null || now.difference(lastWeigh).inDays > 14) {
-      out.add(const Advice(Icons.scale_rounded, K9.blue, 'Czas na ważenie',
-          'Ostatnie ważenie było ponad 2 tygodnie temu. Regularna waga pozwala mi dokładnie korygować dawkę.'));
+      out.add(Advice(Icons.scale_rounded, K9.blue, tr('Czas na ważenie'),
+          tr('Ostatnie ważenie było ponad 2 tygodnie temu. Regularna waga pozwala mi dokładnie korygować dawkę.')));
     }
     if (recent.length >= 2) {
       final days = recent.last.date.difference(recent.first.date).inDays;
@@ -108,11 +109,11 @@ class NutritionAdvisor {
     final bcs = dog.bcs;
     if (bcs != null && s.goal == NutritionGoal.maintain) {
       if (bcs >= 6) {
-        out.add(const Advice(Icons.shield_outlined, K9.yellow, 'Kondycja powyżej ideału',
-            'BCS 6+ oznacza nadwagę. Rozważ cel „Redukcja” i wpisz wagę docelową w profilu.'));
+        out.add(Advice(Icons.shield_outlined, K9.yellow, tr('Kondycja powyżej ideału'),
+            tr('BCS 6+ oznacza nadwagę. Rozważ cel „Redukcja” i wpisz wagę docelową w profilu.')));
       } else if (bcs <= 3) {
-        out.add(const Advice(Icons.shield_outlined, K9.yellow, 'Pies jest szczupły',
-            'BCS 3 lub mniej. Rozważ cel „Budowa masy”.'));
+        out.add(Advice(Icons.shield_outlined, K9.yellow, tr('Pies jest szczupły'),
+            tr('BCS 3 lub mniej. Rozważ cel „Budowa masy”.')));
       }
     }
 
@@ -121,40 +122,38 @@ class NutritionAdvisor {
     final kcal7 = week.fold(0.0, (a, d) => a + d.kcal);
     final treats7 = week.fold(0.0, (a, d) => a + d.treatKcal);
     if (kcal7 > 0 && treats7 / kcal7 > 0.15) {
-      out.add(Advice(Icons.cookie_rounded, K9.yellow, 'Dużo przysmaków',
-          'Przysmaki to ${(treats7 / kcal7 * 100).round()}% kalorii z tygodnia (zalecane do 10–15%). '
-          'Porcja karmy jest już zmniejszana, ale warto użyć mniejszych kawałków lub części karmy jako nagrody.'));
+      out.add(Advice(Icons.cookie_rounded, K9.yellow, tr('Dużo przysmaków'),
+          tr('Przysmaki to {0}% kalorii z tygodnia (zalecane do 10–15%). Porcja karmy jest już zmniejszana, ale warto użyć mniejszych kawałków lub części karmy jako nagrody.', [(treats7 / kcal7 * 100).round()])));
     }
     if (plan != null && plan.treatsShare > 0.25) {
-      out.add(const Advice(Icons.warning_amber_rounded, K9.red, 'Dziś przysmaki to ponad 25% kalorii',
-          'Karma zapewnia minerały i witaminy. Postaraj się nie zastępować jej przysmakami.'));
+      out.add(Advice(Icons.warning_amber_rounded, K9.red, tr('Dziś przysmaki to ponad 25% kalorii'),
+          tr('Karma zapewnia minerały i witaminy. Postaraj się nie zastępować jej przysmakami.')));
     }
 
     // --- Obciążenie treningowe ---
     final r = app.readiness;
     if (r.level == 3 || r.level == 2) {
-      out.add(Advice(Icons.bolt_rounded, K9.orange, 'Wyższe obciążenie treningowe',
-          'Ten tydzień jest cięższy niż zwykle. Dodatkowe kalorie z treningów są już doliczone do dawki'
-          '${plan != null && plan.trainingKcal > 0 ? ' (dziś +${plan.trainingKcal.round()} kcal)' : ''}. Pilnuj wody i regeneracji.'));
+      out.add(Advice(Icons.bolt_rounded, K9.orange, tr('Wyższe obciążenie treningowe'),
+          tr('Ten tydzień jest cięższy niż zwykle. Dodatkowe kalorie z treningów są już doliczone do dawki{0}. Pilnuj wody i regeneracji.', [plan != null && plan.trainingKcal > 0 ? tr(' (dziś +{0} kcal)', [plan.trainingKcal.round()]) : ''])));
     }
 
     // --- Magazyn ---
     final f = n.mainForecast;
     if (f != null && f.daysLeft != null && f.daysLeft! <= n.settings.buyLeadDays + 2) {
-      out.add(Advice(Icons.shopping_bag_rounded, K9.red, 'Kup nowy worek',
-          'Karmy wystarczy na ok. ${f.daysLeft} dni (do ${fmtDateShort(f.emptyDate!)}).'));
+      out.add(Advice(Icons.shopping_bag_rounded, K9.red, tr('Kup nowy worek'),
+          tr('Karmy wystarczy na ok. {0} dni (do {1}).', [f.daysLeft, fmtDateShort(f.emptyDate!)])));
     }
 
     // --- Korekta aktywna ---
     if (s.adjustPct != 0) {
-      out.add(Advice(Icons.tune_rounded, K9.muted, 'Aktywna korekta dawki ${s.adjustPct > 0 ? '+' : ''}${s.adjustPct.round()}%',
-          'Możesz ją wyzerować, jeśli sytuacja się zmieniła.',
+      out.add(Advice(Icons.tune_rounded, K9.muted, tr('Aktywna korekta dawki {0}{1}%', [s.adjustPct > 0 ? '+' : '', s.adjustPct.round()]),
+          tr('Możesz ją wyzerować, jeśli sytuacja się zmieniła.'),
           adjustPct: -s.adjustPct));
     }
 
     if (out.isEmpty) {
-      out.add(const Advice(Icons.check_circle_rounded, K9.green, 'Wszystko w normie',
-          'Dawka pasuje do aktywności i celu. Dodawaj karmienia i ważenia, a będę pilnować bilansu.'));
+      out.add(Advice(Icons.check_circle_rounded, K9.green, tr('Wszystko w normie'),
+          tr('Dawka pasuje do aktywności i celu. Dodawaj karmienia i ważenia, a będę pilnować bilansu.')));
     }
     return out;
   }

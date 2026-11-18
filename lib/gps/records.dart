@@ -1,4 +1,5 @@
 import '../models.dart';
+import '../l10n/l10n.dart';
 
 /// Rekordy z treningów GPS w jednej dyscyplinie.
 class Records {
@@ -33,14 +34,14 @@ class Records {
     final prev = of(all, t.discipline, exceptId: t.id);
     final out = <String>[];
     if (t.bestKmSec != null && (prev.bestKm == null || t.bestKmSec! < prev.bestKm!.bestKmSec!)) {
-      out.add('Najszybszy kilometr');
+      out.add(tr('Najszybszy kilometr'));
     }
     if ((t.distanceKm ?? 0) > 0.5 && (prev.longest == null || t.distanceKm! > prev.longest!.distanceKm!)) {
-      out.add('Najdłuższa trasa');
+      out.add(tr('Najdłuższa trasa'));
     }
     final p = avgPace(t);
     if ((t.distanceKm ?? 0) >= 5 && p != null && (prev.best5k == null || p < avgPace(prev.best5k!)!)) {
-      out.add('Najlepsze tempo na 5 km+');
+      out.add(tr('Najlepsze tempo na 5 km+'));
     }
     return out;
   }

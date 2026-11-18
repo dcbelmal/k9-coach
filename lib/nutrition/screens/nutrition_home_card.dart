@@ -7,6 +7,7 @@ import '../nutrition_store.dart';
 import 'nutrition_forms.dart';
 import 'nutrition_screen.dart';
 import 'products_screen.dart';
+import '../../l10n/l10n.dart';
 
 /// Karta „Żywienie dziś” na ekranie Start.
 class NutritionHomeCard extends StatelessWidget {
@@ -24,22 +25,22 @@ class NutritionHomeCard extends StatelessWidget {
         return K9Card(
           onTap: () => openNutrition(context),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            SectionTitle('Żywienie dziś',
-                icon: Icons.restaurant_rounded, action: 'Otwórz', onAction: () => openNutrition(context)),
+            SectionTitle(tr('Żywienie dziś'),
+                icon: Icons.restaurant_rounded, action: tr('Otwórz'), onAction: () => openNutrition(context)),
             if (plan == null)
-              const Text('Uzupełnij wagę psa, a policzę dzienną porcję karmy.', style: TextStyle(color: K9.muted))
+              Text(tr('Uzupełnij wagę psa, a policzę dzienną porcję karmy.'), style: TextStyle(color: K9.muted))
             else
               Row(children: [
                 Expanded(
-                    child: StatValue(label: 'Zostało karmy', value: '${plan.remainingGrams.round()}', unit: 'g')),
+                    child: StatValue(label: tr('Zostało karmy'), value: '${plan.remainingGrams.round()}', unit: 'g')),
                 Expanded(
                     child: StatValue(
-                        label: plan.balance > 0 ? 'Ponad cel' : 'Zostało',
+                        label: plan.balance > 0 ? tr('Ponad cel') : tr('Zostało'),
                         value: '${plan.balance.abs().round()}',
                         unit: 'kcal')),
                 Expanded(
                   child: StatValue(
-                    label: low ? 'Kup karmę!' : 'Worek',
+                    label: low ? tr('Kup karmę!') : tr('Worek'),
                     value: f == null ? '–' : fmtGrams(f.remainingGrams).split(' ').first,
                     unit: f == null ? null : fmtGrams(f.remainingGrams).split(' ').last,
                     color: low ? K9.red : K9.orange,
@@ -52,7 +53,7 @@ class NutritionHomeCard extends StatelessWidget {
                 child: OutlinedButton.icon(
                   onPressed: () => openFeedingForm(context),
                   icon: const Icon(Icons.restaurant_rounded, size: 18),
-                  label: const Text('Karmienie'),
+                  label: Text(tr('Karmienie')),
                 ),
               ),
               const SizedBox(width: 10),
@@ -60,7 +61,7 @@ class NutritionHomeCard extends StatelessWidget {
                 child: OutlinedButton.icon(
                   onPressed: () => openFeedingForm(context, kind: FeedKind.treat),
                   icon: const Icon(Icons.cookie_rounded, size: 18),
-                  label: const Text('Przysmak'),
+                  label: Text(tr('Przysmak')),
                 ),
               ),
             ]),

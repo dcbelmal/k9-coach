@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
 import '../theme.dart';
+import '../l10n/l10n.dart';
 
 /// Ekran startowy Valkor Coach: logo Valkor Canis z hasłem na czarnym tle.
 class SplashScreen extends StatelessWidget {
@@ -28,7 +29,7 @@ class SplashScreen extends StatelessWidget {
                 child: Image.asset('assets/brand/valkor_logo.png', filterQuality: FilterQuality.medium),
               ),
               const SizedBox(height: 34),
-              const Text('COACH',
+              Text(tr('COACH'),
                   style: TextStyle(
                       fontFamily: 'Cinzel', fontSize: 26, fontWeight: FontWeight.w600, letterSpacing: 8, color: K9.goldLight)),
               const Spacer(),

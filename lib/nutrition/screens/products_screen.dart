@@ -12,6 +12,7 @@ import '../product_lookup.dart';
 import '../web_import.dart';
 import 'label_capture.dart';
 import 'scanner_screen.dart';
+import '../../l10n/l10n.dart';
 
 final _n = NutritionStore.instance;
 
@@ -36,7 +37,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(filter == ProductType.treat ? 'Przysmaki' : 'Baza produktów')),
+      appBar: AppBar(title: Text(filter == ProductType.treat ? tr('Przysmaki') : tr('Baza produktów'))),
       floatingActionButton: FloatingActionButton(
         backgroundColor: K9.orange,
         foregroundColor: Colors.black,
@@ -55,13 +56,13 @@ class _ProductsScreenState extends State<ProductsScreen> {
           return ListView(padding: const EdgeInsets.fromLTRB(16, 4, 16, 100), children: [
             TextField(
               onChanged: (v) => setState(() => query = v),
-              decoration: const InputDecoration(prefixIcon: Icon(Icons.search_rounded), labelText: 'Szukaj nazwy lub kodu'),
+              decoration: InputDecoration(prefixIcon: Icon(Icons.search_rounded), labelText: tr('Szukaj nazwy lub kodu')),
             ),
             gap12,
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(children: [
-                _chip('Wszystkie', null),
+                _chip(tr('Wszystkie'), null),
                 for (final t in ProductType.values) _chip(t.label, t),
               ]),
             ),
@@ -69,9 +70,9 @@ class _ProductsScreenState extends State<ProductsScreen> {
             if (list.isEmpty)
               EmptyState(
                 icon: Icons.qr_code_scanner_rounded,
-                title: 'Brak produktów',
-                text: 'Zeskanuj kod kreskowy z worka, przysmaku lub suplementu albo dodaj produkt ręcznie.',
-                action: 'Dodaj produkt',
+                title: tr('Brak produktów'),
+                text: tr('Zeskanuj kod kreskowy z worka, przysmaku lub suplementu albo dodaj produkt ręcznie.'),
+                action: tr('Dodaj produkt'),
                 onAction: () => addProductFlow(context, type: filter),
               ),
             for (final (i, p) in list.indexed)
@@ -111,8 +112,8 @@ class ProductTile extends StatelessWidget {
     final kcal = p.kcalPer100gEffective;
     final info = <String>[
       p.type.label,
-      if (kcal != null) '${kcal.round()} kcal/100 g${p.kcalEstimated ? ' (szac.)' : ''}',
-      if (p.pieceGrams != null) '${fmtNum(p.pieceGrams!)} g/szt.',
+      if (kcal != null) tr('{0} kcal/100 g{1}', [kcal.round(), p.kcalEstimated ? tr(' (szac.)') : '']),
+      if (p.pieceGrams != null) tr('{0} g/szt.', [fmtNum(p.pieceGrams!)]),
       if (p.packageGrams != null) fmtGrams(p.packageGrams!),
     ];
     return K9Card(
@@ -153,7 +154,7 @@ class ProductThumb extends StatelessWidget {
       );
 }
 
-String fmtGrams(double g) => g >= 1000 ? '${fmtNum(g / 1000, g % 1000 == 0 ? 0 : 1)} kg' : '${g.round()} g';
+String fmtGrams(double g) => g >= 1000 ? tr('{0} kg', [fmtNum(g / 1000, g % 1000 == 0 ? 0 : 1)]) : '${g.round()} g';
 
 // ---------------------------------------------------------------------------
 // Dodawanie: skan / zdjęcie / ręcznie
@@ -168,29 +169,29 @@ Future<FoodProduct?> addProductFlow(BuildContext context, {ProductType? type}) a
     builder: (c) => SingleChildScrollView(
       padding: EdgeInsets.fromLTRB(20, 0, 20, 24 + MediaQuery.viewPaddingOf(c).bottom),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
-        const SheetTitle('Dodaj produkt'),
+        SheetTitle(tr('Dodaj produkt')),
         ListRow(
             icon: Icons.qr_code_scanner_rounded,
             color: K9.orange,
-            title: 'Skanuj kod kreskowy lub QR',
-            subtitle: 'Szukam w darmowych bazach produktów',
+            title: tr('Skanuj kod kreskowy lub QR'),
+            subtitle: tr('Szukam w darmowych bazach produktów'),
             onTap: () => Navigator.pop(c, 0)),
         ListRow(
             icon: Icons.photo_camera_rounded,
             color: K9.blue,
-            title: 'Zdjęcie etykiety',
-            subtitle: 'Odczytam skład, białko, tłuszcz i kcal ze zdjęcia',
+            title: tr('Zdjęcie etykiety'),
+            subtitle: tr('Odczytam skład, białko, tłuszcz i kcal ze zdjęcia'),
             onTap: () => Navigator.pop(c, 1)),
         ListRow(
             icon: Icons.link_rounded,
             color: K9.yellow,
-            title: 'Link ze strony producenta',
-            subtitle: 'Wklej adres strony karmy albo skopiowany tekst',
+            title: tr('Link ze strony producenta'),
+            subtitle: tr('Wklej adres strony karmy albo skopiowany tekst'),
             onTap: () => Navigator.pop(c, 3)),
         ListRow(
             icon: Icons.edit_note_rounded,
             color: K9.green,
-            title: 'Wpisz ręcznie',
+            title: tr('Wpisz ręcznie'),
             onTap: () => Navigator.pop(c, 2)),
       ]),
     ),
@@ -220,17 +221,17 @@ Future<FoodProduct?> addProductFlow(BuildContext context, {ProductType? type}) a
 Future<FoodProduct?> productFromCode(BuildContext context, String code, {ProductType? type}) async {
   final local = _n.byBarcode(code);
   if (local != null) {
-    toast(context, 'Ten produkt już jest w bazie');
+    toast(context, tr('Ten produkt już jest w bazie'));
     return openProductForm(context, existing: local);
   }
   showDialog(
     context: context,
     barrierDismissible: false,
-    builder: (_) => const AlertDialog(
+    builder: (_) => AlertDialog(
       content: Row(children: [
         SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 3)),
         SizedBox(width: 16),
-        Expanded(child: Text('Szukam produktu…')),
+        Expanded(child: Text(tr('Szukam produktu…'))),
       ]),
     ),
   );
@@ -242,21 +243,19 @@ Future<FoodProduct?> productFromCode(BuildContext context, String code, {Product
   if (draft == null) {
     draft = FoodProduct(id: newId(), name: isEan ? '' : code, barcode: isEan ? code : '', type: type ?? ProductType.dry);
     if (!isEan) {
-      toast(context, 'Odczytany kod QR: $code');
+      toast(context, tr('Odczytany kod QR: {0}', [code]));
       return openProductForm(context, draft: draft);
     }
     final photo = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
-        title: Text(res.offline ? 'Brak internetu' : 'Nie znalazłem tej karmy'),
+        title: Text(res.offline ? tr('Brak internetu') : tr('Nie znalazłem tej karmy')),
         content: Text(res.offline
-            ? 'Nie mogę sprawdzić kodu bez internetu. Zrób zdjęcie etykiety – odczytam wartości na telefonie.'
-            : 'Kodu $code nie ma w darmowych bazach (${res.checked.join(', ')}). '
-                'Zrób zdjęcie tyłu opakowania, a odczytam skład, białko, tłuszcz i kalorie. '
-                'Nazwę i producenta wpisz raz – potem ten kod rozpoznam od razu.'),
+            ? tr('Nie mogę sprawdzić kodu bez internetu. Zrób zdjęcie etykiety – odczytam wartości na telefonie.')
+            : tr('Kodu {0} nie ma w darmowych bazach ({1}). Zrób zdjęcie tyłu opakowania, a odczytam skład, białko, tłuszcz i kalorie. Nazwę i producenta wpisz raz – potem ten kod rozpoznam od razu.', [code, res.checked.join(', ')])),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Wpiszę ręcznie')),
-          TextButton(onPressed: () => Navigator.pop(c, true), child: const Text('Zdjęcie etykiety')),
+          TextButton(onPressed: () => Navigator.pop(c, false), child: Text(tr('Wpiszę ręcznie'))),
+          TextButton(onPressed: () => Navigator.pop(c, true), child: Text(tr('Zdjęcie etykiety'))),
         ],
       ),
     );
@@ -274,8 +273,8 @@ Future<FoodProduct?> productFromCode(BuildContext context, String code, {Product
     toast(
         context,
         missing
-            ? 'Znaleziono: ${draft.title}, ale bez wartości odżywczych. Dodaj zdjęcie etykiety w formularzu.'
-            : 'Znaleziono: ${draft.title}. Sprawdź dane.');
+            ? tr('Znaleziono: {0}, ale bez wartości odżywczych. Dodaj zdjęcie etykiety w formularzu.', [draft.title])
+            : tr('Znaleziono: {0}. Sprawdź dane.', [draft.title]));
   }
   return openProductForm(context, draft: draft);
 }
@@ -292,11 +291,10 @@ Future<bool> importFromWeb(BuildContext context, FoodProduct p) async {
   final input = await showDialog<String>(
     context: context,
     builder: (c) => AlertDialog(
-      title: const Text('Strona producenta'),
+      title: Text(tr('Strona producenta')),
       content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        const Text(
-            'Wklej link do strony tej karmy (producent albo sklep). '
-            'Możesz też wkleić skopiowany ze strony tekst ze składem i analizą.',
+        Text(
+            tr('Wklej link do strony tej karmy (producent albo sklep). Możesz też wkleić skopiowany ze strony tekst ze składem i analizą.'),
             style: TextStyle(color: K9.muted)),
         gap12,
         TextField(
@@ -306,10 +304,10 @@ Future<bool> importFromWeb(BuildContext context, FoodProduct p) async {
           maxLines: 5,
           keyboardType: TextInputType.multiline,
           decoration: InputDecoration(
-            labelText: 'Link lub tekst',
-            hintText: 'https://…',
+            labelText: tr('Link lub tekst'),
+            hintText: tr('https://…'),
             suffixIcon: IconButton(
-              tooltip: 'Wklej',
+              tooltip: tr('Wklej'),
               icon: const Icon(Icons.content_paste_rounded),
               onPressed: () async {
                 final t = (await Clipboard.getData('text/plain'))?.text;
@@ -320,8 +318,8 @@ Future<bool> importFromWeb(BuildContext context, FoodProduct p) async {
         ),
       ]),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(c), child: const Text('Anuluj')),
-        TextButton(onPressed: () => Navigator.pop(c, ctrl.text.trim()), child: const Text('Pobierz dane')),
+        TextButton(onPressed: () => Navigator.pop(c), child: Text(tr('Anuluj'))),
+        TextButton(onPressed: () => Navigator.pop(c, ctrl.text.trim()), child: Text(tr('Pobierz dane'))),
       ],
     ),
   );
@@ -329,11 +327,11 @@ Future<bool> importFromWeb(BuildContext context, FoodProduct p) async {
   showDialog(
     context: context,
     barrierDismissible: false,
-    builder: (_) => const AlertDialog(
+    builder: (_) => AlertDialog(
       content: Row(children: [
         SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 3)),
         SizedBox(width: 16),
-        Expanded(child: Text('Czytam stronę…')),
+        Expanded(child: Text(tr('Czytam stronę…'))),
       ]),
     ),
   );
@@ -355,12 +353,10 @@ Future<bool> importFromWeb(BuildContext context, FoodProduct p) async {
   toast(
       context,
       !r.fetched
-          ? 'Nie udało się otworzyć strony. Sprawdź internet albo skopiuj tekst ze strony i wklej go tutaj.'
+          ? tr('Nie udało się otworzyć strony. Sprawdź internet albo skopiuj tekst ze strony i wklej go tutaj.')
           : r.values.isEmpty
-              ? 'Na tej stronie nie znalazłem składu ani wartości. Otwórz ją w przeglądarce, skopiuj tekst „Składniki analityczne” i wklej.'
-              : 'Pobrano: $filled ${filled == 1 ? 'pole' : (filled < 5 ? 'pola' : 'pól')}. '
-                  '${p.kcalPer100g == null && p.estimatedKcalPer100g != null ? 'Strona nie podaje kalorii – liczę je ze składu (ok. ${p.estimatedKcalPer100g!.round()} kcal/100 g). Jeśli znasz dokładną wartość z worka, wpisz ją. ' : ''}'
-                  'Sprawdź dane przed zapisem.');
+              ? tr('Na tej stronie nie znalazłem składu ani wartości. Otwórz ją w przeglądarce, skopiuj tekst „Składniki analityczne” i wklej.')
+              : tr('Pobrano: {0} {1}. {2}Sprawdź dane przed zapisem.', [filled, filled == 1 ? tr('pole') : (filled < 5 ? tr('pola') : tr('pól')), p.kcalPer100g == null && p.estimatedKcalPer100g != null ? tr('Strona nie podaje kalorii – liczę je ze składu (ok. {0} kcal/100 g). Jeśli znasz dokładną wartość z worka, wpisz ją. ', [p.estimatedKcalPer100g!.round()]) : '']));
   return true;
 }
 
@@ -467,7 +463,7 @@ class _ProductFormState extends State<_ProductForm> {
     if (!mounted) return;
     final found = res.product;
     if (found == null) {
-      toast(context, res.offline ? 'Brak internetu – użyj zdjęcia etykiety' : 'Nie ma w darmowych bazach – użyj „Odczytaj z etykiety”');
+      toast(context, res.offline ? tr('Brak internetu – użyj zdjęcia etykiety') : tr('Nie ma w darmowych bazach – użyj „Odczytaj z etykiety”'));
       return;
     }
     setState(() {
@@ -480,7 +476,7 @@ class _ProductFormState extends State<_ProductForm> {
       if (comp.text.isEmpty) comp.text = found.composition;
       _collect();
     });
-    toast(context, 'Uzupełniono dane z bazy online');
+    toast(context, tr('Uzupełniono dane z bazy online'));
   }
 
   @override
@@ -488,7 +484,7 @@ class _ProductFormState extends State<_ProductForm> {
     final est = p.estimatedKcalPer100g;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       SheetTitle(
-        widget.existing == null ? 'Nowy produkt' : 'Produkt',
+        widget.existing == null ? tr('Nowy produkt') : tr('Produkt'),
         onDelete: widget.existing == null
             ? null
             : () async {
@@ -516,9 +512,9 @@ class _ProductFormState extends State<_ProductForm> {
         const SizedBox(width: 12),
         Expanded(
           child: Column(children: [
-            TextField(controller: name, decoration: const InputDecoration(labelText: 'Nazwa produktu')),
+            TextField(controller: name, decoration: InputDecoration(labelText: tr('Nazwa produktu'))),
             const SizedBox(height: 8),
-            TextField(controller: brand, decoration: const InputDecoration(labelText: 'Producent')),
+            TextField(controller: brand, decoration: InputDecoration(labelText: tr('Producent'))),
           ]),
         ),
       ]),
@@ -543,78 +539,78 @@ class _ProductFormState extends State<_ProductForm> {
         controller: code,
         keyboardType: TextInputType.number,
         decoration: InputDecoration(
-          labelText: 'Kod kreskowy (EAN)',
+          labelText: tr('Kod kreskowy (EAN)'),
           suffixIcon: IconButton(icon: const Icon(Icons.qr_code_scanner_rounded, color: K9.orange), onPressed: _scan),
         ),
       ),
       gap16,
       Row(children: [
-        const Expanded(child: Text('Wartości z etykiety', style: TextStyle(fontWeight: FontWeight.w700))),
+        Expanded(child: Text(tr('Wartości z etykiety'), style: TextStyle(fontWeight: FontWeight.w700))),
         IconButton(
-          tooltip: 'Pobierz ze strony producenta',
+          tooltip: tr('Pobierz ze strony producenta'),
           onPressed: _readWeb,
           icon: const Icon(Icons.link_rounded, color: K9.yellow),
         ),
         TextButton.icon(
           onPressed: _readLabel,
           icon: const Icon(Icons.document_scanner_rounded, size: 20),
-          label: const Text('Ze zdjęcia'),
+          label: Text(tr('Ze zdjęcia')),
         ),
       ]),
       const SizedBox(height: 4),
       Row(children: [
-        _num(kcal, 'kcal / 100 g'),
+        _num(kcal, tr('kcal / 100 g')),
         const SizedBox(width: 10),
-        _num(pack, 'Opakowanie (kg)'),
+        _num(pack, tr('Opakowanie (kg)')),
       ]),
       const SizedBox(height: 10),
       Row(children: [
-        _num(protein, 'Białko %'),
+        _num(protein, tr('Białko %')),
         const SizedBox(width: 10),
-        _num(fat, 'Tłuszcz %'),
+        _num(fat, tr('Tłuszcz %')),
         const SizedBox(width: 10),
-        _num(fiber, 'Włókno %'),
+        _num(fiber, tr('Włókno %')),
       ]),
       const SizedBox(height: 10),
       Row(children: [
-        _num(ash, 'Popiół %'),
+        _num(ash, tr('Popiół %')),
         const SizedBox(width: 10),
-        _num(moisture, 'Wilgotność %'),
+        _num(moisture, tr('Wilgotność %')),
         const SizedBox(width: 10),
-        _num(piece, 'Sztuka (g)'),
+        _num(piece, tr('Sztuka (g)')),
       ]),
       if (p.kcalPer100g == null && est != null)
         Padding(
           padding: const EdgeInsets.only(top: 8),
-          child: Text('Szacowana kaloryczność ze składu: ${est.round()} kcal/100 g',
+          child: Text(tr('Szacowana kaloryczność ze składu: {0} kcal/100 g', [est.round()]),
               style: const TextStyle(color: K9.orange, fontSize: 12.5)),
         ),
       if (p.type == ProductType.treat || p.type == ProductType.supplement)
-        const Padding(
+        Padding(
           padding: EdgeInsets.only(top: 8),
-          child: Text('Podaj masę jednej sztuki – wtedy w treningu wystarczy liczyć sztuki.',
+          child: Text(tr('Podaj masę jednej sztuki – wtedy w treningu wystarczy liczyć sztuki.'),
               style: TextStyle(color: K9.muted, fontSize: 12.5)),
         ),
       gap12,
-      TextField(controller: comp, minLines: 1, maxLines: 4, decoration: const InputDecoration(labelText: 'Skład')),
+      TextField(controller: comp, minLines: 1, maxLines: 4, decoration: InputDecoration(labelText: tr('Skład'))),
       if (p.type.isMainFood)
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           value: makeMain,
           onChanged: (v) => setState(() => makeMain = v),
-          title: const Text('To główna karma psa'),
-          subtitle: const Text('Z niej liczę porcję w gramach', style: TextStyle(color: K9.muted)),
+          title: Text(tr('To główna karma psa')),
+          subtitle: Text(tr('Z niej liczę porcję w gramach'), style: TextStyle(color: K9.muted)),
         ),
       Row(children: [
         Checkbox(value: p.favorite, onChanged: (v) => setState(() => p.favorite = v ?? false)),
-        const Text('Ulubiony'),
+        Text(tr('Ulubiony')),
       ]),
       const SizedBox(height: 12),
       FilledButton(
         onPressed: () async {
           _collect();
           if (p.name.isEmpty && p.brand.isEmpty) {
-            toast(context, 'Wpisz nazwę produktu');
+            toast(context, tr('Wpisz nazwę produktu'));
             return;
           }
           await _n.upsertProduct(p);
@@ -625,7 +621,7 @@ class _ProductFormState extends State<_ProductForm> {
           }
           if (context.mounted) Navigator.pop(context, p);
         },
-        child: const Text('Zapisz'),
+        child: Text(tr('Zapisz')),
       ),
     ]);
   }

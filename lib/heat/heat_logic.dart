@@ -1,4 +1,5 @@
 import 'package:material_ui/material_ui.dart';
+import '../l10n/l10n.dart';
 
 DateTime _day(DateTime d) => DateTime(d.year, d.month, d.day);
 
@@ -35,10 +36,12 @@ enum HeatStage {
   anestrus('Spoczynek (anestrus)', 'Okres bez cieczki. Dobry czas na intensywny trening i starty.', Color(0xFF34C759)),
   unknown('Brak danych', 'Zapisz początek cieczki, a policzę etap cyklu i kolejny termin.', Color(0xFF8E8E93));
 
-  final String label;
-  final String description;
+  final String _label;
+  String get label => tr(_label);
+  final String _description;
+  String get description => tr(_description);
   final Color color;
-  const HeatStage(this.label, this.description, this.color);
+  const HeatStage(this._label, this._description, this.color);
 }
 
 class HeatStatus {

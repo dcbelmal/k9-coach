@@ -23,6 +23,7 @@ import '../widgets/common.dart';
 import 'module_store.dart';
 import 'modules.dart';
 import 'premium_screen.dart';
+import '../l10n/l10n.dart';
 
 /// Otwiera ekran danego modułu.
 void openModule(BuildContext context, AppModule m) {
@@ -126,17 +127,17 @@ class PlannedModuleScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final feats = plannedFeatures[module] ?? const <String>[];
+    final feats = trList(plannedFeatures[module] ?? const <String>[]);
     return Scaffold(
       appBar: AppBar(title: Text(module.label)),
       body: ListView(padding: const EdgeInsets.all(20), children: [
         const SizedBox(height: 12),
         Center(child: IconBadge(module.icon, K9.orange, size: 80)),
         const SizedBox(height: 18),
-        const Text('Moduł w przygotowaniu',
+        Text(tr('Moduł w przygotowaniu'),
             textAlign: TextAlign.center, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
         const SizedBox(height: 8),
-        const Text('Pojawi się w kolejnej aktualizacji. Na razie możesz zapisywać treningi w module Trening.',
+        Text(tr('Pojawi się w kolejnej aktualizacji. Na razie możesz zapisywać treningi w module Trening.'),
             textAlign: TextAlign.center, style: TextStyle(color: K9.muted)),
         const SizedBox(height: 24),
         if (feats.isNotEmpty)
@@ -158,7 +159,7 @@ class PlannedModuleScreen extends StatelessWidget {
           FilledButton.icon(
             onPressed: () => openTrainingForm(context),
             icon: const Icon(Icons.add_rounded),
-            label: const Text('Zapisz trening'),
+            label: Text(tr('Zapisz trening')),
           ),
         ],
       ]),
@@ -172,7 +173,7 @@ class _WeightScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = AppStore.instance;
     return Scaffold(
-      appBar: AppBar(title: const Text('Historia masy')),
+      appBar: AppBar(title: Text(tr('Historia masy'))),
       body: ListenableBuilder(
         listenable: s,
         builder: (context, _) =>
@@ -187,7 +188,7 @@ class _NotesScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Notatki')),
+      appBar: AppBar(title: Text(tr('Notatki'))),
       body: ListView(
           padding: const EdgeInsets.fromLTRB(16, 4, 16, 40), children: [DogNotesEditor(dog: AppStore.instance.dog!)]),
     );

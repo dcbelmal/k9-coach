@@ -8,6 +8,7 @@ import '../../widgets/common.dart';
 import '../nutrition_models.dart';
 import '../nutrition_store.dart';
 import 'products_screen.dart';
+import '../../l10n/l10n.dart';
 
 final _n = NutritionStore.instance;
 
@@ -64,7 +65,7 @@ class _TreatTrainingScreenState extends State<TreatTrainingScreen> {
       builder: (c) => SingleChildScrollView(
         padding: EdgeInsets.fromLTRB(20, 0, 20, 24 + MediaQuery.viewPaddingOf(c).bottom),
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          const SheetTitle('Wybierz nagrodę'),
+          SheetTitle(tr('Wybierz nagrodę')),
           for (final p in rest)
             Padding(
                 padding: const EdgeInsets.only(bottom: 8),
@@ -75,7 +76,7 @@ class _TreatTrainingScreenState extends State<TreatTrainingScreen> {
               if (c.mounted) Navigator.pop(c, p);
             },
             icon: const Icon(Icons.add_rounded),
-            label: const Text('Nowy przysmak (skan lub ręcznie)'),
+            label: Text(tr('Nowy przysmak (skan lub ręcznie)')),
           ),
         ]),
       ),
@@ -91,14 +92,14 @@ class _TreatTrainingScreenState extends State<TreatTrainingScreen> {
       context,
       StatefulBuilder(
         builder: (c, set) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          const SheetTitle('Zakończ trening'),
+          SheetTitle(tr('Zakończ trening')),
           TextField(
               controller: duration,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Czas (min)')),
+              decoration: InputDecoration(labelText: tr('Czas (min)'))),
           gap12,
           Row(children: [
-            const Text('Intensywność', style: TextStyle(fontWeight: FontWeight.w600)),
+            Text(tr('Intensywność'), style: TextStyle(fontWeight: FontWeight.w600)),
             const Spacer(),
             Text('${rpe.round()}/10', style: const TextStyle(color: K9.orange, fontWeight: FontWeight.w700)),
           ]),
@@ -110,9 +111,9 @@ class _TreatTrainingScreenState extends State<TreatTrainingScreen> {
               activeColor: K9.orange,
               inactiveColor: K9.cardHi,
               onChanged: (v) => set(() => rpe = v)),
-          Text('Nagrody: ${kcal.round()} kcal', style: const TextStyle(color: K9.muted)),
+          Text(tr('Nagrody: {0} kcal', [kcal.round()]), style: const TextStyle(color: K9.muted)),
           const SizedBox(height: 16),
-          FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Zapisz trening')),
+          FilledButton(onPressed: () => Navigator.pop(c, true), child: Text(tr('Zapisz trening'))),
         ]),
       ),
     );
@@ -131,13 +132,11 @@ class _TreatTrainingScreenState extends State<TreatTrainingScreen> {
     await showDialog(
       context: context,
       builder: (c) => AlertDialog(
-        title: const Text('Trening zapisany'),
+        title: Text(tr('Trening zapisany')),
         content: Text(plan == null
-            ? 'Nagrody zapisane w dzienniku.'
-            : 'Nagrody: ${kcal.round()} kcal.\n'
-                'Pozostało na dziś: ${plan.remainingKcal.round()} kcal.\n'
-                'Proponowana porcja karmy na resztę dnia: ${plan.remainingGrams.round()} g.'),
-        actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text('OK'))],
+            ? tr('Nagrody zapisane w dzienniku.')
+            : tr('Nagrody: {0} kcal.\nPozostało na dziś: {1} kcal.\nProponowana porcja karmy na resztę dnia: {2} g.', [kcal.round(), plan.remainingKcal.round(), plan.remainingGrams.round()])),
+        actions: [TextButton(onPressed: () => Navigator.pop(c), child: Text(tr('OK')))],
       ),
     );
     if (mounted) Navigator.of(context).pop();
@@ -146,9 +145,9 @@ class _TreatTrainingScreenState extends State<TreatTrainingScreen> {
   String _summary() {
     final parts = <String>[];
     counts.forEach((id, v) {
-      if (v > 0) parts.add('${_n.product(id)?.title ?? 'przysmak'}: ${fmtNum(v, 0)} szt.');
+      if (v > 0) parts.add(tr('{0}: {1} szt.', [_n.product(id)?.title ?? tr('przysmak'), fmtNum(v, 0)]));
     });
-    return parts.isEmpty ? '' : 'Nagrody – ${parts.join(', ')}';
+    return parts.isEmpty ? '' : tr('Nagrody – {0}', [parts.join(', ')]);
   }
 
   String _clock() {
@@ -167,17 +166,17 @@ class _TreatTrainingScreenState extends State<TreatTrainingScreen> {
       canPop: started == null,
       onPopInvokedWithResult: (didPop, _) async {
         if (didPop) return;
-        final leave = await confirmDelete(context, 'trwający trening (bez zapisu)');
+        final leave = await confirmDelete(context, tr('trwający trening (bez zapisu)'));
         if (leave && context.mounted) {
           timer?.cancel();
           Navigator.of(context).pop();
         }
       },
       child: Scaffold(
-        appBar: AppBar(title: const Text('Trening z nagrodami')),
+        appBar: AppBar(title: Text(tr('Trening z nagrodami'))),
         body: ListView(padding: const EdgeInsets.fromLTRB(16, 4, 16, 120), children: [
           if (started == null) ...[
-            const Text('Dyscyplina', style: TextStyle(fontWeight: FontWeight.w700)),
+            Text(tr('Dyscyplina'), style: TextStyle(fontWeight: FontWeight.w700)),
             const SizedBox(height: 8),
             Wrap(spacing: 8, runSpacing: 8, children: [
               for (final d in Discipline.values)
@@ -207,19 +206,19 @@ class _TreatTrainingScreenState extends State<TreatTrainingScreen> {
                 ]),
               ),
               Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                Text('${kcal.round()} kcal', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: K9.orange)),
-                const Text('w nagrodach', style: TextStyle(color: K9.muted, fontSize: 12)),
+                Text(tr('{0} kcal', [kcal.round()]), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: K9.orange)),
+                Text(tr('w nagrodach'), style: TextStyle(color: K9.muted, fontSize: 12)),
                 if (remaining != null)
-                  Text('zostanie ${remaining.round()} kcal', style: const TextStyle(color: K9.faint, fontSize: 12)),
+                  Text(tr('zostanie {0} kcal', [remaining.round()]), style: const TextStyle(color: K9.faint, fontSize: 12)),
               ]),
             ]),
           ),
           gap12,
-          const SectionTitle('Nagrody', icon: Icons.cookie_rounded),
+          SectionTitle(tr('Nagrody'), icon: Icons.cookie_rounded),
           if (selected.isEmpty)
-            const Padding(
+            Padding(
               padding: EdgeInsets.only(bottom: 8),
-              child: Text('Dodaj przysmaki, których używasz. Najlepiej z masą jednej sztuki.',
+              child: Text(tr('Dodaj przysmaki, których używasz. Najlepiej z masą jednej sztuki.'),
                   style: TextStyle(color: K9.muted)),
             ),
           for (final id in selected)
@@ -228,16 +227,16 @@ class _TreatTrainingScreenState extends State<TreatTrainingScreen> {
               count: counts[id] ?? 0,
               onChanged: (v) => setState(() => counts[id] = v < 0 ? 0 : v),
             ),
-          TextButton.icon(onPressed: _addTreat, icon: const Icon(Icons.add_rounded), label: const Text('Dodaj nagrodę')),
+          TextButton.icon(onPressed: _addTreat, icon: const Icon(Icons.add_rounded), label: Text(tr('Dodaj nagrodę'))),
         ]),
         bottomNavigationBar: SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
             child: started == null
                 ? FilledButton.icon(
-                    onPressed: _start, icon: const Icon(Icons.play_arrow_rounded), label: const Text('Rozpocznij trening'))
+                    onPressed: _start, icon: const Icon(Icons.play_arrow_rounded), label: Text(tr('Rozpocznij trening')))
                 : FilledButton.icon(
-                    onPressed: _finish, icon: const Icon(Icons.stop_rounded), label: const Text('Zakończ i zapisz')),
+                    onPressed: _finish, icon: const Icon(Icons.stop_rounded), label: Text(tr('Zakończ i zapisz'))),
           ),
         ),
       ),
@@ -264,7 +263,7 @@ class _TreatCounter extends StatelessWidget {
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(p.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700)),
-              Text(perPiece == null ? 'liczone w gramach' : '${fmtNum(perPiece)} kcal / szt.',
+              Text(perPiece == null ? tr('liczone w gramach') : tr('{0} kcal / szt.', [fmtNum(perPiece)]),
                   style: const TextStyle(color: K9.muted, fontSize: 12.5)),
             ]),
           ),

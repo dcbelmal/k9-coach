@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import '../models.dart';
 import 'nutrition_models.dart';
+import '../l10n/l10n.dart';
 
 /// Obliczenia zapotrzebowania energetycznego psa.
 ///
@@ -29,11 +30,11 @@ class Energy {
   }
 
   static String lifeStageLabel(int? months) {
-    if (months == null) return 'dorosły';
-    if (months < 4) return 'szczenię do 4 mies.';
-    if (months < 12) return 'młody pies';
+    if (months == null) return tr('dorosły');
+    if (months < 4) return tr('szczenię do 4 mies.');
+    if (months < 12) return tr('młody pies');
     if (months >= 96) return 'senior';
-    return 'dorosły';
+    return tr('dorosły');
   }
 
   /// Dodatkowe kalorie spalone na treningu.
@@ -135,7 +136,7 @@ DailyPlan computeDailyPlan({
     case NutritionGoal.maintain:
       break;
   }
-  if (growing) notes.add('Młody pies ($months mies.): zapotrzebowanie wzrostowe.');
+  if (growing) notes.add(tr('Młody pies ({0} mies.): zapotrzebowanie wzrostowe.', [months]));
 
   final rer = Energy.rer(basis);
   final base = rer * factor;
@@ -173,9 +174,9 @@ DailyPlan computeDailyPlan({
     evening = entriesToday.where((e) => e.kind == FeedKind.evening).fold(0.0, (a, e) => a + e.grams);
   }
 
-  if (training > 0) notes.add('Treningi dziś: +${training.round()} kcal.');
-  if (treats > 0) notes.add('Przysmaki: ${treats.round()} kcal odjęte od porcji karmy.');
-  if (adj != 0) notes.add('Korekta z panelu AI: ${adj > 0 ? '+' : ''}${adj.round()}%.');
+  if (training > 0) notes.add(tr('Treningi dziś: +{0} kcal.', [training.round()]));
+  if (treats > 0) notes.add(tr('Przysmaki: {0} kcal odjęte od porcji karmy.', [treats.round()]));
+  if (adj != 0) notes.add(tr('Korekta z panelu AI: {0}{1}%.', [adj > 0 ? '+' : '', adj.round()]));
 
   return DailyPlan(
     weightKg: weight,

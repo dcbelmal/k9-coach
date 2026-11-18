@@ -9,6 +9,7 @@ import '../theme.dart';
 import '../widgets/common.dart';
 import 'forms.dart';
 import 'home.dart';
+import '../l10n/l10n.dart';
 
 class StatsScreen extends StatefulWidget {
   /// W zakładce Trening: bez własnego nagłówka i marginesu u góry.
@@ -80,15 +81,15 @@ class _StatsScreenState extends State<StatsScreen> {
           top: !widget.embedded,
           child: ListView(padding: EdgeInsets.fromLTRB(16, widget.embedded ? 0 : 8, 16, 120), children: [
             if (!widget.embedded) ...[
-              const Row(children: [
+              Row(children: [
                 Icon(Icons.bar_chart_rounded, color: K9.orange),
                 SizedBox(width: 10),
-                Text('Statystyki', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
+                Text(tr('Statystyki'), style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
               ]),
               gap16,
             ],
             Segmented(
-                items: const ['Tydzień', 'Miesiąc', 'Rok'],
+                items: [tr('Tydzień'), tr('Miesiąc'), tr('Rok')],
                 index: period,
                 onChanged: (i) => setState(() => period = i)),
             gap16,
@@ -99,15 +100,15 @@ class _StatsScreenState extends State<StatsScreen> {
                   Expanded(
                       child: StatValue(
                           icon: Icons.directions_run_rounded,
-                          label: 'Dystans',
+                          label: tr('Dystans'),
                           value: fmtKm(totals.km),
                           unit: 'km')),
                   Expanded(
                       child: StatValue(
-                          icon: Icons.timer_outlined, label: 'Czas treningu', value: fmtDurationShort(totals.minutes))),
+                          icon: Icons.timer_outlined, label: tr('Czas treningu'), value: fmtDurationShort(totals.minutes))),
                   Expanded(
                       child: StatValue(
-                          icon: Icons.event_available_rounded, label: 'Treningi', value: '${totals.count}')),
+                          icon: Icons.event_available_rounded, label: tr('Treningi'), value: '${totals.count}')),
                 ]),
               ),
             ),
@@ -116,11 +117,11 @@ class _StatsScreenState extends State<StatsScreen> {
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Row(children: [
                   Expanded(
-                    child: Text(showKm ? 'Dystans (km)' : 'Czas treningów (min)',
+                    child: Text(showKm ? tr('Dystans (km)') : tr('Czas treningów (min)'),
                         style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
                   ),
                   _MiniToggle(
-                      a: 'km', b: 'czas', first: showKm, onChanged: (v) => setState(() => showKm = v)),
+                      a: 'km', b: tr('czas'), first: showKm, onChanged: (v) => setState(() => showKm = v)),
                 ]),
                 const SizedBox(height: 18),
                 SizedBox(height: 190, child: _BarChart(values: values, labels: [for (final b in buckets) b.$3])),
@@ -269,10 +270,10 @@ class _TypesCardState extends State<_TypesCard> {
     final total = widget.items.length;
     return K9Card(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Typy treningów', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+        Text(tr('Typy treningów'), style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
         const SizedBox(height: 14),
         if (total == 0)
-          const Text('Brak treningów w tym okresie.', style: TextStyle(color: K9.muted))
+          Text(tr('Brak treningów w tym okresie.'), style: TextStyle(color: K9.muted))
         else
           Row(children: [
             SizedBox(
@@ -348,8 +349,8 @@ class _LoadCard extends StatelessWidget {
     return K9Card(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          const Expanded(
-              child: Text('Obciążenie i regeneracja', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700))),
+          Expanded(
+              child: Text(tr('Obciążenie i regeneracja'), style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700))),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(color: c.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(10)),
@@ -376,7 +377,7 @@ class _LoadCard extends StatelessWidget {
                     showTitles: true,
                     reservedSize: 20,
                     interval: 1,
-                    getTitlesWidget: (v, m) => Text(v.toInt() == 7 ? 'teraz' : '-${7 - v.toInt()} tydz.',
+                    getTitlesWidget: (v, m) => Text(v.toInt() == 7 ? tr('teraz') : tr('-{0} tydz.', [7 - v.toInt()]),
                         style: const TextStyle(color: K9.faint, fontSize: 9.5)),
                   ),
                 ),
@@ -409,8 +410,8 @@ class _LoadCard extends StatelessWidget {
         const SizedBox(height: 8),
         Text(
             r.ratio == 0
-                ? 'Obciążenie = czas × intensywność (RPE).'
-                : 'Stosunek obciążenia 7 dni do średniej z 4 tygodni: ${fmtNum(r.ratio, 2)} (bezpiecznie 0,8–1,3).',
+                ? tr('Obciążenie = czas × intensywność (RPE).')
+                : tr('Stosunek obciążenia 7 dni do średniej z 4 tygodni: {0} (bezpiecznie 0,8–1,3).', [fmtNum(r.ratio, 2)]),
             style: const TextStyle(color: K9.faint, fontSize: 11.5)),
       ]),
     );
@@ -428,18 +429,18 @@ class _WeightCard extends StatelessWidget {
     return K9Card(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          const Expanded(child: Text('Waga', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700))),
+          Expanded(child: Text(tr('Waga'), style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700))),
           if (w.isNotEmpty)
-            Text('${fmtNum(w.last.kg)} kg',
+            Text(tr('{0} kg', [fmtNum(w.last.kg)]),
                 style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: K9.orange)),
           IconButton(
               onPressed: () => openWeightForm(context),
               icon: const Icon(Icons.add_circle_outline_rounded, color: K9.orange)),
         ]),
         if (w.length < 2)
-          const Padding(
+          Padding(
             padding: EdgeInsets.symmetric(vertical: 12),
-            child: Text('Dodaj co najmniej dwa pomiary, aby zobaczyć wykres.',
+            child: Text(tr('Dodaj co najmniej dwa pomiary, aby zobaczyć wykres.'),
                 style: TextStyle(color: K9.muted)),
           )
         else
@@ -486,7 +487,7 @@ class WeightChart extends StatelessWidget {
                     show: true,
                     alignment: Alignment.topRight,
                     style: const TextStyle(color: K9.green, fontSize: 11, fontWeight: FontWeight.w600),
-                    labelResolver: (_) => 'cel ${fmtNum(target!)} kg',
+                    labelResolver: (_) => tr('cel {0} kg', [fmtNum(target!)]),
                   ),
                 ),
               ]),
@@ -520,7 +521,7 @@ class WeightChart extends StatelessWidget {
             getTooltipColor: (_) => K9.cardHi,
             getTooltipItems: (spots) => [
               for (final s in spots)
-                LineTooltipItem('${fmtNum(s.y)} kg',
+                LineTooltipItem(tr('{0} kg', [fmtNum(s.y)]),
                     const TextStyle(color: K9.text, fontWeight: FontWeight.w700))
             ],
           ),
@@ -565,14 +566,14 @@ class _GoalsCard extends StatelessWidget {
     final w = s.dog?.weightKg;
     final t = s.dog?.targetWeightKg;
     final rows = <(String, String, double, Color)>[
-      ('Kilometry w tym tygodniu', '${fmtKm(weekKm)} / ${fmtKm(goal)} km', goal <= 0 ? 0 : weekKm / goal, K9.orange),
-      ('Kilometry w tym roku', '${fmtKm(yearKm)} / ${fmtKm(yearGoal)} km', yearGoal <= 0 ? 0 : yearKm / yearGoal, K9.yellow),
+      (tr('Kilometry w tym tygodniu'), tr('{0} / {1} km', [fmtKm(weekKm), fmtKm(goal)]), goal <= 0 ? 0 : weekKm / goal, K9.orange),
+      (tr('Kilometry w tym roku'), tr('{0} / {1} km', [fmtKm(yearKm), fmtKm(yearGoal)]), yearGoal <= 0 ? 0 : yearKm / yearGoal, K9.yellow),
       if (w != null && t != null && t > 0)
-        ('Docelowa masa', '${fmtNum(w)} / ${fmtNum(t)} kg', math.min(w, t) / math.max(w, t), K9.green),
+        (tr('Docelowa masa'), tr('{0} / {1} kg', [fmtNum(w), fmtNum(t)]), math.min(w, t) / math.max(w, t), K9.green),
     ];
     return K9Card(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Postęp do celów', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+        Text(tr('Postęp do celów'), style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
         const SizedBox(height: 14),
         for (final r in rows) ...[
           Row(children: [

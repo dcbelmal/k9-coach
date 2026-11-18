@@ -8,11 +8,12 @@ import '../widgets/common.dart';
 import 'breeding_logic.dart';
 import 'breeding_models.dart';
 import 'breeding_store.dart';
+import '../l10n/l10n.dart';
 
 void openLitter(BuildContext context, Mating m) =>
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => LitterScreen(mating: m)));
 
-String _g(int g) => g >= 1000 ? '${fmtNum(g / 1000, 2)} kg' : '$g g';
+String _g(int g) => g >= 1000 ? tr('{0} kg', [fmtNum(g / 1000, 2)]) : '$g g';
 
 /// Miot: szczenięta i ich ważenia.
 class LitterScreen extends StatelessWidget {
@@ -31,7 +32,7 @@ class LitterScreen extends StatelessWidget {
         final age = l.ageDays(now);
         return Scaffold(
           appBar: AppBar(
-            title: Text('Miot ${fmtDateShort(l.born)}'),
+            title: Text(tr('Miot {0}', [fmtDateShort(l.born)])),
             actions: [
               IconButton(
                 icon: const Icon(Icons.edit_outlined),
@@ -46,15 +47,15 @@ class LitterScreen extends StatelessWidget {
                   foregroundColor: Colors.black,
                   onPressed: () => showFormSheet(context, _WeighAllForm(mating: mating)),
                   icon: const Icon(Icons.scale_rounded),
-                  label: const Text('Ważenie miotu', style: TextStyle(fontWeight: FontWeight.w700)),
+                  label: Text(tr('Ważenie miotu'), style: TextStyle(fontWeight: FontWeight.w700)),
                 ),
           body: ListView(padding: const EdgeInsets.fromLTRB(16, 4, 16, 100), children: [
             K9Card(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Row(children: [
-                  Expanded(child: StatValue(label: 'Wiek', value: age < 14 ? '$age' : '${age ~/ 7}', unit: age < 14 ? 'dni' : 'tyg.')),
-                  Expanded(child: StatValue(label: 'Psy', value: '${l.males}')),
-                  Expanded(child: StatValue(label: 'Suki', value: '${l.females}')),
+                  Expanded(child: StatValue(label: tr('Wiek'), value: age < 14 ? '$age' : '${age ~/ 7}', unit: age < 14 ? tr('dni') : tr('tyg.'))),
+                  Expanded(child: StatValue(label: tr('Psy'), value: '${l.males}')),
+                  Expanded(child: StatValue(label: tr('Suki'), value: '${l.females}')),
                 ]),
                 if (mating.partner.isNotEmpty || l.notes.isNotEmpty) ...[
                   const SizedBox(height: 12),
@@ -70,15 +71,14 @@ class LitterScreen extends StatelessWidget {
             gap12,
             K9Card(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                SectionTitle('Szczenięta', icon: Icons.pets_rounded, action: 'Dodaj', onAction: () => openPuppyForm(context, mating)),
-                if (l.puppies.isEmpty) const Text('Dodaj szczenięta, żeby zapisywać ich masę.', style: TextStyle(color: K9.muted)),
+                SectionTitle(tr('Szczenięta'), icon: Icons.pets_rounded, action: tr('Dodaj'), onAction: () => openPuppyForm(context, mating)),
+                if (l.puppies.isEmpty) Text(tr('Dodaj szczenięta, żeby zapisywać ich masę.'), style: TextStyle(color: K9.muted)),
                 for (final p in l.puppies) _PuppyRow(mating: mating, p: p, born: l.born),
               ]),
             ),
             gap12,
-            const Text(
-              'Szczenię powinno codziennie przybierać i podwoić masę urodzeniową w ok. 7–10 dni. '
-              'Spadek wagi w pierwszych dniach – skontaktuj się z weterynarzem.',
+            Text(
+              tr('Szczenię powinno codziennie przybierać i podwoić masę urodzeniową w ok. 7–10 dni. Spadek wagi w pierwszych dniach – skontaktuj się z weterynarzem.'),
               style: TextStyle(color: K9.faint, fontSize: 12),
             ),
           ]),
@@ -88,12 +88,12 @@ class LitterScreen extends StatelessWidget {
   }
 
   static String _careTip(int age) => switch (age) {
-        < 3 => 'Pierwsze dni: waż szczenięta 2× dziennie, pilnuj ciepła w kojcu (ok. 30 °C) i czy każde ssie.',
-        < 14 => 'Waż codziennie o tej samej porze. Oczy otworzą się ok. 10.–14. dnia.',
-        < 21 => 'Ok. 2.–3. tygodnia pierwsze odrobaczanie. Szczenięta zaczynają chodzić.',
-        < 35 => 'Od 3.–4. tygodnia pierwsze papki i socjalizacja: nowe dźwięki, podłoża, ludzie.',
-        < 56 => 'Odrobaczanie co 2 tygodnie, pierwsze szczepienie ok. 6.–8. tygodnia. Przegląd miotu w związku.',
-        _ => 'Szczenięta mogą iść do nowych domów od ok. 8. tygodnia (po przeglądzie miotu i czipowaniu).',
+        < 3 => tr('Pierwsze dni: waż szczenięta 2× dziennie, pilnuj ciepła w kojcu (ok. 30 °C) i czy każde ssie.'),
+        < 14 => tr('Waż codziennie o tej samej porze. Oczy otworzą się ok. 10.–14. dnia.'),
+        < 21 => tr('Ok. 2.–3. tygodnia pierwsze odrobaczanie. Szczenięta zaczynają chodzić.'),
+        < 35 => tr('Od 3.–4. tygodnia pierwsze papki i socjalizacja: nowe dźwięki, podłoża, ludzie.'),
+        < 56 => tr('Odrobaczanie co 2 tygodnie, pierwsze szczepienie ok. 6.–8. tygodnia. Przegląd miotu w związku.'),
+        _ => tr('Szczenięta mogą iść do nowych domów od ok. 8. tygodnia (po przeglądzie miotu i czipowaniu).'),
       };
 }
 
@@ -151,25 +151,25 @@ class _LitterFormState extends State<_LitterForm> {
   Widget build(BuildContext context) {
     final isNew = l == null;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      SheetTitle(isNew ? 'Poród – nowy miot' : 'Edytuj miot'),
-      DateField(label: 'Data porodu', value: born, onChanged: (v) => setState(() => born = v!)),
+      SheetTitle(isNew ? tr('Poród – nowy miot') : tr('Edytuj miot')),
+      DateField(label: tr('Data porodu'), value: born, onChanged: (v) => setState(() => born = v!)),
       if (isNew) ...[
         gap12,
         Row(children: [
-          Expanded(child: _num(males, 'Psy (szt.)')),
+          Expanded(child: _num(males, tr('Psy (szt.)'))),
           const SizedBox(width: 10),
-          Expanded(child: _num(females, 'Suki (szt.)')),
+          Expanded(child: _num(females, tr('Suki (szt.)'))),
         ]),
-        const Padding(
+        Padding(
           padding: EdgeInsets.only(left: 4, top: 6),
-          child: Text('Utworzę listę szczeniąt – imiona i masę uzupełnisz później.',
+          child: Text(tr('Utworzę listę szczeniąt – imiona i masę uzupełnisz później.'),
               style: TextStyle(color: K9.faint, fontSize: 12)),
         ),
       ],
       gap12,
-      _num(stillborn, 'Martwo urodzone (opcjonalnie)'),
+      _num(stillborn, tr('Martwo urodzone (opcjonalnie)')),
       gap12,
-      TextField(controller: notes, maxLines: 3, decoration: const InputDecoration(labelText: 'Notatki (przebieg porodu)')),
+      TextField(controller: notes, maxLines: 3, decoration: InputDecoration(labelText: tr('Notatki (przebieg porodu)'))),
       const SizedBox(height: 20),
       FilledButton(
         onPressed: () async {
@@ -179,8 +179,8 @@ class _LitterFormState extends State<_LitterForm> {
             final nm = int.tryParse(males.text) ?? 0, nf = int.tryParse(females.text) ?? 0;
             var k = 0;
             m.litter = Litter(born: dayOnly(born), stillborn: sb, notes: notes.text.trim(), puppies: [
-              for (var i = 0; i < nm; i++) Puppy(id: '${newId()}${k++}', name: 'Pies ${i + 1}', female: false),
-              for (var i = 0; i < nf; i++) Puppy(id: '${newId()}${k++}', name: 'Suka ${i + 1}', female: true),
+              for (var i = 0; i < nm; i++) Puppy(id: '${newId()}${k++}', name: tr('Pies {0}', [i + 1]), female: false),
+              for (var i = 0; i < nf; i++) Puppy(id: '${newId()}${k++}', name: tr('Suka {0}', [i + 1]), female: true),
             ]);
           } else {
             m.litter!
@@ -194,7 +194,7 @@ class _LitterFormState extends State<_LitterForm> {
           Navigator.pop(context);
           if (isNew) openLitter(context, m);
         },
-        child: const Text('Zapisz'),
+        child: Text(tr('Zapisz')),
       ),
     ]);
   }
@@ -233,34 +233,34 @@ class _PuppyFormState extends State<_PuppyForm> {
     final l = widget.mating.litter!;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       SheetTitle(
-        p == null ? 'Nowe szczenię' : p.name,
+        p == null ? tr('Nowe szczenię') : p.name,
         onDelete: p == null
             ? null
             : () async {
-                if (await confirmDelete(context, 'szczenię ${p.name}')) {
+                if (await confirmDelete(context, tr('szczenię {0}', [p.name]))) {
                   l.puppies.remove(p);
                   await BreedingStore.instance.touch();
                   if (context.mounted) Navigator.pop(context);
                 }
               },
       ),
-      TextField(controller: name, textCapitalization: TextCapitalization.words, decoration: const InputDecoration(labelText: 'Imię')),
+      TextField(controller: name, textCapitalization: TextCapitalization.words, decoration: InputDecoration(labelText: tr('Imię'))),
       gap12,
       SegmentedButton<bool>(
-        segments: const [ButtonSegment(value: false, label: Text('Pies')), ButtonSegment(value: true, label: Text('Suka'))],
+        segments: [ButtonSegment(value: false, label: Text(tr('Pies'))), ButtonSegment(value: true, label: Text(tr('Suka')))],
         selected: {female},
         onSelectionChanged: (s) => setState(() => female = s.first),
         showSelectedIcon: false,
       ),
       gap12,
-      TextField(controller: color, decoration: const InputDecoration(labelText: 'Umaszczenie / znaki szczególne')),
+      TextField(controller: color, decoration: InputDecoration(labelText: tr('Umaszczenie / znaki szczególne'))),
       gap16,
-      const Text('Ważenie', style: TextStyle(fontWeight: FontWeight.w700)),
+      Text(tr('Ważenie'), style: TextStyle(fontWeight: FontWeight.w700)),
       gap12,
       Row(children: [
-        Expanded(child: DateField(label: 'Data', value: date, onChanged: (v) => setState(() => date = v!))),
+        Expanded(child: DateField(label: tr('Data'), value: date, onChanged: (v) => setState(() => date = v!))),
         const SizedBox(width: 10),
-        Expanded(child: _num(grams, 'Masa (g)')),
+        Expanded(child: _num(grams, tr('Masa (g)'))),
       ]),
       if (p != null && p.weights.isNotEmpty) ...[
         gap12,
@@ -269,7 +269,7 @@ class _PuppyFormState extends State<_PuppyForm> {
             padding: const EdgeInsets.symmetric(vertical: 3),
             child: Row(children: [
               Expanded(
-                child: Text('${fmtDate(w.date)} · ${l.born.difference(w.date).inDays.abs()}. dzień',
+                child: Text(tr('{0} · {1}. dzień', [fmtDate(w.date), l.born.difference(w.date).inDays.abs()]),
                     style: const TextStyle(color: K9.muted, fontSize: 13)),
               ),
               Text(_g(w.grams), style: const TextStyle(fontWeight: FontWeight.w600)),
@@ -280,7 +280,7 @@ class _PuppyFormState extends State<_PuppyForm> {
       FilledButton(
         onPressed: () async {
           if (name.text.trim().isEmpty) {
-            toast(context, 'Podaj imię szczenięcia');
+            toast(context, tr('Podaj imię szczenięcia'));
             return;
           }
           final pup = p ?? Puppy(id: newId(), name: '');
@@ -294,7 +294,7 @@ class _PuppyFormState extends State<_PuppyForm> {
           await BreedingStore.instance.touch();
           if (context.mounted) Navigator.pop(context);
         },
-        child: const Text('Zapisz'),
+        child: Text(tr('Zapisz')),
       ),
     ]);
   }
@@ -316,8 +316,8 @@ class _WeighAllFormState extends State<_WeighAllForm> {
   Widget build(BuildContext context) {
     final l = widget.mating.litter!;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      const SheetTitle('Ważenie miotu'),
-      DateField(label: 'Data', value: date, onChanged: (v) => setState(() => date = v!)),
+      SheetTitle(tr('Ważenie miotu')),
+      DateField(label: tr('Data'), value: date, onChanged: (v) => setState(() => date = v!)),
       gap12,
       for (final p in l.puppies)
         Padding(
@@ -334,7 +334,7 @@ class _WeighAllFormState extends State<_WeighAllForm> {
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 decoration: InputDecoration(
                   labelText: 'g',
-                  hintText: p.lastGrams == null ? null : 'było ${p.lastGrams}',
+                  hintText: p.lastGrams == null ? null : tr('było {0}', [p.lastGrams]),
                 ),
               ),
             ),
@@ -354,9 +354,9 @@ class _WeighAllFormState extends State<_WeighAllForm> {
           await BreedingStore.instance.touch();
           if (!context.mounted) return;
           Navigator.pop(context);
-          toast(context, 'Zapisano ważenie ($n szt.)');
+          toast(context, tr('Zapisano ważenie ({0} szt.)', [n]));
         },
-        child: const Text('Zapisz'),
+        child: Text(tr('Zapisz')),
       ),
     ]);
   }
