@@ -7,6 +7,7 @@ import '../store.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import 'zkwp_calendar.dart';
+import '../l10n/l10n.dart';
 
 final _s = AppStore.instance;
 
@@ -24,10 +25,10 @@ class _ShowsScreenState extends State<ShowsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-          title: const Row(children: [
+          title: Row(children: [
         Icon(Icons.emoji_events_outlined, color: K9.orange),
         SizedBox(width: 10),
-        Text('Wystawy'),
+        Text(tr('Wystawy')),
       ])),
       floatingActionButton: FloatingActionButton(
         backgroundColor: K9.orange,
@@ -39,7 +40,7 @@ class _ShowsScreenState extends State<ShowsScreen> {
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
           child: Segmented(
-              items: const ['Terminarz', 'Moje', 'Wyniki', 'Tytuły'], index: tab, onChanged: (i) => setState(() => tab = i)),
+              items: [tr('Terminarz'), tr('Moje'), tr('Wyniki'), tr('Tytuły')], index: tab, onChanged: (i) => setState(() => tab = i)),
         ),
         Expanded(
           child: ListenableBuilder(
@@ -72,16 +73,16 @@ class _ShowList extends StatelessWidget {
     if (_s.shows.isEmpty) {
       return EmptyState(
         icon: Icons.emoji_events_rounded,
-        title: 'Brak wystaw',
-        text: 'Dodaj wystawę, a przypomnę o terminie zgłoszeń i samej wystawie.',
-        action: 'Dodaj wystawę',
+        title: tr('Brak wystaw'),
+        text: tr('Dodaj wystawę, a przypomnę o terminie zgłoszeń i samej wystawie.'),
+        action: tr('Dodaj wystawę'),
         onAction: () => openShowForm(context),
       );
     }
     return ListView(padding: const EdgeInsets.fromLTRB(16, 0, 16, 100), children: [
-      if (upcoming.isNotEmpty) const _Header('Nadchodzące'),
+      if (upcoming.isNotEmpty) _Header(tr('Nadchodzące')),
       for (final (i, e) in upcoming.indexed) FadeSlideIn(index: i, child: _ShowCard(e: e)),
-      if (past.isNotEmpty) const _Header('Minione'),
+      if (past.isNotEmpty) _Header(tr('Minione')),
       for (final (i, e) in past.indexed) FadeSlideIn(index: i + upcoming.length, child: _ShowCard(e: e)),
     ]);
   }
@@ -117,7 +118,7 @@ class _ShowCard extends StatelessWidget {
                 Text(e.name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15.5)),
                 const SizedBox(height: 2),
                 Text(
-                    [if (e.place.isNotEmpty) e.place, e.type.label, 'kl. ${e.showClass.label}'].join(' · '),
+                    [if (e.place.isNotEmpty) e.place, e.type.label, tr('kl. {0}', [e.showClass.label])].join(' · '),
                     style: const TextStyle(color: K9.muted, fontSize: 12.5)),
               ]),
             ),
@@ -128,15 +129,15 @@ class _ShowCard extends StatelessWidget {
             Row(children: [
               const Icon(Icons.assignment_late_outlined, size: 16, color: K9.yellow),
               const SizedBox(width: 6),
-              Text('Zgłoszenia do ${fmtDate(e.entryDeadline!)} (${relDays(e.entryDeadline!)})',
+              Text(tr('Zgłoszenia do {0} ({1})', [fmtDate(e.entryDeadline!), relDays(e.entryDeadline!)]),
                   style: const TextStyle(color: K9.yellow, fontSize: 12.5, fontWeight: FontWeight.w600)),
             ]),
           ],
           if (e.hasResult) ...[
             const SizedBox(height: 10),
             Wrap(spacing: 6, runSpacing: 6, children: [
-              if (e.grade != null) _Tag(e.grade!, K9.green),
-              if (e.placement != null) _Tag('${e.placement}. lokata', K9.blue),
+              if (e.grade != null) _Tag(tr(e.grade!), K9.green),
+              if (e.placement != null) _Tag(tr('{0}. lokata', [e.placement]), K9.blue),
               for (final t in e.titles) _Tag(t.short, t.color),
             ]),
           ],
@@ -187,19 +188,19 @@ class _Results extends StatelessWidget {
   Widget build(BuildContext context) {
     final list = _s.shows.where((e) => e.hasResult).toList();
     if (list.isEmpty) {
-      return const EmptyState(
+      return EmptyState(
           icon: Icons.military_tech_rounded,
-          title: 'Brak wyników',
-          text: 'Po wystawie otwórz ją i wpisz ocenę, lokatę i zdobyte tytuły.');
+          title: tr('Brak wyników'),
+          text: tr('Po wystawie otwórz ją i wpisz ocenę, lokatę i zdobyte tytuły.'));
     }
     final excellent = list.where((e) => e.grade == 'Doskonała').length;
     final wins = list.where((e) => e.placement == 1).length;
     return ListView(padding: const EdgeInsets.fromLTRB(16, 0, 16, 100), children: [
       K9Card(
         child: Row(children: [
-          Expanded(child: StatValue(label: 'Wystawy', value: '${list.length}')),
-          Expanded(child: StatValue(label: 'Oceny doskonałe', value: '$excellent')),
-          Expanded(child: StatValue(label: 'Pierwsze lokaty', value: '$wins')),
+          Expanded(child: StatValue(label: tr('Wystawy'), value: '${list.length}')),
+          Expanded(child: StatValue(label: tr('Oceny doskonałe'), value: '$excellent')),
+          Expanded(child: StatValue(label: tr('Pierwsze lokaty'), value: '$wins')),
         ]),
       ),
       gap12,
@@ -220,20 +221,20 @@ class _Titles extends StatelessWidget {
     return ListView(padding: const EdgeInsets.fromLTRB(16, 0, 16, 100), children: [
       K9Card(
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const SectionTitle('Championaty', icon: Icons.workspace_premium_outlined),
+          SectionTitle(tr('Championaty'), icon: Icons.workspace_premium_outlined),
           for (final c in Championship.values) ...[
             _ChampRow(st: _s.champStatus(c)),
             const SizedBox(height: 14),
           ],
-          const Text(
-              'Zasady wg regulaminów ZKwP (zkwp.pl/championaty) i FCI. Stuknij championat, aby zobaczyć warunki. Tytuł zatwierdza ZKwP na wniosek właściciela.',
+          Text(
+              tr('Zasady wg regulaminów ZKwP (zkwp.pl/championaty) i FCI. Stuknij championat, aby zobaczyć warunki. Tytuł zatwierdza ZKwP na wniosek właściciela.'),
               style: TextStyle(color: K9.faint, fontSize: 11.5)),
         ]),
       ),
       gap16,
-      const SectionTitle('Galeria medali', icon: Icons.military_tech_outlined),
+      SectionTitle(tr('Galeria medali'), icon: Icons.military_tech_outlined),
       if (medals.isEmpty)
-        const K9Card(child: Text('Tu pojawią się zdobyte tytuły.', style: TextStyle(color: K9.muted)))
+        K9Card(child: Text(tr('Tu pojawią się zdobyte tytuły.'), style: TextStyle(color: K9.muted)))
       else
         GridView.count(
           crossAxisCount: 3,
@@ -333,15 +334,15 @@ void _showRules(BuildContext context, ChampStatus st) {
         K9Card(
           color: K9.cardHi,
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('Zasada', style: TextStyle(fontWeight: FontWeight.w700)),
+            Text(tr('Zasada'), style: TextStyle(fontWeight: FontWeight.w700)),
             const SizedBox(height: 6),
             Text(st.rule, style: const TextStyle(color: Color(0xFFCFCFD4), fontSize: 13.5, height: 1.4)),
           ]),
         ),
         if (st.champ == Championship.inter) ...[
           gap12,
-          const Text(
-              'Rasy z grup I–III domyślnie traktuję jako podlegające próbom pracy. Możesz to zmienić w profilu psa. Zdaną próbę zaznacz w Celach (np. IGP 1 – zaliczone).',
+          Text(
+              tr('Rasy z grup I–III domyślnie traktuję jako podlegające próbom pracy. Możesz to zmienić w profilu psa. Zdaną próbę zaznacz w Celach (np. IGP 1 – zaliczone).'),
               style: TextStyle(color: K9.faint, fontSize: 12)),
         ],
       ]),
@@ -416,38 +417,38 @@ class _ShowFormState extends State<_ShowForm> {
   Widget build(BuildContext context) {
     final past = e.date.isBefore(DateTime.now().add(const Duration(days: 1)));
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      SheetTitle(widget.existing == null ? 'Nowa wystawa' : 'Wystawa',
+      SheetTitle(widget.existing == null ? tr('Nowa wystawa') : tr('Wystawa'),
           onDelete: widget.existing == null
               ? null
               : () async {
-                  if (await confirmDelete(context, 'wystawę')) {
+                  if (await confirmDelete(context, tr('wystawę'))) {
                     await _s.deleteShow(widget.existing!);
                     if (context.mounted) Navigator.pop(context);
                   }
                 }),
-      TextField(controller: name, decoration: const InputDecoration(labelText: 'Nazwa wystawy *')),
+      TextField(controller: name, decoration: InputDecoration(labelText: tr('Nazwa wystawy *'))),
       gap12,
       Row(children: [
-        Expanded(child: TextField(controller: place, decoration: const InputDecoration(labelText: 'Miejsce'))),
+        Expanded(child: TextField(controller: place, decoration: InputDecoration(labelText: tr('Miejsce')))),
         const SizedBox(width: 12),
-        Expanded(child: TextField(controller: judge, decoration: const InputDecoration(labelText: 'Sędzia'))),
+        Expanded(child: TextField(controller: judge, decoration: InputDecoration(labelText: tr('Sędzia')))),
       ]),
       gap12,
-      DateField(label: 'Data wystawy', value: e.date, withTime: true, onChanged: (d) => setState(() => e.date = d!)),
+      DateField(label: tr('Data wystawy'), value: e.date, withTime: true, onChanged: (d) => setState(() => e.date = d!)),
       if (e.type == ShowType.international) ...[
         gap12,
-        TextField(controller: country, decoration: const InputDecoration(labelText: 'Kraj (ważne dla C.I.B.)')),
+        TextField(controller: country, decoration: InputDecoration(labelText: tr('Kraj (ważne dla C.I.B.)'))),
       ],
       gap16,
-      const Text('Rodzaj', style: TextStyle(fontWeight: FontWeight.w600)),
+      Text(tr('Rodzaj'), style: TextStyle(fontWeight: FontWeight.w600)),
       const SizedBox(height: 8),
       _chips(ShowType.values, e.type, (v) => v.label, (v) => e.type = v),
       gap16,
-      const Text('Klasa', style: TextStyle(fontWeight: FontWeight.w600)),
+      Text(tr('Klasa'), style: TextStyle(fontWeight: FontWeight.w600)),
       const SizedBox(height: 8),
       _chips(ShowClass.values, e.showClass, (v) => v.label, (v) => e.showClass = v),
       gap16,
-      const Text('Zgłoszenie', style: TextStyle(fontWeight: FontWeight.w600)),
+      Text(tr('Zgłoszenie'), style: TextStyle(fontWeight: FontWeight.w600)),
       const SizedBox(height: 8),
       _chips(ShowStatus.values, e.status, (v) => v.label, (v) => e.status = v),
       gap12,
@@ -455,7 +456,7 @@ class _ShowFormState extends State<_ShowForm> {
         Expanded(
           flex: 3,
           child: DateField(
-              label: 'Termin zgłoszeń',
+              label: tr('Termin zgłoszeń'),
               value: e.entryDeadline,
               clearable: true,
               onChanged: (d) => setState(() => e.entryDeadline = d)),
@@ -466,12 +467,12 @@ class _ShowFormState extends State<_ShowForm> {
           child: TextField(
               controller: fee,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(labelText: 'Opłata (zł)')),
+              decoration: InputDecoration(labelText: tr('Opłata (zł)'))),
         ),
       ]),
       if (past || e.hasResult) ...[
         const SizedBox(height: 22),
-        const Text('Wynik', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+        Text(tr('Wynik'), style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
         gap12,
         Row(children: [
           Expanded(
@@ -479,10 +480,10 @@ class _ShowFormState extends State<_ShowForm> {
             child: DropdownButtonFormField<String?>(
               initialValue: e.grade,
               dropdownColor: K9.cardHi,
-              decoration: const InputDecoration(labelText: 'Ocena'),
+              decoration: InputDecoration(labelText: tr('Ocena')),
               items: [
                 const DropdownMenuItem(value: null, child: Text('—')),
-                for (final g in showGrades) DropdownMenuItem(value: g, child: Text(g)),
+                for (final g in showGrades) DropdownMenuItem(value: g, child: Text(tr(g))),
               ],
               onChanged: (v) => e.grade = v,
             ),
@@ -493,11 +494,11 @@ class _ShowFormState extends State<_ShowForm> {
             child: TextField(
                 controller: placement,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Lokata')),
+                decoration: InputDecoration(labelText: tr('Lokata'))),
           ),
         ]),
         gap12,
-        const Text('Zdobyte tytuły', style: TextStyle(fontWeight: FontWeight.w600)),
+        Text(tr('Zdobyte tytuły'), style: TextStyle(fontWeight: FontWeight.w600)),
         const SizedBox(height: 8),
         Wrap(spacing: 8, runSpacing: 8, children: [
           for (final t in ShowTitle.values.where((t) => t != ShowTitle.jcwc || e.titles.contains(t)))
@@ -516,12 +517,12 @@ class _ShowFormState extends State<_ShowForm> {
         ]),
       ],
       gap16,
-      TextField(controller: notes, maxLines: 3, minLines: 1, decoration: const InputDecoration(labelText: 'Notatki (opis sędziego, wrażenia)')),
+      TextField(controller: notes, maxLines: 3, minLines: 1, decoration: InputDecoration(labelText: tr('Notatki (opis sędziego, wrażenia)'))),
       const SizedBox(height: 20),
       FilledButton(
         onPressed: () async {
           if (name.text.trim().isEmpty) {
-            toast(context, 'Wpisz nazwę wystawy');
+            toast(context, tr('Wpisz nazwę wystawy'));
             return;
           }
           e
@@ -536,10 +537,10 @@ class _ShowFormState extends State<_ShowForm> {
           await _s.upsertShow(e);
           if (context.mounted) {
             Navigator.pop(context);
-            toast(context, 'Zapisano');
+            toast(context, tr('Zapisano'));
           }
         },
-        child: const Text('Zapisz'),
+        child: Text(tr('Zapisz')),
       ),
     ]);
   }

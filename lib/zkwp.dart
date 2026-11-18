@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'models.dart';
 import 'models_ext.dart';
+import 'l10n/l10n.dart';
 
 /// Wystawa z terminarza ZKwP (https://zkwp.pl/wystawy.php).
 class ZkwpShow {
@@ -43,10 +44,10 @@ class ZkwpShow {
 
   String get title {
     final kind = switch (type) {
-      ShowType.international => 'Międzynarodowa wystawa psów',
-      ShowType.national => 'Krajowa wystawa psów',
-      ShowType.club => 'Wystawa klubowa',
-      ShowType.specialty => 'Wystawa specjalistyczna',
+      ShowType.international => tr('Międzynarodowa wystawa psów'),
+      ShowType.national => tr('Krajowa wystawa psów'),
+      ShowType.club => tr('Wystawa klubowa'),
+      ShowType.specialty => tr('Wystawa specjalistyczna'),
     };
     return '$kind – $city';
   }
@@ -106,9 +107,9 @@ class ZkwpShow {
 
   String get groupsLabel {
     final g = groups;
-    if (g == null) return 'rasy: sprawdź u organizatora';
-    if (g.isEmpty) return 'wszystkie rasy';
-    return 'gr. ${g.map((e) => romanNumerals[e - 1]).join(', ')}';
+    if (g == null) return tr('rasy: sprawdź u organizatora');
+    if (g.isEmpty) return tr('wszystkie rasy');
+    return tr('gr. {0}', [g.map((e) => romanNumerals[e - 1]).join(', ')]);
   }
 
   Map<String, dynamic> toJson() => {
@@ -267,13 +268,13 @@ class ZkwpService {
       final r = await http.get(url(year), headers: {'User-Agent': 'Mozilla/5.0 (Valkor Coach)'}).timeout(const Duration(seconds: 20));
       if (r.statusCode != 200) throw Exception('HTTP ${r.statusCode}');
       final shows = parseZkwp(_decode(r.bodyBytes), year);
-      if (shows.isEmpty && cached != null) return (cached, cachedAt, 'Nie udało się odczytać terminarza.');
+      if (shows.isEmpty && cached != null) return (cached, cachedAt, tr('Nie udało się odczytać terminarza.'));
       final now = DateTime.now();
       await prefs.setString(
           '$_cacheKey$year', jsonEncode({'at': now.toIso8601String(), 'shows': shows.map((e) => e.toJson()).toList()}));
       return (shows, now, null);
     } catch (e) {
-      return (cached ?? <ZkwpShow>[], cachedAt, 'Brak połączenia ze stroną ZKwP.');
+      return (cached ?? <ZkwpShow>[], cachedAt, tr('Brak połączenia ze stroną ZKwP.'));
     }
   }
 }

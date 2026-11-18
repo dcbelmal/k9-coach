@@ -1,6 +1,7 @@
 import 'dart:ui' show PlatformDispatcher;
 
 import 'package:shared_preferences/shared_preferences.dart';
+import '../l10n/l10n.dart';
 
 /// Kraj członkowski FCI (lub sąsiad) – kod ISO, nazwa i flaga.
 class ShowCountry {
@@ -13,7 +14,10 @@ class ShowCountry {
   /// Flaga z kodu ISO (dwie litery → dwa symbole regionalne).
   String get flag => String.fromCharCodes(code.codeUnits.map((c) => 0x1F1E6 + c - 0x41));
 
-  String get label => '$flag $name';
+  /// Nazwa w języku aplikacji (klucz tłumaczenia = nazwa polska).
+  String get localName => tr(name);
+
+  String get label => '$flag $localName';
 }
 
 /// Kraje Europy, dla których FCI publikuje kalendarz wystaw.
