@@ -2,7 +2,10 @@ import 'package:flutter/services.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:material_ui/material_ui.dart';
 
+import 'breeding/breeding_store.dart';
 import 'files/file_store.dart';
+import 'guides/guide_store.dart';
+import 'modules/billing.dart';
 import 'gallery/gallery_store.dart';
 import 'heat/heat_store.dart';
 import 'modules/module_store.dart';
@@ -29,7 +32,10 @@ Future<void> main() async {
   await ModuleStore.instance.load();
   await HeatStore.instance.load();
   await GalleryStore.instance.load();
+  await BreedingStore.instance.load();
+  await GuideStore.instance.load();
   runApp(const K9CoachApp());
+  Billing.instance.init(); // w tle – nie blokuje startu aplikacji
 }
 
 class K9CoachApp extends StatelessWidget {

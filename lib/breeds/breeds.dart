@@ -103,7 +103,7 @@ const breeds = <Breed>[
   Breed('kangal', 'Owczarek anatolijski', 2, ['kangal']),
   Breed('caucasian', 'Owczarek kaukaski', 2),
   Breed('central_asian', 'Owczarek środkowoazjatycki', 2, ['alabaj']),
-  Breed('tatra', 'Owczarek tatrzański', 2),
+  Breed('tatra', 'Owczarek tatrzański', 1, ['polski owczarek tatrzański']),
   Breed('hovawart', 'Hovawart', 2),
   Breed('entlebucher', 'Entlebucher', 2),
   Breed('appenzeller', 'Appenzeller', 2),

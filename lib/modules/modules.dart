@@ -52,6 +52,7 @@ enum AppModule {
   stats('Statystyki', Icons.bar_chart_rounded, ModuleSection.more, ModuleRule.always),
   gear('Sprzęt', Icons.backpack_rounded, ModuleSection.more, ModuleRule.always),
   goals('Cele', Icons.track_changes_rounded, ModuleSection.more, ModuleRule.always),
+  breedAtlas('Atlas ras', Icons.menu_book_rounded, ModuleSection.more, ModuleRule.always),
 
   // --- Suka ------------------------------------------------------------------
   heat('Cykl i cieczka', Icons.water_drop_rounded, ModuleSection.reproduction, ModuleRule.intactFemale),

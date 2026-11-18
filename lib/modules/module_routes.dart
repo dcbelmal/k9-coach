@@ -1,6 +1,9 @@
 import 'package:material_ui/material_ui.dart';
 
+import '../breeding/breeding_screen.dart';
+import '../breeds/breed_screen.dart';
 import '../gallery/gallery_screen.dart';
+import '../guides/guide_screen.dart';
 import '../heat/heat_screen.dart';
 import '../models.dart';
 import '../nutrition/screens/nutrition_screen.dart';
@@ -59,13 +62,15 @@ void openModule(BuildContext context, AppModule m) {
       push(const GoalsScreen());
     case AppModule.heat:
       openHeat(context);
+    case AppModule.breedAtlas:
+      openBreedAtlas(context);
     case AppModule.breeding:
-      push(const PlannedModuleScreen(module: AppModule.breeding));
+      openBreeding(context);
     case AppModule.reproduction:
-      if (ModuleStore.instance.isEnabled(AppModule.heat)) {
+      if (ModuleStore.instance.premium) {
+        openBreeding(context);
+      } else if (ModuleStore.instance.isEnabled(AppModule.heat)) {
         openHeat(context);
-      } else if (ModuleStore.instance.premium) {
-        push(const PlannedModuleScreen(module: AppModule.breeding));
       } else {
         push(const PremiumScreen());
       }
@@ -92,7 +97,7 @@ void openModule(BuildContext context, AppModule m) {
           AppModule.agility ||
           AppModule.dogtrekking ||
           AppModule.protection:
-      push(PlannedModuleScreen(module: m));
+      openGuide(context, m);
   }
 }
 

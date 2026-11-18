@@ -4,8 +4,19 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models.dart';
+import '../guides/guide_store.dart';
+import '../guides/guides_data.dart';
 import '../store.dart';
 import 'modules.dart';
+
+/// Skąd pochodzi Premium.
+enum PremiumSource {
+  /// Przełącznik testowy (aplikacja spoza Sklepu Play).
+  test,
+
+  /// Subskrypcja w Google Play.
+  play,
+}
 
 /// Stan modułów: ręczne włączenia/wyłączenia i flaga Premium.
 /// Zapisywane osobno od danych psa, więc stare dane zostają nietknięte.
@@ -19,8 +30,9 @@ class ModuleStore extends ChangeNotifier {
   /// null = automatycznie wg profilu, true/false = ręcznie.
   final Map<AppModule, bool> overrides = {};
 
-  /// Premium (na razie lokalny przełącznik – brak systemu płatności).
+  /// Premium: subskrypcja Google Play albo przełącznik testowy (patrz Billing).
   bool premium = false;
+  PremiumSource premiumSource = PremiumSource.test;
 
   Future<void> load() async {
     _prefs = await SharedPreferences.getInstance();
@@ -29,6 +41,7 @@ class ModuleStore extends ChangeNotifier {
     try {
       final j = jsonDecode(raw) as Map<String, dynamic>;
       premium = j['premium'] ?? false;
+      premiumSource = PremiumSource.values.asNameMap()[j['premiumSource']] ?? PremiumSource.test;
       overrides.clear();
       final o = (j['overrides'] as Map?) ?? {};
       for (final e in o.entries) {
@@ -47,6 +60,7 @@ class ModuleStore extends ChangeNotifier {
         _key,
         jsonEncode({
           'premium': premium,
+          'premiumSource': premiumSource.name,
           'overrides': {for (final e in overrides.entries) e.key.name: e.value},
         }));
   }
@@ -54,6 +68,8 @@ class ModuleStore extends ChangeNotifier {
   /// Czy moduł ma już dane użytkownika – wtedy nie chowamy go automatycznie.
   bool hasData(AppModule m) {
     final s = AppStore.instance;
+    final guide = guides[m];
+    if (guide != null) return guide.exercises.any((e) => GuideStore.instance.statusOf(e.id) > 0);
     bool trained(Discipline d) => s.trainings.any((t) => t.discipline == d);
     return switch (m) {
       AppModule.canicross => trained(Discipline.canicross),
@@ -95,14 +111,17 @@ class ModuleStore extends ChangeNotifier {
     await _save();
   }
 
-  Future<void> setPremium(bool on) async {
+  Future<void> setPremium(bool on, {PremiumSource source = PremiumSource.test}) async {
+    if (premium == on && premiumSource == source) return;
     premium = on;
+    premiumSource = source;
     await _save();
   }
 
   Future<void> reset() async {
     overrides.clear();
-    premium = false;
+    // Opłaconej subskrypcji nie kasujemy razem z danymi psa.
+    if (premiumSource != PremiumSource.play) premium = false;
     await _save();
   }
 }
