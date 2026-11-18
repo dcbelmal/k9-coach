@@ -1,17 +1,22 @@
+import '../l10n/l10n.dart';
+
 /// Lokalna baza ras (etap 1: nazwa i grupa FCI do wyszukiwarki).
 /// W kolejnym etapie dojdą: numer wzorca FCI, docelowa masa i wzrost,
 /// długość życia, aktywność, żywienie, predyspozycje sportowe i badania.
 class Breed {
   final String id;
-  final String name;
+  final String namePl; // nazwa polska (klucz tłumaczenia)
   final int fciGroup;
   final List<String> aliases;
-  const Breed(this.id, this.name, this.fciGroup, [this.aliases = const []]);
+  const Breed(this.id, this.namePl, this.fciGroup, [this.aliases = const []]);
+
+  /// Nazwa w języku aplikacji.
+  String get name => tr(namePl);
 
   bool matches(String q) {
     final n = _fold(q);
     if (n.isEmpty) return true;
-    return _fold(name).contains(n) || aliases.any((a) => _fold(a).contains(n));
+    return _fold(name).contains(n) || _fold(namePl).contains(n) || aliases.any((a) => _fold(a).contains(n));
   }
 }
 
@@ -27,6 +32,7 @@ String _fold(String s) {
 }
 
 const mixedBreedLabel = 'Mieszaniec';
+String get mixedBreedName => tr(mixedBreedLabel);
 
 Breed? breedById(String? id) {
   if (id == null) return null;
@@ -41,7 +47,7 @@ Breed? breedByName(String name) {
   final n = _fold(name);
   if (n.isEmpty) return null;
   for (final b in breeds) {
-    if (_fold(b.name) == n || b.aliases.any((a) => _fold(a) == n)) return b;
+    if (_fold(b.name) == n || _fold(b.namePl) == n || b.aliases.any((a) => _fold(a) == n)) return b;
   }
   return null;
 }

@@ -4,6 +4,7 @@ import '../store.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import '../modules/dog_wizard.dart';
+import '../l10n/l10n.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -52,16 +53,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               const Spacer(),
-              const FadeSlideIn(
-                child: Text('VALKOR COACH',
+              FadeSlideIn(
+                child: Text(tr('VALKOR COACH'),
                     style: TextStyle(
                         fontFamily: 'Cinzel', color: K9.goldLight, fontSize: 28, fontWeight: FontWeight.w700, letterSpacing: 2.5)),
               ),
               const SizedBox(height: 10),
-              const FadeSlideIn(
+              FadeSlideIn(
                 index: 1,
                 child: Text(
-                  'Trening, zdrowie i forma Twojego psa sportowego w jednym miejscu.',
+                  tr('Trening, zdrowie i forma Twojego psa sportowego w jednym miejscu.'),
                   style: TextStyle(fontSize: 17, color: Color(0xFFCFCFD4), height: 1.35),
                 ),
               ),
@@ -71,7 +72,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 child: FilledButton(
                   onPressed: () => Navigator.of(context)
                       .push(MaterialPageRoute(builder: (_) => const DogWizardScreen())),
-                  child: const Text('Dodaj swojego psa'),
+                  child: Text(tr('Dodaj swojego psa')),
                 ),
               ),
               const SizedBox(height: 12),
@@ -90,7 +91,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           setState(() => loading = true);
                           await AppStore.instance.loadDemo();
                         },
-                  child: const Text('Zobacz na przykładzie (Gamora)'),
+                  child: Text(tr('Zobacz na przykładzie (Gamora)')),
                 ),
               ),
               const SizedBox(height: 8),

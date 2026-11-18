@@ -1,13 +1,16 @@
 import 'breeding_models.dart';
+import '../l10n/l10n.dart';
 
 DateTime _day(DateTime d) => DateTime(d.year, d.month, d.day);
 
 /// Etap ciąży / opieki – dzień liczony od krycia (albo owulacji).
 class PregnancyMilestone {
   final int day;
-  final String title;
-  final String text;
-  const PregnancyMilestone(this.day, this.title, this.text);
+  final String _title;
+  String get title => tr(_title);
+  final String _text;
+  String get text => tr(_text);
+  const PregnancyMilestone(this.day, this._title, this._text);
 }
 
 /// Kalkulator ciąży suki. Wartości orientacyjne – ciąża trwa zwykle 63 dni
@@ -74,7 +77,7 @@ class PregnancyCalc {
   }
 
   /// Opis tygodnia ciąży.
-  static String weekLabel(int day) => day < 0 ? '—' : '${day ~/ 7 + 1}. tydzień';
+  static String weekLabel(int day) => day < 0 ? '—' : tr('{0}. tydzień', [day ~/ 7 + 1]);
 }
 
 /// Normy przyrostu masy szczeniąt.

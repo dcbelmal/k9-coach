@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import '../models.dart' show newId;
 import 'catalog.dart';
 import 'nutrition_models.dart';
+import '../l10n/l10n.dart';
 
 /// Wyszukiwanie produktu po kodzie kreskowym w otwartych bazach
 /// Open Pet Food Facts / Open Food Facts (bez klucza i opłat).
@@ -37,7 +38,7 @@ class ProductLookup {
     final c = code.trim();
     if (!RegExp(r'^\d{6,14}$').hasMatch(c)) return const LookupResult(null, false, []);
     final known = FoodCatalog.byBarcode(c);
-    if (known != null) return LookupResult(known, false, const ['Katalog Valkor']);
+    if (known != null) return LookupResult(known, false, [tr('Katalog Valkor')]);
     final cl = client ?? http.Client();
     final checked = <String>[];
     var answered = 0;
@@ -56,7 +57,7 @@ class ProductLookup {
           debugPrint('Wyszukiwanie $host: $e');
         }
       }
-      checked.add('UPCitemdb');
+      checked.add(tr('UPCitemdb'));
       try {
         final r = await cl
             .get(Uri.https('api.upcitemdb.com', '/prod/trial/lookup', {'upc': c}), headers: _ua)
@@ -132,7 +133,7 @@ class ProductLookup {
     if (name.isEmpty && brand.isEmpty) return null;
     return FoodProduct(
       id: newId(),
-      name: name.isEmpty ? 'Produkt $code' : name,
+      name: name.isEmpty ? tr('Produkt {0}', [code]) : name,
       brand: brand,
       type: type,
       barcode: code,

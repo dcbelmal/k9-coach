@@ -13,6 +13,7 @@ import 'nutrition_charts.dart';
 import 'nutrition_forms.dart';
 import 'products_screen.dart';
 import 'treat_training_screen.dart';
+import '../../l10n/l10n.dart';
 
 final _n = NutritionStore.instance;
 
@@ -37,18 +38,18 @@ class _NutritionScreenState extends State<NutritionScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Row(children: [
+        title: Row(children: [
           Icon(Icons.restaurant_rounded, color: K9.orange),
           SizedBox(width: 10),
-          Text('Żywienie'),
+          Text(tr('Żywienie')),
         ]),
         actions: [
           IconButton(
-              tooltip: 'Dziennik',
+              tooltip: tr('Dziennik'),
               onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DiaryScreen())),
               icon: const Icon(Icons.menu_book_rounded)),
           IconButton(
-              tooltip: 'Ustawienia',
+              tooltip: tr('Ustawienia'),
               onPressed: () => openNutritionSettings(context),
               icon: const Icon(Icons.tune_rounded)),
         ],
@@ -58,7 +59,7 @@ class _NutritionScreenState extends State<NutritionScreen> {
         foregroundColor: Colors.black,
         onPressed: () => openFeedingForm(context),
         icon: const Icon(Icons.add_rounded),
-        label: const Text('Karmienie', style: TextStyle(fontWeight: FontWeight.w700)),
+        label: Text(tr('Karmienie'), style: TextStyle(fontWeight: FontWeight.w700)),
       ),
       body: ListenableBuilder(
         listenable: _n,
@@ -69,9 +70,9 @@ class _NutritionScreenState extends State<NutritionScreen> {
           if (plan == null) {
             return EmptyState(
               icon: Icons.monitor_weight_rounded,
-              title: 'Podaj wagę psa',
-              text: 'Dzienną dawkę liczę z masy ciała, wieku, aktywności i treningów.',
-              action: 'Dodaj ważenie',
+              title: tr('Podaj wagę psa'),
+              text: tr('Dzienną dawkę liczę z masy ciała, wieku, aktywności i treningów.'),
+              action: tr('Dodaj ważenie'),
               onAction: () => openWeightForm(context),
             );
           }
@@ -138,16 +139,16 @@ class _TodayCard extends StatelessWidget {
             center: Column(mainAxisSize: MainAxisSize.min, children: [
               Text('${plan.remainingGrams.round()}',
                   style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, height: 1)),
-              const Text('g zostało', style: TextStyle(color: K9.muted, fontSize: 10.5)),
+              Text(tr('g zostało'), style: TextStyle(color: K9.muted, fontSize: 10.5)),
             ]),
           ),
           const SizedBox(width: 16),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('Dzisiejsza porcja', style: TextStyle(color: K9.muted, fontSize: 12.5)),
-              Text('${plan.dailyGrams.round()} g karmy',
+              Text(tr('Dzisiejsza porcja'), style: TextStyle(color: K9.muted, fontSize: 12.5)),
+              Text(tr('{0} g karmy', [plan.dailyGrams.round()]),
                   style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
-              Text('${plan.targetKcal.round()} kcal · zjedzone ${plan.eatenKcal.round()} kcal',
+              Text(tr('{0} kcal · zjedzone {1} kcal', [plan.targetKcal.round(), plan.eatenKcal.round()]),
                   style: const TextStyle(color: Color(0xFFCFCFD4), fontSize: 13)),
               if (food != null)
                 Text(food.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: K9.faint, fontSize: 12)),
@@ -177,7 +178,7 @@ class _TodayCard extends StatelessWidget {
           OutlinedButton.icon(
             onPressed: () => addProductFlow(context, type: ProductType.dry),
             icon: const Icon(Icons.qr_code_scanner_rounded),
-            label: const Text('Dodaj karmę główną'),
+            label: Text(tr('Dodaj karmę główną')),
           ),
         ],
       ]),
@@ -206,7 +207,7 @@ class _MealButton extends StatelessWidget {
             const SizedBox(width: 8),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(kind == FeedKind.morning ? 'Rano' : 'Wieczorem', style: const TextStyle(color: K9.muted, fontSize: 12)),
+                Text(kind == FeedKind.morning ? tr('Rano') : tr('Wieczorem'), style: const TextStyle(color: K9.muted, fontSize: 12)),
                 Text('${grams.round()} g', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
               ]),
             ),
@@ -228,12 +229,12 @@ class _StockTile extends StatelessWidget {
         Row(children: [
           Icon(Icons.inventory_2_rounded, color: low ? K9.red : K9.orange, size: 20),
           const SizedBox(width: 6),
-          const Text('Magazyn', style: TextStyle(color: K9.muted, fontSize: 12.5)),
+          Text(tr('Magazyn'), style: TextStyle(color: K9.muted, fontSize: 12.5)),
         ]),
         const SizedBox(height: 8),
         if (f == null) ...[
-          const Text('Brak worka', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-          const Text('Dodaj otwarty worek', style: TextStyle(color: K9.muted, fontSize: 12)),
+          Text(tr('Brak worka'), style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+          Text(tr('Dodaj otwarty worek'), style: TextStyle(color: K9.muted, fontSize: 12)),
         ] else ...[
           Text(fmtGrams(f.remainingGrams), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
           const SizedBox(height: 6),
@@ -249,8 +250,8 @@ class _StockTile extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
               f.emptyDate == null
-                  ? 'brak danych o zużyciu'
-                  : 'do ${fmtDateShort(f.emptyDate!)} · kup ${relDays(f.buyDate!)}',
+                  ? tr('brak danych o zużyciu')
+                  : tr('do {0} · kup {1}', [fmtDateShort(f.emptyDate!), relDays(f.buyDate!)]),
               maxLines: 2,
               style: TextStyle(color: low ? K9.red : K9.muted, fontSize: 12)),
         ],
@@ -269,17 +270,17 @@ class _TreatsTile extends StatelessWidget {
       onTap: () => Navigator.of(context)
           .push(MaterialPageRoute(builder: (_) => const ProductsScreen(initialType: ProductType.treat))),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Row(children: [
+        Row(children: [
           Icon(Icons.cookie_rounded, color: K9.yellow, size: 20),
           SizedBox(width: 6),
-          Text('Przysmaki dziś', style: TextStyle(color: K9.muted, fontSize: 12.5)),
+          Text(tr('Przysmaki dziś'), style: TextStyle(color: K9.muted, fontSize: 12.5)),
         ]),
         const SizedBox(height: 8),
-        Text('${plan.treatsKcal.round()} kcal', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+        Text(tr('{0} kcal', [plan.treatsKcal.round()]), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
         const SizedBox(height: 4),
-        Text('${fmtNum(pcs, 0)} szt. · ${(plan.treatsShare * 100).round()}% dnia',
+        Text(tr('{0} szt. · {1}% dnia', [fmtNum(pcs, 0), (plan.treatsShare * 100).round()]),
             style: TextStyle(color: plan.treatsShare > 0.15 ? K9.yellow : K9.muted, fontSize: 12)),
-        const Text('odjęte od karmy', style: TextStyle(color: K9.faint, fontSize: 12)),
+        Text(tr('odjęte od karmy'), style: TextStyle(color: K9.faint, fontSize: 12)),
       ]),
     );
   }
@@ -296,20 +297,20 @@ class _BalanceTile extends StatelessWidget {
     return K9Card(
       onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DiaryScreen())),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Row(children: [
+        Row(children: [
           Icon(Icons.balance_rounded, color: K9.orange, size: 20),
           SizedBox(width: 6),
-          Text('Bilans kalorii', style: TextStyle(color: K9.muted, fontSize: 12.5)),
+          Text(tr('Bilans kalorii'), style: TextStyle(color: K9.muted, fontSize: 12.5)),
         ]),
         const SizedBox(height: 8),
-        Text(b > 0 ? '+${b.round()} kcal' : '${(-b).round()} kcal',
+        Text(b > 0 ? tr('+{0} kcal', [b.round()]) : tr('{0} kcal', [(-b).round()]),
             style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: c)),
         const SizedBox(height: 4),
-        Text(b > 0 ? 'ponad cel dnia' : 'zostało do celu', style: const TextStyle(color: K9.muted, fontSize: 12)),
+        Text(b > 0 ? tr('ponad cel dnia') : tr('zostało do celu'), style: const TextStyle(color: K9.muted, fontSize: 12)),
         Text(
             plan.trainingKcal > 0
-                ? 'cel ${plan.targetKcal.round()} (trening +${plan.trainingKcal.round()})'
-                : 'cel ${plan.targetKcal.round()} kcal',
+                ? tr('cel {0} (trening +{1})', [plan.targetKcal.round(), plan.trainingKcal.round()])
+                : tr('cel {0} kcal', [plan.targetKcal.round()]),
             style: const TextStyle(color: K9.faint, fontSize: 12)),
       ]),
     );
@@ -324,15 +325,15 @@ class _WeightTile extends StatelessWidget {
     return K9Card(
       onTap: () => openWeightForm(context),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Row(children: [
+        Row(children: [
           Icon(Icons.monitor_weight_rounded, color: Color(0xFFBF5AF2), size: 20),
           SizedBox(width: 6),
-          Text('Waga', style: TextStyle(color: K9.muted, fontSize: 12.5)),
+          Text(tr('Waga'), style: TextStyle(color: K9.muted, fontSize: 12.5)),
         ]),
         const SizedBox(height: 8),
-        Text('${fmtNum(dog.weightKg ?? 0)} kg', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+        Text(tr('{0} kg', [fmtNum(dog.weightKg ?? 0)]), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
         const SizedBox(height: 4),
-        Text(t == null ? 'cel: nie ustawiono' : 'cel ${fmtNum(t)} kg (${_n.settings.goal.label.toLowerCase()})',
+        Text(t == null ? tr('cel: nie ustawiono') : tr('cel {0} kg ({1})', [fmtNum(t), _n.settings.goal.label.toLowerCase()]),
             maxLines: 2, style: const TextStyle(color: K9.muted, fontSize: 12)),
       ]),
     );
@@ -347,7 +348,7 @@ class _AiCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return K9Card(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const SectionTitle('Asystent AI – rekomendacje', icon: Icons.auto_awesome_rounded),
+        SectionTitle(tr('Asystent AI – rekomendacje'), icon: Icons.auto_awesome_rounded),
         for (final a in advice.take(5))
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
@@ -369,12 +370,12 @@ class _AiCard extends StatelessWidget {
                           final next = (s.adjustPct + a.adjustPct!).clamp(-30, 30).toDouble();
                           s.adjustPct = next.abs() < 0.5 ? 0 : next;
                           await _n.saveSettings(s, reason: 'rekomendacja AI');
-                          if (context.mounted) toast(context, 'Dawka zaktualizowana');
+                          if (context.mounted) toast(context, tr('Dawka zaktualizowana'));
                         },
                         icon: const Icon(Icons.check_rounded, size: 18),
                         label: Text(a.title.startsWith('Aktywna korekta')
-                            ? 'Wyzeruj korektę'
-                            : 'Zastosuj ${a.adjustPct! > 0 ? '+' : ''}${a.adjustPct!.round()}%'),
+                            ? tr('Wyzeruj korektę')
+                            : tr('Zastosuj {0}{1}%', [a.adjustPct! > 0 ? '+' : '', a.adjustPct!.round()])),
                       ),
                     ),
                 ]),
@@ -392,14 +393,14 @@ class _Actions extends StatelessWidget {
   Widget build(BuildContext context) {
     void push(Widget w) => Navigator.of(context).push(MaterialPageRoute(builder: (_) => w));
     final items = <(IconData, String, VoidCallback)>[
-      (Icons.qr_code_scanner_rounded, 'Skanuj', () => addProductFlow(context)),
-      (Icons.sports_rounded, 'Trening z nagrodami', () => openTreatTraining(context)),
-      (Icons.cookie_rounded, 'Przysmak', () => openFeedingForm(context, kind: FeedKind.treat)),
-      (Icons.medication_liquid_rounded, 'Suplementy', () => push(const SupplementsScreen())),
-      (Icons.inventory_2_rounded, 'Magazyn', () => push(const StockScreen())),
-      (Icons.list_alt_rounded, 'Produkty', () => push(const ProductsScreen())),
-      (Icons.menu_book_rounded, 'Dziennik', () => push(const DiaryScreen())),
-      (Icons.tune_rounded, 'Ustawienia', () => openNutritionSettings(context)),
+      (Icons.qr_code_scanner_rounded, tr('Skanuj'), () => addProductFlow(context)),
+      (Icons.sports_rounded, tr('Trening z nagrodami'), () => openTreatTraining(context)),
+      (Icons.cookie_rounded, tr('Przysmak'), () => openFeedingForm(context, kind: FeedKind.treat)),
+      (Icons.medication_liquid_rounded, tr('Suplementy'), () => push(const SupplementsScreen())),
+      (Icons.inventory_2_rounded, tr('Magazyn'), () => push(const StockScreen())),
+      (Icons.list_alt_rounded, tr('Produkty'), () => push(const ProductsScreen())),
+      (Icons.menu_book_rounded, tr('Dziennik'), () => push(const DiaryScreen())),
+      (Icons.tune_rounded, tr('Ustawienia'), () => openNutritionSettings(context)),
     ];
     return GridView.count(
       crossAxisCount: 4,
@@ -442,18 +443,18 @@ class _HowCard extends StatelessWidget {
           tilePadding: EdgeInsets.zero,
           childrenPadding: EdgeInsets.zero,
           leading: const Icon(Icons.calculate_rounded, color: K9.orange),
-          title: const Text('Jak liczę dawkę', style: TextStyle(fontWeight: FontWeight.w700)),
+          title: Text(tr('Jak liczę dawkę'), style: TextStyle(fontWeight: FontWeight.w700)),
           children: [
-            _row('Masa do obliczeń', '${fmtNum(plan.basisKg)} kg'),
-            _row('Zapotrzebowanie spoczynkowe (RER)', '${plan.rer.round()} kcal'),
-            _row('Mnożnik (${Energy.lifeStageLabel(months)}, ${_n.settings.activity.label.toLowerCase()})',
+            _row(tr('Masa do obliczeń'), tr('{0} kg', [fmtNum(plan.basisKg)])),
+            _row(tr('Zapotrzebowanie spoczynkowe (RER)'), tr('{0} kcal', [plan.rer.round()])),
+            _row(tr('Mnożnik ({0}, {1})', [Energy.lifeStageLabel(months), _n.settings.activity.label.toLowerCase()]),
                 '× ${fmtNum(plan.factor, 2)}'),
-            _row('Podstawa', '${plan.baseKcal.round()} kcal'),
-            _row('Treningi dziś', '+${plan.trainingKcal.round()} kcal'),
-            if (plan.adjustPct != 0) _row('Korekta', '${plan.adjustPct > 0 ? '+' : ''}${plan.adjustPct.round()}%'),
-            _row('Cel na dziś', '${plan.targetKcal.round()} kcal'),
-            _row('Przysmaki i suplementy', '−${(plan.treatsKcal + plan.supplementsKcal).round()} kcal'),
-            _row('Kaloryczność karmy', '${(plan.kcalPerGram * 100).round()} kcal/100 g'),
+            _row(tr('Podstawa'), tr('{0} kcal', [plan.baseKcal.round()])),
+            _row(tr('Treningi dziś'), tr('+{0} kcal', [plan.trainingKcal.round()])),
+            if (plan.adjustPct != 0) _row(tr('Korekta'), '${plan.adjustPct > 0 ? '+' : ''}${plan.adjustPct.round()}%'),
+            _row(tr('Cel na dziś'), tr('{0} kcal', [plan.targetKcal.round()])),
+            _row(tr('Przysmaki i suplementy'), tr('−{0} kcal', [(plan.treatsKcal + plan.supplementsKcal).round()])),
+            _row(tr('Kaloryczność karmy'), tr('{0} kcal/100 g', [(plan.kcalPerGram * 100).round()])),
             const SizedBox(height: 8),
             for (final n in plan.notes)
               Align(
@@ -461,8 +462,8 @@ class _HowCard extends StatelessWidget {
                 child: Text('• $n', style: const TextStyle(color: K9.muted, fontSize: 12.5)),
               ),
             const SizedBox(height: 8),
-            const Text(
-                'Wzory: RER = 70 × masa^0,75 (NRC/WSAVA). Dawka jest orientacyjna – obserwuj kondycję psa i skonsultuj dietę z weterynarzem.',
+            Text(
+                tr('Wzory: RER = 70 × masa^0,75 (NRC/WSAVA). Dawka jest orientacyjna – obserwuj kondycję psa i skonsultuj dietę z weterynarzem.'),
                 style: TextStyle(color: K9.faint, fontSize: 11.5)),
           ],
         ),
@@ -488,7 +489,7 @@ class StockScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Magazyn karmy')),
+      appBar: AppBar(title: Text(tr('Magazyn karmy'))),
       floatingActionButton: FloatingActionButton(
         backgroundColor: K9.orange,
         foregroundColor: Colors.black,
@@ -503,26 +504,26 @@ class StockScreen extends StatelessWidget {
           if (_n.bags.isEmpty) {
             return EmptyState(
               icon: Icons.inventory_2_rounded,
-              title: 'Pusty magazyn',
-              text: 'Dodaj otwarty worek karmy. Odejmę każde karmienie i przewidzę, kiedy się skończy.',
-              action: 'Dodaj worek',
+              title: tr('Pusty magazyn'),
+              text: tr('Dodaj otwarty worek karmy. Odejmę każde karmienie i przewidzę, kiedy się skończy.'),
+              action: tr('Dodaj worek'),
               onAction: () => openBagForm(context),
             );
           }
           return ListView(padding: const EdgeInsets.fromLTRB(16, 4, 16, 100), children: [
             for (final b in active) _BagCard(f: _n.forecast(b)),
             if (done.isNotEmpty) ...[
-              const Padding(
+              Padding(
                 padding: EdgeInsets.fromLTRB(4, 12, 4, 8),
-                child: Text('Skończone', style: TextStyle(color: K9.muted, fontWeight: FontWeight.w700)),
+                child: Text(tr('Skończone'), style: TextStyle(color: K9.muted, fontWeight: FontWeight.w700)),
               ),
               for (final b in done.take(20))
                 ListRow(
                   icon: Icons.inventory_2_outlined,
                   color: K9.faint,
-                  title: _n.product(b.productId)?.title ?? 'Produkt usunięty',
+                  title: _n.product(b.productId)?.title ?? tr('Produkt usunięty'),
                   subtitle:
-                      '${fmtGrams(b.initialGrams)} · ${fmtDateShort(b.opened)} – ${fmtDateShort(b.finished!)} (${b.finished!.difference(b.opened).inDays} dni)',
+                      tr('{0} · {1} – {2} ({3} dni)', [fmtGrams(b.initialGrams), fmtDateShort(b.opened), fmtDateShort(b.finished!), b.finished!.difference(b.opened).inDays]),
                   onTap: () => openBagForm(context, existing: b),
                 ),
             ],
@@ -555,15 +556,15 @@ class _BagCard extends StatelessWidget {
           const SizedBox(width: 14),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(f.product?.title ?? 'Produkt usunięty', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-              Text('Zostało ${fmtGrams(f.remainingGrams)} z ${fmtGrams(f.bag.initialGrams)}',
+              Text(f.product?.title ?? tr('Produkt usunięty'), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+              Text(tr('Zostało {0} z {1}', [fmtGrams(f.remainingGrams), fmtGrams(f.bag.initialGrams)]),
                   style: const TextStyle(color: K9.muted, fontSize: 13)),
               if (f.emptyDate != null)
                 Text(
-                    'Zużycie ${f.dailyUse.round()} g/dzień · koniec ${fmtDateShort(f.emptyDate!)} (${relDays(f.emptyDate!)})',
+                    tr('Zużycie {0} g/dzień · koniec {1} ({2})', [f.dailyUse.round(), fmtDateShort(f.emptyDate!), relDays(f.emptyDate!)]),
                     style: TextStyle(color: low ? K9.red : K9.faint, fontSize: 12)),
               if (f.buyDate != null)
-                Text('Kup nowy: ${fmtDateShort(f.buyDate!)}', style: TextStyle(color: c, fontSize: 12, fontWeight: FontWeight.w600)),
+                Text(tr('Kup nowy: {0}', [fmtDateShort(f.buyDate!)]), style: TextStyle(color: c, fontSize: 12, fontWeight: FontWeight.w600)),
             ]),
           ),
         ]),
@@ -581,7 +582,7 @@ class SupplementsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Suplementy')),
+      appBar: AppBar(title: Text(tr('Suplementy'))),
       floatingActionButton: FloatingActionButton(
         backgroundColor: K9.orange,
         foregroundColor: Colors.black,
@@ -594,9 +595,9 @@ class SupplementsScreen extends StatelessWidget {
           if (_n.supplements.isEmpty) {
             return EmptyState(
               icon: Icons.medication_liquid_rounded,
-              title: 'Brak suplementów',
-              text: 'Dodaj suplement i godzinę, a codziennie przypomnę o podaniu.',
-              action: 'Dodaj suplement',
+              title: tr('Brak suplementów'),
+              text: tr('Dodaj suplement i godzinę, a codziennie przypomnę o podaniu.'),
+              action: tr('Dodaj suplement'),
               onAction: () => openSupplementPlanForm(context),
             );
           }
@@ -615,7 +616,7 @@ class SupplementsScreen extends StatelessWidget {
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                         Text(s.name, style: const TextStyle(fontWeight: FontWeight.w700)),
                         Text(
-                            '${s.dose.isEmpty ? '' : '${s.dose} · '}codziennie ${s.hour.toString().padLeft(2, '0')}:${s.minute.toString().padLeft(2, '0')}',
+                            tr('{0}codziennie {1}:{2}', [s.dose.isEmpty ? '' : '${s.dose} · ', s.hour.toString().padLeft(2, '0'), s.minute.toString().padLeft(2, '0')]),
                             style: const TextStyle(color: K9.muted, fontSize: 12.5)),
                       ]),
                     ),
@@ -631,7 +632,7 @@ class SupplementsScreen extends StatelessWidget {
                           e.label = s.name;
                           await _n.addEntry(e);
                         },
-                        child: const Text('Podano'),
+                        child: Text(tr('Podano')),
                       ),
                   ]),
                 ),

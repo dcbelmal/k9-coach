@@ -7,6 +7,7 @@ import '../../widgets/common.dart';
 import '../nutrition_models.dart';
 import '../nutrition_store.dart';
 import 'products_screen.dart';
+import '../../l10n/l10n.dart';
 
 final _n = NutritionStore.instance;
 
@@ -20,9 +21,9 @@ Widget _productPicker({
   final list = _n.ofType(types);
   return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
     if (list.isEmpty)
-      const Padding(
+      Padding(
         padding: EdgeInsets.only(bottom: 8),
-        child: Text('Brak produktów w bazie. Dodaj pierwszy.', style: TextStyle(color: K9.muted)),
+        child: Text(tr('Brak produktów w bazie. Dodaj pierwszy.'), style: TextStyle(color: K9.muted)),
       ),
     Wrap(spacing: 8, runSpacing: 8, children: [
       for (final p in list)
@@ -40,7 +41,7 @@ Widget _productPicker({
         ),
       ActionChip(
         avatar: const Icon(Icons.add_rounded, size: 18, color: K9.orange),
-        label: const Text('Nowy'),
+        label: Text(tr('Nowy')),
         backgroundColor: K9.cardHi,
         side: BorderSide.none,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -132,7 +133,7 @@ class _FeedingFormState extends State<_FeedingForm> {
     final kcal = product == null ? 0.0 : _grams * product!.kcalPerGram;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       SheetTitle(
-        widget.existing == null ? 'Dodaj do dziennika' : 'Wpis w dzienniku',
+        widget.existing == null ? tr('Dodaj do dziennika') : tr('Wpis w dzienniku'),
         onDelete: widget.existing == null
             ? null
             : () async {
@@ -180,7 +181,7 @@ class _FeedingFormState extends State<_FeedingForm> {
             controller: amount,
             onChanged: (_) => setState(() {}),
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: InputDecoration(labelText: byPieces ? 'Ilość (szt.)' : 'Ilość (g)'),
+            decoration: InputDecoration(labelText: byPieces ? tr('Ilość (szt.)') : tr('Ilość (g)')),
           ),
         ),
         if (product?.pieceGrams != null) ...[
@@ -195,18 +196,18 @@ class _FeedingFormState extends State<_FeedingForm> {
       if (product != null)
         Padding(
           padding: const EdgeInsets.only(top: 8),
-          child: Text('≈ ${kcal.round()} kcal', style: const TextStyle(color: K9.orange, fontWeight: FontWeight.w700)),
+          child: Text(tr('≈ {0} kcal', [kcal.round()]), style: const TextStyle(color: K9.orange, fontWeight: FontWeight.w700)),
         ),
       gap12,
-      DateField(label: 'Data i godzina', value: date, withTime: true, onChanged: (d) => setState(() => date = d!)),
+      DateField(label: tr('Data i godzina'), value: date, withTime: true, onChanged: (d) => setState(() => date = d!)),
       gap12,
-      TextField(controller: notes, decoration: const InputDecoration(labelText: 'Notatka')),
+      TextField(controller: notes, decoration: InputDecoration(labelText: tr('Notatka'))),
       const SizedBox(height: 20),
       FilledButton(
         onPressed: () async {
           final g = _grams;
           if (g <= 0) {
-            toast(context, 'Podaj ilość');
+            toast(context, tr('Podaj ilość'));
             return;
           }
           final entry = FeedingEntry(
@@ -225,10 +226,10 @@ class _FeedingFormState extends State<_FeedingForm> {
           if (context.mounted) {
             Navigator.pop(context);
             final p = _n.plan;
-            toast(context, p == null ? 'Zapisano' : 'Zapisano · do końca dnia ${p.remainingGrams.round()} g karmy');
+            toast(context, p == null ? tr('Zapisano') : tr('Zapisano · do końca dnia {0} g karmy', [p.remainingGrams.round()]));
           }
         },
-        child: const Text('Zapisz'),
+        child: Text(tr('Zapisz')),
       ),
     ]);
   }
@@ -277,11 +278,11 @@ class _BagFormState extends State<_BagForm> {
     final b = widget.existing;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       SheetTitle(
-        b == null ? 'Nowy worek / opakowanie' : 'Worek karmy',
+        b == null ? tr('Nowy worek / opakowanie') : tr('Worek karmy'),
         onDelete: b == null
             ? null
             : () async {
-                if (await confirmDelete(context, 'ten worek z magazynu')) {
+                if (await confirmDelete(context, tr('ten worek z magazynu'))) {
                   await _n.deleteBag(b);
                   if (context.mounted) Navigator.pop(context);
                 }
@@ -303,7 +304,7 @@ class _BagFormState extends State<_BagForm> {
           child: TextField(
             controller: kg,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(labelText: 'Masa opakowania (kg)'),
+            decoration: InputDecoration(labelText: tr('Masa opakowania (kg)')),
           ),
         ),
         const SizedBox(width: 10),
@@ -311,19 +312,19 @@ class _BagFormState extends State<_BagForm> {
           child: TextField(
             controller: price,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(labelText: 'Cena (zł)'),
+            decoration: InputDecoration(labelText: tr('Cena (zł)')),
           ),
         ),
       ]),
       gap12,
-      DateField(label: 'Data otwarcia', value: opened, onChanged: (d) => setState(() => opened = d!)),
+      DateField(label: tr('Data otwarcia'), value: opened, onChanged: (d) => setState(() => opened = d!)),
       if (b != null) ...[
         gap12,
         TextField(
           controller: left,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: const InputDecoration(
-              labelText: 'Zostało w worku (kg)', helperText: 'Popraw, jeśli zważysz worek – prognoza się dostosuje'),
+          decoration: InputDecoration(
+              labelText: tr('Zostało w worku (kg)'), helperText: tr('Popraw, jeśli zważysz worek – prognoza się dostosuje')),
         ),
       ],
       const SizedBox(height: 20),
@@ -333,11 +334,11 @@ class _BagFormState extends State<_BagForm> {
             await _n.finishBag(b);
             if (context.mounted) {
               Navigator.pop(context);
-              toast(context, 'Worek oznaczony jako skończony');
+              toast(context, tr('Worek oznaczony jako skończony'));
             }
           },
           icon: const Icon(Icons.check_rounded),
-          label: const Text('Worek skończony'),
+          label: Text(tr('Worek skończony')),
         ),
         const SizedBox(height: 10),
       ],
@@ -345,7 +346,7 @@ class _BagFormState extends State<_BagForm> {
         onPressed: () async {
           final g = (parseNum(kg.text) ?? 0) * 1000;
           if (product == null || g <= 0) {
-            toast(context, 'Wybierz produkt i podaj masę');
+            toast(context, tr('Wybierz produkt i podaj masę'));
             return;
           }
           if (b == null) {
@@ -363,7 +364,7 @@ class _BagFormState extends State<_BagForm> {
           }
           if (context.mounted) Navigator.pop(context);
         },
-        child: const Text('Zapisz'),
+        child: Text(tr('Zapisz')),
       ),
     ]);
   }
@@ -409,11 +410,11 @@ class _SettingsFormState extends State<_SettingsForm> {
   @override
   Widget build(BuildContext context) {
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      const SheetTitle('Ustawienia żywienia'),
-      const Text('Cel', style: TextStyle(fontWeight: FontWeight.w700)),
+      SheetTitle(tr('Ustawienia żywienia')),
+      Text(tr('Cel'), style: TextStyle(fontWeight: FontWeight.w700)),
       const SizedBox(height: 8),
       Segmented(
-        items: const ['Utrzymanie', 'Redukcja', 'Masa'],
+        items: [tr('Utrzymanie'), tr('Redukcja'), tr('Masa')],
         index: s.goal.index,
         onChanged: (i) => setState(() => s.goal = NutritionGoal.values[i]),
       ),
@@ -421,10 +422,10 @@ class _SettingsFormState extends State<_SettingsForm> {
       TextField(
         controller: target,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        decoration: const InputDecoration(labelText: 'Waga docelowa (kg)'),
+        decoration: InputDecoration(labelText: tr('Waga docelowa (kg)')),
       ),
       gap16,
-      const Text('Aktywność poza treningami', style: TextStyle(fontWeight: FontWeight.w700)),
+      Text(tr('Aktywność poza treningami'), style: TextStyle(fontWeight: FontWeight.w700)),
       const SizedBox(height: 8),
       Segmented(
         items: [for (final a in ActivityLevel.values) a.label],
@@ -432,23 +433,23 @@ class _SettingsFormState extends State<_SettingsForm> {
         onChanged: (i) => setState(() => s.activity = ActivityLevel.values[i]),
       ),
       const SizedBox(height: 6),
-      Text('${s.activity.hint}. Treningi z aplikacji doliczam automatycznie.',
+      Text(tr('{0}. Treningi z aplikacji doliczam automatycznie.', [s.activity.hint]),
           style: const TextStyle(color: K9.muted, fontSize: 12.5)),
       SwitchListTile(
         contentPadding: EdgeInsets.zero,
         value: s.neutered,
         onChanged: (v) => setState(() => s.neutered = v),
-        title: Text(AppStore.instance.dog?.female == false ? 'Pies wykastrowany' : 'Suka wysterylizowana'),
+        title: Text(AppStore.instance.dog?.female == false ? tr('Pies wykastrowany') : tr('Suka wysterylizowana')),
       ),
       const Divider(),
-      const Text('Karmienia', style: TextStyle(fontWeight: FontWeight.w700)),
+      Text(tr('Karmienia'), style: TextStyle(fontWeight: FontWeight.w700)),
       const SizedBox(height: 8),
       Row(children: [
         Expanded(
           child: OutlinedButton.icon(
             onPressed: () => _time(true),
             icon: const Icon(Icons.wb_sunny_rounded),
-            label: Text('Rano ${_hm(s.morningHour, s.morningMinute)}'),
+            label: Text(tr('Rano {0}', [_hm(s.morningHour, s.morningMinute)])),
           ),
         ),
         const SizedBox(width: 10),
@@ -456,15 +457,15 @@ class _SettingsFormState extends State<_SettingsForm> {
           child: OutlinedButton.icon(
             onPressed: () => _time(false),
             icon: const Icon(Icons.nights_stay_rounded),
-            label: Text('Wieczór ${_hm(s.eveningHour, s.eveningMinute)}'),
+            label: Text(tr('Wieczór {0}', [_hm(s.eveningHour, s.eveningMinute)])),
           ),
         ),
       ]),
       const SizedBox(height: 10),
       Row(children: [
-        const Text('Podział porcji'),
+        Text(tr('Podział porcji')),
         const Spacer(),
-        Text('rano ${(s.morningShare * 100).round()}% · wieczór ${(100 - s.morningShare * 100).round()}%',
+        Text(tr('rano {0}% · wieczór {1}%', [(s.morningShare * 100).round(), (100 - s.morningShare * 100).round()]),
             style: const TextStyle(color: K9.orange, fontWeight: FontWeight.w700)),
       ]),
       Slider(
@@ -480,20 +481,20 @@ class _SettingsFormState extends State<_SettingsForm> {
         contentPadding: EdgeInsets.zero,
         value: s.feedReminders,
         onChanged: (v) => setState(() => s.feedReminders = v),
-        title: const Text('Przypomnienia o karmieniu'),
+        title: Text(tr('Przypomnienia o karmieniu')),
       ),
       SwitchListTile(
         contentPadding: EdgeInsets.zero,
         value: s.stockReminders,
         onChanged: (v) => setState(() => s.stockReminders = v),
-        title: const Text('Przypomnienia o kończącej się karmie'),
+        title: Text(tr('Przypomnienia o kończącej się karmie')),
       ),
       Row(children: [
-        const Expanded(child: Text('Przypomnij o zakupie przed końcem worka')),
+        Expanded(child: Text(tr('Przypomnij o zakupie przed końcem worka'))),
         IconButton(
             onPressed: s.buyLeadDays > 1 ? () => setState(() => s.buyLeadDays--) : null,
             icon: const Icon(Icons.remove_circle_outline_rounded)),
-        Text('${s.buyLeadDays} dni', style: const TextStyle(fontWeight: FontWeight.w700)),
+        Text(tr('{0} dni', [s.buyLeadDays]), style: const TextStyle(fontWeight: FontWeight.w700)),
         IconButton(
             onPressed: s.buyLeadDays < 21 ? () => setState(() => s.buyLeadDays++) : null,
             icon: const Icon(Icons.add_circle_outline_rounded)),
@@ -510,7 +511,7 @@ class _SettingsFormState extends State<_SettingsForm> {
           await _n.saveSettings(s);
           if (context.mounted) Navigator.pop(context);
         },
-        child: const Text('Zapisz'),
+        child: Text(tr('Zapisz')),
       ),
     ]);
   }
@@ -541,7 +542,7 @@ class _SupplementFormState extends State<_SupplementForm> {
   Widget build(BuildContext context) {
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       SheetTitle(
-        widget.existing == null ? 'Nowy suplement' : 'Suplement',
+        widget.existing == null ? tr('Nowy suplement') : tr('Suplement'),
         onDelete: widget.existing == null
             ? null
             : () async {
@@ -560,9 +561,9 @@ class _SupplementFormState extends State<_SupplementForm> {
         }),
       ),
       gap12,
-      TextField(controller: name, decoration: const InputDecoration(labelText: 'Nazwa')),
+      TextField(controller: name, decoration: InputDecoration(labelText: tr('Nazwa'))),
       gap12,
-      TextField(controller: dose, decoration: const InputDecoration(labelText: 'Dawka (np. 1 tabletka)')),
+      TextField(controller: dose, decoration: InputDecoration(labelText: tr('Dawka (np. 1 tabletka)'))),
       gap12,
       OutlinedButton.icon(
         onPressed: () async {
@@ -570,13 +571,13 @@ class _SupplementFormState extends State<_SupplementForm> {
           if (t != null) setState(() => s..hour = t.hour..minute = t.minute);
         },
         icon: const Icon(Icons.schedule_rounded),
-        label: Text('Codziennie o ${s.hour.toString().padLeft(2, '0')}:${s.minute.toString().padLeft(2, '0')}'),
+        label: Text(tr('Codziennie o {0}:{1}', [s.hour.toString().padLeft(2, '0'), s.minute.toString().padLeft(2, '0')])),
       ),
       SwitchListTile(
         contentPadding: EdgeInsets.zero,
         value: s.active,
         onChanged: (v) => setState(() => s.active = v),
-        title: const Text('Przypominaj'),
+        title: Text(tr('Przypominaj')),
       ),
       const SizedBox(height: 12),
       FilledButton(
@@ -585,13 +586,13 @@ class _SupplementFormState extends State<_SupplementForm> {
             ..name = name.text.trim()
             ..dose = dose.text.trim();
           if (s.name.isEmpty) {
-            toast(context, 'Wpisz nazwę');
+            toast(context, tr('Wpisz nazwę'));
             return;
           }
           await _n.upsertSupplement(s);
           if (context.mounted) Navigator.pop(context);
         },
-        child: const Text('Zapisz'),
+        child: Text(tr('Zapisz')),
       ),
     ]);
   }

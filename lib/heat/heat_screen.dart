@@ -6,15 +6,16 @@ import '../theme.dart';
 import '../widgets/common.dart';
 import 'heat_logic.dart';
 import 'heat_store.dart';
+import '../l10n/l10n.dart';
 
 void openHeat(BuildContext context) =>
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => const HeatScreen()));
 
 String _countdown(int days) {
-  if (days == 0) return 'dziś';
+  if (days == 0) return tr('dziś');
   if (days == 1) return 'jutro';
-  if (days > 0) return 'za $days dni';
-  return '${-days} dni temu';
+  if (days > 0) return tr('za {0} dni', [days]);
+  return tr('{0} dni temu', [-days]);
 }
 
 /// Ekran modułu „Cykl i cieczka”.
@@ -26,10 +27,10 @@ class HeatScreen extends StatelessWidget {
     final h = HeatStore.instance;
     return Scaffold(
       appBar: AppBar(
-        title: const Row(children: [
+        title: Row(children: [
           Icon(Icons.water_drop_rounded, color: K9.orange),
           SizedBox(width: 10),
-          Text('Cykl i cieczka'),
+          Text(tr('Cykl i cieczka')),
         ]),
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -37,7 +38,7 @@ class HeatScreen extends StatelessWidget {
         foregroundColor: Colors.black,
         onPressed: () => openHeatForm(context),
         icon: const Icon(Icons.add_rounded),
-        label: const Text('Dodaj cieczkę', style: TextStyle(fontWeight: FontWeight.w700)),
+        label: Text(tr('Dodaj cieczkę'), style: TextStyle(fontWeight: FontWeight.w700)),
       ),
       body: ListenableBuilder(
         listenable: h,
@@ -55,10 +56,10 @@ class HeatScreen extends StatelessWidget {
                     final c = st.current!;
                     c.end = dayOnly(now);
                     await h.upsert(c);
-                    if (context.mounted) toast(context, 'Zapisano koniec cieczki');
+                    if (context.mounted) toast(context, tr('Zapisano koniec cieczki'));
                   },
                   icon: const Icon(Icons.check_rounded),
-                  label: const Text('Cieczka się skończyła (dziś)'),
+                  label: Text(tr('Cieczka się skończyła (dziś)')),
                 ),
               )
             else
@@ -67,10 +68,10 @@ class HeatScreen extends StatelessWidget {
                 child: FilledButton.icon(
                   onPressed: () async {
                     await h.startToday();
-                    if (context.mounted) toast(context, 'Zapisano początek cieczki');
+                    if (context.mounted) toast(context, tr('Zapisano początek cieczki'));
                   },
                   icon: const Icon(Icons.water_drop_outlined),
-                  label: const Text('Cieczka zaczęła się dziś'),
+                  label: Text(tr('Cieczka zaczęła się dziś')),
                 ),
               ),
             gap12,
@@ -78,17 +79,17 @@ class HeatScreen extends StatelessWidget {
               index: 2,
               child: K9Card(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const SectionTitle('Prognoza', icon: Icons.event_repeat_rounded),
+                  SectionTitle(tr('Prognoza'), icon: Icons.event_repeat_rounded),
                   Row(children: [
                     Expanded(
                       child: StatValue(
-                        label: 'Kolejna cieczka',
+                        label: tr('Kolejna cieczka'),
                         value: st.nextStart == null ? '—' : fmtDate(st.nextStart!),
                       ),
                     ),
                     Expanded(
                       child: StatValue(
-                        label: 'Odstęp',
+                        label: tr('Odstęp'),
                         value: (st.intervalDays / 30.4).toStringAsFixed(1).replaceAll('.', ','),
                         unit: 'mies.',
                       ),
@@ -97,7 +98,7 @@ class HeatScreen extends StatelessWidget {
                   const SizedBox(height: 10),
                   Text(
                     st.nextStart == null
-                        ? 'Zapisz pierwszą cieczkę, a policzę kolejną.'
+                        ? tr('Zapisz pierwszą cieczkę, a policzę kolejną.')
                         : '${_countdown(st.daysToNext(now)!)} · '
                             '${st.intervalFromHistory ? 'średnia z Twoich wpisów' : 'typowo co ok. 6 miesięcy (dokładniej po 2 cieczkach)'}',
                     style: const TextStyle(color: K9.muted, fontSize: 13),
@@ -106,8 +107,8 @@ class HeatScreen extends StatelessWidget {
                     contentPadding: EdgeInsets.zero,
                     value: h.remind,
                     onChanged: h.setRemind,
-                    title: const Text('Powiadomienia'),
-                    subtitle: const Text('Tydzień przed, w dniu terminu i na początek dni płodnych',
+                    title: Text(tr('Powiadomienia')),
+                    subtitle: Text(tr('Tydzień przed, w dniu terminu i na początek dni płodnych'),
                         style: TextStyle(color: K9.muted, fontSize: 12.5)),
                   ),
                 ]),
@@ -116,8 +117,8 @@ class HeatScreen extends StatelessWidget {
             gap12,
             FadeSlideIn(index: 3, child: _History(cycles: h.cycles)),
             gap12,
-            const Text(
-              'Etapy i dni płodne są orientacyjne. Dokładny moment krycia najlepiej ustalić badaniem progesteronu u weterynarza.',
+            Text(
+              tr('Etapy i dni płodne są orientacyjne. Dokładny moment krycia najlepiej ustalić badaniem progesteronu u weterynarza.'),
               style: TextStyle(color: K9.faint, fontSize: 12),
             ),
           ]);
@@ -149,20 +150,20 @@ class _StageCard extends StatelessWidget {
           center: Column(mainAxisSize: MainAxisSize.min, children: [
             Text(day == null || day < 1 ? '—' : '$day',
                 style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, height: 1)),
-            const Text('dzień', style: TextStyle(color: K9.muted, fontSize: 11)),
+            Text(tr('dzień'), style: TextStyle(color: K9.muted, fontSize: 11)),
           ]),
         ),
         const SizedBox(width: 16),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('Aktualny etap', style: TextStyle(color: K9.muted, fontSize: 12.5)),
+            Text(tr('Aktualny etap'), style: TextStyle(color: K9.muted, fontSize: 12.5)),
             const SizedBox(height: 2),
             Text(st.stage.label, style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: c)),
             const SizedBox(height: 4),
             Text(st.stage.description, style: const TextStyle(color: Color(0xFFCFCFD4), fontSize: 13, height: 1.3)),
             if (active && st.fertileFrom != null) ...[
               const SizedBox(height: 6),
-              Text('Dni płodne ok.: ${fmtDate(st.fertileFrom!)} – ${fmtDate(st.fertileTo!)}',
+              Text(tr('Dni płodne ok.: {0} – {1}', [fmtDate(st.fertileFrom!), fmtDate(st.fertileTo!)]),
                   style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
             ],
           ]),
@@ -180,14 +181,14 @@ class _History extends StatelessWidget {
   Widget build(BuildContext context) {
     return K9Card(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const SectionTitle('Historia cykli', icon: Icons.history_rounded),
+        SectionTitle(tr('Historia cykli'), icon: Icons.history_rounded),
         if (cycles.isEmpty)
-          const Text('Brak wpisów.', style: TextStyle(color: K9.muted)),
+          Text(tr('Brak wpisów.'), style: TextStyle(color: K9.muted)),
         for (final (i, c) in cycles.indexed)
           ListRow(
             icon: Icons.water_drop_rounded,
             color: K9.red,
-            title: '${fmtDate(c.start)}${c.end == null ? ' – trwa' : ' – ${fmtDate(c.end!)}'}',
+            title: '${fmtDate(c.start)}${c.end == null ? tr(' – trwa') : ' – ${fmtDate(c.end!)}'}',
             subtitle: [
               if (c.lengthDays != null) '${c.lengthDays} dni',
               if (i + 1 < cycles.length)
@@ -214,10 +215,10 @@ class HeatHomeCard extends StatelessWidget {
         final st = h.status;
         final now = DateTime.now();
         final text = st.current != null
-            ? '${st.day}. dzień cieczki · ${st.stage == HeatStage.estrus ? 'dni płodne' : 'początek'}'
+            ? tr('{0}. dzień cieczki · {1}', [st.day, st.stage == HeatStage.estrus ? tr('dni płodne') : tr('początek')])
             : st.nextStart == null
-                ? 'Zapisz początek cieczki, a przewidzę kolejną.'
-                : 'Kolejna cieczka ${_countdown(st.daysToNext(now)!)} (${fmtDate(st.nextStart!)})';
+                ? tr('Zapisz początek cieczki, a przewidzę kolejną.')
+                : tr('Kolejna cieczka {0} ({1})', [_countdown(st.daysToNext(now)!), fmtDate(st.nextStart!)]);
         return K9Card(
           onTap: () => openHeat(context),
           child: Row(children: [
@@ -225,7 +226,7 @@ class HeatHomeCard extends StatelessWidget {
             const SizedBox(width: 12),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(st.current != null ? 'Cieczka trwa' : (st.stage == HeatStage.unknown ? 'Cykl i cieczka' : st.stage.label),
+                Text(st.current != null ? tr('Cieczka trwa') : (st.stage == HeatStage.unknown ? tr('Cykl i cieczka') : st.stage.label),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
@@ -261,30 +262,30 @@ class _HeatFormState extends State<_HeatForm> {
     final e = widget.existing;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       SheetTitle(
-        e == null ? 'Nowa cieczka' : 'Edytuj cieczkę',
+        e == null ? tr('Nowa cieczka') : tr('Edytuj cieczkę'),
         onDelete: e == null
             ? null
             : () async {
-                if (await confirmDelete(context, 'wpis cieczki')) {
+                if (await confirmDelete(context, tr('wpis cieczki'))) {
                   await HeatStore.instance.delete(e);
                   if (context.mounted) Navigator.pop(context);
                 }
               },
       ),
-      DateField(label: 'Początek (pierwszy dzień krwawienia)', value: start, onChanged: (v) => setState(() => start = v!)),
+      DateField(label: tr('Początek (pierwszy dzień krwawienia)'), value: start, onChanged: (v) => setState(() => start = v!)),
       gap12,
-      DateField(label: 'Koniec (opcjonalnie)', value: end, clearable: true, onChanged: (v) => setState(() => end = v)),
+      DateField(label: tr('Koniec (opcjonalnie)'), value: end, clearable: true, onChanged: (v) => setState(() => end = v)),
       gap12,
       TextField(
         controller: notes,
         maxLines: 3,
-        decoration: const InputDecoration(labelText: 'Notatki (objawy, zachowanie, krycie)'),
+        decoration: InputDecoration(labelText: tr('Notatki (objawy, zachowanie, krycie)')),
       ),
       const SizedBox(height: 20),
       FilledButton(
         onPressed: () async {
           if (end != null && end!.isBefore(start)) {
-            toast(context, 'Koniec nie może być przed początkiem');
+            toast(context, tr('Koniec nie może być przed początkiem'));
             return;
           }
           await HeatStore.instance.upsert(HeatCycle(
@@ -295,7 +296,7 @@ class _HeatFormState extends State<_HeatForm> {
           ));
           if (context.mounted) Navigator.pop(context);
         },
-        child: const Text('Zapisz'),
+        child: Text(tr('Zapisz')),
       ),
     ]);
   }

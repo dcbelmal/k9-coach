@@ -8,6 +8,7 @@ import '../widgets/common.dart';
 import 'forms.dart';
 import 'home.dart';
 import 'shows.dart';
+import '../l10n/l10n.dart';
 
 /// Kalendarz jako osobny ekran (otwierany ze Start, Treningu i modułów).
 void openCalendar(BuildContext context) => Navigator.of(context)
@@ -55,8 +56,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
                     const Icon(Icons.calendar_month_rounded, color: K9.orange),
                     const SizedBox(width: 10),
                   ],
-                  const Expanded(
-                    child: Text('Kalendarz', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
+                  Expanded(
+                    child: Text(tr('Kalendarz'), style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
                   ),
                   IconButton(
                     onPressed: () => openEventForm(context, date: selected),
@@ -99,7 +100,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                           Expanded(
                             child: Center(
                               child: Text(
-                                w,
+                                tr(w),
                                 style: const TextStyle(color: K9.muted, fontSize: 12, fontWeight: FontWeight.w600),
                               ),
                             ),
@@ -174,21 +175,21 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 children: [
                   Expanded(
                     child: Text(
-                      sameDay(selected, DateTime.now()) ? 'Dziś, ${fmtDate(selected)}' : fmtDate(selected),
+                      sameDay(selected, DateTime.now()) ? tr('Dziś, {0}', [fmtDate(selected)]) : fmtDate(selected),
                       style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
                     ),
                   ),
                   TextButton.icon(
                     onPressed: () => _addFor(context),
                     icon: const Icon(Icons.add_rounded),
-                    label: const Text('Dodaj'),
+                    label: Text(tr('Dodaj')),
                   ),
                 ],
               ),
               const SizedBox(height: 4),
               if (dayItems.isEmpty)
-                const K9Card(
-                  child: Text('Brak wpisów w tym dniu.', style: TextStyle(color: K9.muted)),
+                K9Card(
+                  child: Text(tr('Brak wpisów w tym dniu.'), style: TextStyle(color: K9.muted)),
                 ),
               for (final (i, it) in dayItems.indexed)
                 Padding(
@@ -204,7 +205,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                         color: it.color,
                         title: it.title,
                         subtitle: it.source is HealthRecord
-                            ? '${it.subtitle} · termin'
+                            ? tr('{0} · termin', [it.subtitle])
                             : '${fmtTime(it.date)} · ${it.subtitle}',
                       ),
                     ),
@@ -216,11 +217,11 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 runSpacing: 6,
                 children: [
                   for (final (label, color) in [
-                    ('Trening', K9.orange),
-                    ('Zdrowie', K9.green),
-                    ('Zawody / wystawy', K9.yellow),
-                    ('Wizyta', K9.red),
-                    ('Przypomnienie', K9.blue),
+                    (tr('Trening'), K9.orange),
+                    (tr('Zdrowie'), K9.green),
+                    (tr('Zawody / wystawy'), K9.yellow),
+                    (tr('Wizyta'), K9.red),
+                    (tr('Przypomnienie'), K9.blue),
                   ])
                     Row(
                       mainAxisSize: MainAxisSize.min,
@@ -257,7 +258,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
               ListRow(
                 icon: Icons.directions_run_rounded,
                 color: K9.orange,
-                title: 'Trening',
+                title: tr('Trening'),
                 onTap: () {
                   Navigator.pop(c);
                   openTrainingForm(
@@ -270,7 +271,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
               ListRow(
                 icon: Icons.event_rounded,
                 color: K9.yellow,
-                title: 'Zawody, wystawa, wizyta lub przypomnienie',
+                title: tr('Zawody, wystawa, wizyta lub przypomnienie'),
                 onTap: () {
                   Navigator.pop(c);
                   openEventForm(context, date: selected);
@@ -279,7 +280,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
               ListRow(
                 icon: Icons.emoji_events_rounded,
                 color: K9.yellow,
-                title: 'Wystawa',
+                title: tr('Wystawa'),
                 onTap: () {
                   Navigator.pop(c);
                   openShowForm(context, date: DateTime(selected.year, selected.month, selected.day, 9));
@@ -288,7 +289,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
               ListRow(
                 icon: Icons.vaccines_rounded,
                 color: K9.green,
-                title: 'Wpis zdrowotny',
+                title: tr('Wpis zdrowotny'),
                 onTap: () {
                   Navigator.pop(c);
                   openHealthForm(context);

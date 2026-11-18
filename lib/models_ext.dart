@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
 import 'models.dart';
+import 'l10n/l10n.dart';
 
 DateTime? _d(dynamic v) => v == null ? null : DateTime.parse(v as String);
 double? _n(dynamic v) => (v as num?)?.toDouble();
@@ -134,7 +135,7 @@ class ShowEntry {
         entryDeadline: _d(j['deadline']),
         fee: _n(j['fee']),
         judge: j['judge'] ?? '',
-        country: j['country'] ?? 'Polska',
+        country: j['country'] ?? tr('Polska'),
         grade: j['grade'],
         placement: j['placement'],
         titles: {for (final t in (j['titles'] as List? ?? [])) ShowTitle.values.byName(t)},
@@ -167,9 +168,10 @@ enum DocType {
   insurance('Ubezpieczenie', Icons.shield_rounded),
   other('Inny dokument', Icons.description_rounded);
 
-  final String label;
+  final String _label;
+  String get label => tr(_label);
   final IconData icon;
-  const DocType(this.label, this.icon);
+  const DocType(this._label, this.icon);
 }
 
 class DogDocument {
@@ -233,9 +235,10 @@ enum GearCategory {
   booties('Ochraniacze łap', Icons.pets_rounded),
   other('Inne', Icons.inventory_2_rounded);
 
-  final String label;
+  final String _label;
+  String get label => tr(_label);
   final IconData icon;
-  const GearCategory(this.label, this.icon);
+  const GearCategory(this._label, this.icon);
 }
 
 class GearItem {
@@ -317,9 +320,10 @@ enum GoalType {
   weight('Masa ciała', Icons.monitor_weight_rounded),
   custom('Własny cel', Icons.flag_rounded);
 
-  final String label;
+  final String _label;
+  String get label => tr(_label);
   final IconData icon;
-  const GoalType(this.label, this.icon);
+  const GoalType(this._label, this.icon);
 }
 
 const examPresets = ['BH-VT', 'IGP 1', 'IGP 2', 'IGP 3', 'IGP-FH', 'Obedience 1', 'Nosework NW1'];

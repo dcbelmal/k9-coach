@@ -4,6 +4,7 @@ import '../theme.dart';
 import '../widgets/common.dart';
 import 'billing.dart';
 import 'module_store.dart';
+import '../l10n/l10n.dart';
 
 /// Co odblokowuje Premium. `ready` = już działa w aplikacji.
 const premiumFeatures = <(IconData, String, String, bool)>[
@@ -26,7 +27,7 @@ class PremiumScreen extends StatelessWidget {
     final m = ModuleStore.instance;
     final b = Billing.instance;
     return Scaffold(
-      appBar: AppBar(title: const Text('Valkor Premium')),
+      appBar: AppBar(title: Text(tr('Valkor Premium'))),
       body: ListenableBuilder(
         listenable: Listenable.merge([m, b]),
         builder: (context, _) => ListView(padding: const EdgeInsets.fromLTRB(16, 4, 16, 40), children: [
@@ -40,15 +41,15 @@ class PremiumScreen extends StatelessWidget {
               Row(children: [
                 const Icon(Icons.workspace_premium_rounded, color: K9.gold, size: 30),
                 const SizedBox(width: 10),
-                const Expanded(
-                  child: Text('PREMIUM',
+                Expanded(
+                  child: Text(tr('PREMIUM'),
                       style: TextStyle(
                           fontFamily: 'Cinzel', color: K9.goldLight, fontSize: 20, fontWeight: FontWeight.w700, letterSpacing: 2)),
                 ),
-                if (m.premium) const Pill(icon: Icons.check_rounded, text: 'Aktywne'),
+                if (m.premium) Pill(icon: Icons.check_rounded, text: tr('Aktywne')),
               ]),
               const SizedBox(height: 10),
-              const Text('Pełnia możliwości dla hodowców, zawodników i psów pracujących.',
+              Text(tr('Pełnia możliwości dla hodowców, zawodników i psów pracujących.'),
                   style: TextStyle(color: Color(0xFFCFCFD4))),
             ]),
           ),
@@ -64,12 +65,12 @@ class PremiumScreen extends StatelessWidget {
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text(f.$2, style: TextStyle(fontSize: 15, color: f.$4 ? K9.text : K9.muted)),
+                        Text(tr(f.$2), style: TextStyle(fontSize: 15, color: f.$4 ? K9.text : K9.muted)),
                         if (f.$3.isNotEmpty)
-                          Text(f.$3, style: const TextStyle(color: K9.muted, fontSize: 12.5)),
+                          Text(tr(f.$3), style: const TextStyle(color: K9.muted, fontSize: 12.5)),
                       ]),
                     ),
-                    if (!f.$4) const Text('wkrótce', style: TextStyle(color: K9.faint, fontSize: 12)),
+                    if (!f.$4) Text(tr('wkrótce'), style: TextStyle(color: K9.faint, fontSize: 12)),
                   ]),
                 ),
             ]),
@@ -77,7 +78,7 @@ class PremiumScreen extends StatelessWidget {
           gap12,
           if (b.live) ..._storeSection(context, m, b) else ..._testSection(context, m, b),
           gap12,
-          const Text(freeForever, style: TextStyle(color: K9.faint, fontSize: 12)),
+          Text(tr(freeForever), style: const TextStyle(color: K9.faint, fontSize: 12)),
         ]),
       ),
     );
@@ -86,13 +87,13 @@ class PremiumScreen extends StatelessWidget {
   List<Widget> _storeSection(BuildContext context, ModuleStore m, Billing b) {
     if (m.premium && m.premiumSource == PremiumSource.play) {
       return [
-        const K9Card(
+        K9Card(
           child: Row(children: [
             Icon(Icons.verified_rounded, color: K9.green),
             SizedBox(width: 12),
             Expanded(
               child: Text(
-                'Subskrypcja aktywna. Zmienisz ją lub anulujesz w Sklepie Google Play → Płatności i subskrypcje.',
+                tr('Subskrypcja aktywna. Zmienisz ją lub anulujesz w Sklepie Google Play → Płatności i subskrypcje.'),
                 style: TextStyle(fontSize: 13.5),
               ),
             ),
@@ -112,10 +113,10 @@ class PremiumScreen extends StatelessWidget {
         ),
       TextButton(
         onPressed: b.busy ? null : b.restore,
-        child: const Text('Przywróć zakup'),
+        child: Text(tr('Przywróć zakup')),
       ),
-      const Text(
-        'Płatność przez Google Play. Subskrypcja odnawia się automatycznie – możesz ją anulować w każdej chwili w Sklepie Play.',
+      Text(
+        tr('Płatność przez Google Play. Subskrypcja odnawia się automatycznie – możesz ją anulować w każdej chwili w Sklepie Play.'),
         style: TextStyle(color: K9.faint, fontSize: 12),
       ),
     ];
@@ -124,16 +125,16 @@ class PremiumScreen extends StatelessWidget {
   List<Widget> _testSection(BuildContext context, ModuleStore m, Billing b) => [
         K9Card(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Row(children: [
+            Row(children: [
               Icon(Icons.info_outline_rounded, color: K9.blue),
               SizedBox(width: 10),
-              Expanded(child: Text('Płatności Google Play', style: TextStyle(fontWeight: FontWeight.w700))),
+              Expanded(child: Text(tr('Płatności Google Play'), style: TextStyle(fontWeight: FontWeight.w700))),
             ]),
             const SizedBox(height: 8),
             Text(
               b.supported
-                  ? 'Zakup zadziała, gdy aplikacja będzie pobrana ze Sklepu Google Play. Ta wersja jest z GitHuba, więc na razie Premium włączysz testowo poniżej.'
-                  : 'Zakup działa w aplikacji na Androida ze Sklepu Google Play.',
+                  ? tr('Zakup zadziała, gdy aplikacja będzie pobrana ze Sklepu Google Play. Ta wersja jest z GitHuba, więc na razie Premium włączysz testowo poniżej.')
+                  : tr('Zakup działa w aplikacji na Androida ze Sklepu Google Play.'),
               style: const TextStyle(color: K9.muted, fontSize: 13),
             ),
           ]),
@@ -145,10 +146,10 @@ class PremiumScreen extends StatelessWidget {
             value: m.premium,
             onChanged: (v) async {
               await m.setPremium(v);
-              if (context.mounted) toast(context, v ? 'Premium włączone' : 'Premium wyłączone');
+              if (context.mounted) toast(context, v ? tr('Premium włączone') : tr('Premium wyłączone'));
             },
-            title: const Text('Włącz Premium (wersja testowa)', style: TextStyle(fontWeight: FontWeight.w700)),
-            subtitle: const Text('Za darmo, tylko do sprawdzenia modułów przed startem płatności.',
+            title: Text(tr('Włącz Premium (wersja testowa)'), style: TextStyle(fontWeight: FontWeight.w700)),
+            subtitle: Text(tr('Za darmo, tylko do sprawdzenia modułów przed startem płatności.'),
                 style: TextStyle(color: K9.muted, fontSize: 12.5)),
           ),
         ),
@@ -181,7 +182,7 @@ class _PlanCard extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(color: K9.orange, borderRadius: BorderRadius.circular(8)),
-                    child: const Text('Najtaniej',
+                    child: Text(tr('Najtaniej'),
                         style: TextStyle(color: Colors.black, fontSize: 11, fontWeight: FontWeight.w700)),
                   ),
                 ],

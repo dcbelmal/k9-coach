@@ -10,6 +10,7 @@ import 'forms.dart';
 import 'stats.dart';
 import 'gps_screen.dart';
 import 'track_detail.dart';
+import '../l10n/l10n.dart';
 
 /// Który segment zakładki Trening jest otwarty (0 dyscypliny … 3 statystyki).
 final trainingTab = ValueNotifier<int>(0);
@@ -54,13 +55,13 @@ class _TrainingScreenState extends State<TrainingScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Trening'),
+        title: Text(tr('Trening')),
         automaticallyImplyLeading: !widget.inTab,
         actions: [
           TextButton.icon(
             onPressed: () => openCalendar(context),
             icon: const Icon(Icons.calendar_month_outlined, color: K9.orange),
-            label: const Text('Kalendarz', style: TextStyle(color: K9.orange, fontWeight: FontWeight.w700)),
+            label: Text(tr('Kalendarz'), style: TextStyle(color: K9.orange, fontWeight: FontWeight.w700)),
           ),
           const SizedBox(width: 4),
         ],
@@ -77,7 +78,7 @@ class _TrainingScreenState extends State<TrainingScreen> {
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
           child: Segmented(
-              items: const ['Dyscypliny', 'Plan', 'Historia', 'Statystyki'],
+              items: [tr('Dyscypliny'), tr('Plan'), tr('Historia'), tr('Statystyki')],
               index: tab,
               onChanged: _select),
         ),
@@ -164,8 +165,8 @@ class _DisciplineCard extends StatelessWidget {
                           style: const TextStyle(color: Color(0xFFCFCFD4), fontSize: 12.5)),
                       Text(
                           last == null
-                              ? 'Brak treningów'
-                              : '${list.length} treningów · ostatni ${relDays(last.date)}',
+                              ? tr('Brak treningów')
+                              : tr('{0} treningów · ostatni {1}', [list.length, relDays(last.date)]),
                           style: const TextStyle(color: K9.muted, fontSize: 11.5)),
                     ]),
               ),
@@ -206,7 +207,7 @@ class _WeekPlanState extends State<WeekPlan> {
               icon: const Icon(Icons.chevron_left_rounded, color: K9.orange)),
           Expanded(
             child: Column(children: [
-              Text('Tydzień ${_weekNumber(week)}',
+              Text(tr('Tydzień {0}', [_weekNumber(week)]),
                   style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
               Text('${fmtDateShort(week)} – ${fmtDateShort(week.add(const Duration(days: 6)))}',
                   style: const TextStyle(color: K9.muted, fontSize: 12.5)),
@@ -256,10 +257,10 @@ class _DayRow extends StatelessWidget {
                 color: K9.bg,
                 onTap: () => openTrainingForm(context,
                     planned: day.isAfter(DateTime.now()), date: DateTime(day.year, day.month, day.day, 17)),
-                child: const Row(children: [
+                child: Row(children: [
                   Icon(Icons.add_rounded, color: K9.faint, size: 20),
                   SizedBox(width: 8),
-                  Text('Dodaj trening', style: TextStyle(color: K9.faint)),
+                  Text(tr('Dodaj trening'), style: TextStyle(color: K9.faint)),
                 ]),
               ),
             for (final t in list)
@@ -289,7 +290,7 @@ class _DayRow extends StatelessWidget {
                     ),
                     if (!t.done && !dayOnly(t.date).isBefore(dayOnly(DateTime.now())))
                       IconButton(
-                        tooltip: 'Rozpocznij trening',
+                        tooltip: tr('Rozpocznij trening'),
                         onPressed: () => openGps(context, plan: t),
                         icon: const Icon(Icons.play_circle_fill_rounded, color: K9.orange, size: 30),
                       ),
@@ -337,10 +338,10 @@ class TrainingHistoryList extends StatelessWidget {
     if (items.isEmpty) {
       return ListView(children: [
         ?header,
-        const EmptyState(
+        EmptyState(
             icon: Icons.directions_run_rounded,
-            title: 'Brak treningów',
-            text: 'Zapisuj treningi, a zobaczysz tu historię i statystyki.'),
+            title: tr('Brak treningów'),
+            text: tr('Zapisuj treningi, a zobaczysz tu historię i statystyki.')),
       ]);
     }
     final children = <Widget>[?header];
@@ -402,7 +403,7 @@ class DisciplineScreen extends StatelessWidget {
             ? openGps(context, discipline: discipline)
             : openTrainingForm(context, discipline: discipline),
         icon: Icon(discipline.hasDistance ? Icons.play_arrow_rounded : Icons.add_rounded),
-        label: Text(discipline.hasDistance ? 'Start GPS' : 'Trening',
+        label: Text(discipline.hasDistance ? tr('Start GPS') : tr('Trening'),
             style: const TextStyle(fontWeight: FontWeight.w700)),
       ),
       body: ListenableBuilder(
@@ -423,18 +424,18 @@ class DisciplineScreen extends StatelessWidget {
                     TextButton.icon(
                       onPressed: () => openTrainingForm(context, discipline: discipline),
                       icon: const Icon(Icons.edit_note_rounded, size: 18),
-                      label: const Text('Dodaj ręcznie'),
+                      label: Text(tr('Dodaj ręcznie')),
                     ),
                   ]),
                 ],
                 K9Card(
                 child: Row(children: [
-                  Expanded(child: StatValue(label: 'Treningi', value: '${list.length}')),
-                  Expanded(child: StatValue(label: 'Czas', value: fmtDurationShort(minutes))),
+                  Expanded(child: StatValue(label: tr('Treningi'), value: '${list.length}')),
+                  Expanded(child: StatValue(label: tr('Czas'), value: fmtDurationShort(minutes))),
                   if (discipline.hasDistance)
-                    Expanded(child: StatValue(label: 'Dystans', value: fmtKm(km), unit: 'km'))
+                    Expanded(child: StatValue(label: tr('Dystans'), value: fmtKm(km), unit: 'km'))
                   else
-                    Expanded(child: StatValue(label: 'Śr. RPE', value: fmtNum(avgRpe))),
+                    Expanded(child: StatValue(label: tr('Śr. RPE'), value: fmtNum(avgRpe))),
                 ]),
               ),
                 if (discipline.hasDistance && !Records.of(list, discipline).isEmpty) ...[
@@ -459,15 +460,15 @@ class GpsStartCard extends StatelessWidget {
     return K9Card(
       gradient: K9.orangeGradient,
       onTap: () => openGps(context),
-      child: const Row(children: [
+      child: Row(children: [
         Icon(Icons.route_rounded, color: Colors.black, size: 32),
         SizedBox(width: 14),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Trening z GPS',
+            Text(tr('Trening z GPS'),
                 style: TextStyle(color: Colors.black, fontSize: 17, fontWeight: FontWeight.w800)),
             SizedBox(height: 2),
-            Text('Mapa, tempo, kilometry i rekordy',
+            Text(tr('Mapa, tempo, kilometry i rekordy'),
                 style: TextStyle(color: Colors.black87, fontSize: 12.5)),
           ]),
         ),

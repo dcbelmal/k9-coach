@@ -7,6 +7,7 @@ import '../theme.dart';
 import '../widgets/common.dart';
 import 'breed_info.dart';
 import 'breeds.dart';
+import '../l10n/l10n.dart';
 
 void openBreed(BuildContext context, Breed b) =>
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => BreedScreen(breed: b)));
@@ -37,19 +38,19 @@ class _BreedAtlasScreenState extends State<BreedAtlasScreen> {
     final list = searchBreeds(q.text).where((b) => group == null || b.fciGroup == group).toList();
     final mine = currentDogBreed;
     return Scaffold(
-      appBar: AppBar(title: const Text('Atlas ras')),
+      appBar: AppBar(title: Text(tr('Atlas ras'))),
       body: ListView(padding: const EdgeInsets.fromLTRB(16, 4, 16, 40), children: [
         TextField(
           controller: q,
           onChanged: (_) => setState(() {}),
-          decoration: const InputDecoration(prefixIcon: Icon(Icons.search_rounded), hintText: 'Szukaj rasy, np. malinois'),
+          decoration: InputDecoration(prefixIcon: Icon(Icons.search_rounded), hintText: tr('Szukaj rasy, np. malinois')),
         ),
         gap12,
         SizedBox(
           height: 38,
           child: ListView(scrollDirection: Axis.horizontal, children: [
-            _chip('Wszystkie', group == null, () => setState(() => group = null)),
-            for (var g = 1; g <= 10; g++) _chip('Gr. ${romanNumerals[g - 1]}', group == g, () => setState(() => group = g)),
+            _chip(tr('Wszystkie'), group == null, () => setState(() => group = null)),
+            for (var g = 1; g <= 10; g++) _chip(tr('Gr. {0}', [romanNumerals[g - 1]]), group == g, () => setState(() => group = g)),
           ]),
         ),
         gap12,
@@ -61,7 +62,7 @@ class _BreedAtlasScreenState extends State<BreedAtlasScreen> {
               const SizedBox(width: 12),
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('Rasa ${AppStore.instance.dog!.name}', style: const TextStyle(color: K9.muted, fontSize: 12.5)),
+                  Text(tr('Rasa {0}', [AppStore.instance.dog!.name]), style: const TextStyle(color: K9.muted, fontSize: 12.5)),
                   Text(mine.name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
                 ]),
               ),
@@ -74,7 +75,7 @@ class _BreedAtlasScreenState extends State<BreedAtlasScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           child: Column(children: [
             if (list.isEmpty)
-              const Padding(padding: EdgeInsets.all(16), child: Text('Brak takiej rasy w bazie.', style: TextStyle(color: K9.muted))),
+              Padding(padding: EdgeInsets.all(16), child: Text(tr('Brak takiej rasy w bazie.'), style: TextStyle(color: K9.muted))),
             for (final b in list)
               ListTile(
                 title: Text(b.name, style: const TextStyle(fontWeight: FontWeight.w600)),
@@ -90,7 +91,7 @@ class _BreedAtlasScreenState extends State<BreedAtlasScreen> {
 
   String _subtitle(Breed b) {
     final i = breedInfoFor(b.id);
-    final g = 'Grupa ${romanNumerals[b.fciGroup - 1]}';
+    final g = tr('Grupa {0}', [romanNumerals[b.fciGroup - 1]]);
     return i == null ? g : '$g · ${i.size.label.toLowerCase()} · ${i.weightLabel}';
   }
 
@@ -121,7 +122,7 @@ class BreedScreen extends StatelessWidget {
     final dog = AppStore.instance.dog;
     final isMine = dog != null && currentDogBreed?.id == breed.id;
     return Scaffold(
-      appBar: AppBar(title: const Text('O rasie')),
+      appBar: AppBar(title: Text(tr('O rasie'))),
       body: ListView(padding: const EdgeInsets.fromLTRB(16, 4, 16, 40), children: [
         K9Card(
           gradient: const LinearGradient(
@@ -136,15 +137,15 @@ class BreedScreen extends StatelessWidget {
             if (i?.fciNo != null) ...[
               const SizedBox(height: 10),
               Row(children: [
-                Pill(icon: Icons.menu_book_rounded, text: 'Wzorzec FCI nr ${i!.fciNo}'),
+                Pill(icon: Icons.menu_book_rounded, text: tr('Wzorzec FCI nr {0}', [i!.fciNo])),
                 const Spacer(),
                 TextButton.icon(
                   onPressed: () async {
                     await Clipboard.setData(ClipboardData(text: i.fciUrl(breed.fciGroup)!));
-                    if (context.mounted) toast(context, 'Skopiowano link do wzorca FCI');
+                    if (context.mounted) toast(context, tr('Skopiowano link do wzorca FCI'));
                   },
                   icon: const Icon(Icons.link_rounded, size: 18),
-                  label: const Text('Kopiuj link'),
+                  label: Text(tr('Kopiuj link')),
                 ),
               ]),
             ],
@@ -152,20 +153,20 @@ class BreedScreen extends StatelessWidget {
         ),
         gap12,
         if (i == null)
-          const K9Card(
-            child: Text('Dla tej rasy nie mamy jeszcze szczegółowych danych.', style: TextStyle(color: K9.muted)),
+          K9Card(
+            child: Text(tr('Dla tej rasy nie mamy jeszcze szczegółowych danych.'), style: TextStyle(color: K9.muted)),
           )
         else ...[
           K9Card(
             child: Column(children: [
               Row(children: [
-                Expanded(child: StatValue(label: 'Wzrost w kłębie', value: i.heightLabel.replaceAll(' cm', ''), unit: 'cm')),
-                Expanded(child: StatValue(label: 'Masa ciała', value: i.weightLabel.replaceAll(' kg', ''), unit: 'kg')),
+                Expanded(child: StatValue(label: tr('Wzrost w kłębie'), value: i.heightLabel.replaceAll(' cm', ''), unit: 'cm')),
+                Expanded(child: StatValue(label: tr('Masa ciała'), value: i.weightLabel.replaceAll(' kg', ''), unit: 'kg')),
               ]),
               const SizedBox(height: 14),
               Row(children: [
-                Expanded(child: StatValue(label: 'Długość życia', value: '${i.lifeMin}–${i.lifeMax}', unit: 'lat')),
-                Expanded(child: StatValue(label: 'Wielkość', value: i.size.label)),
+                Expanded(child: StatValue(label: tr('Długość życia'), value: '${i.lifeMin}–${i.lifeMax}', unit: tr('lat'))),
+                Expanded(child: StatValue(label: tr('Wielkość'), value: i.size.label)),
               ]),
             ]),
           ),
@@ -176,7 +177,7 @@ class BreedScreen extends StatelessWidget {
           gap12,
           K9Card(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const SectionTitle('Potrzeba ruchu', icon: Icons.bolt_rounded),
+              SectionTitle(tr('Potrzeba ruchu'), icon: Icons.bolt_rounded),
               Row(children: [
                 for (var k = 1; k <= 5; k++)
                   Expanded(
@@ -195,14 +196,14 @@ class BreedScreen extends StatelessWidget {
               const SizedBox(height: 2),
               Text(i.energyHint, style: const TextStyle(color: K9.muted, fontSize: 13)),
               const SizedBox(height: 6),
-              Text('Bieganie przy rowerze / canicross: stopniowo od ok. ${i.size.runningFromMonths}. miesiąca życia.',
+              Text(tr('Bieganie przy rowerze / canicross: stopniowo od ok. {0}. miesiąca życia.', [i.size.runningFromMonths]),
                   style: const TextStyle(color: K9.muted, fontSize: 13)),
             ]),
           ),
           gap12,
           K9Card(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const SectionTitle('Pasujące sporty i zajęcia', icon: Icons.emoji_events_outlined),
+              SectionTitle(tr('Pasujące sporty i zajęcia'), icon: Icons.emoji_events_outlined),
               Wrap(spacing: 8, runSpacing: 8, children: [
                 for (final s in i.sports)
                   Container(
@@ -220,7 +221,7 @@ class BreedScreen extends StatelessWidget {
           gap12,
           K9Card(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const SectionTitle('Zalecane badania', icon: Icons.health_and_safety_outlined),
+              SectionTitle(tr('Zalecane badania'), icon: Icons.health_and_safety_outlined),
               for (final t in i.tests)
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 6),
@@ -231,19 +232,19 @@ class BreedScreen extends StatelessWidget {
                       child: Text(t, style: const TextStyle(fontWeight: FontWeight.w700, color: K9.orange)),
                     ),
                     Expanded(
-                      child: Text(testDescriptions[t] ?? '',
+                      child: Text(tr(testDescriptions[t] ?? ''),
                           style: const TextStyle(color: Color(0xFFCFCFD4), fontSize: 13, height: 1.3)),
                     ),
                   ]),
                 ),
               const SizedBox(height: 6),
-              const Text('Przed kryciem i przy zakupie szczenięcia pytaj o wyniki tych badań u rodziców.',
+              Text(tr('Przed kryciem i przy zakupie szczenięcia pytaj o wyniki tych badań u rodziców.'),
                   style: TextStyle(color: K9.faint, fontSize: 12)),
             ]),
           ),
           gap12,
-          const Text(
-            'Dane orientacyjne – zakres dla suk i psów razem. Dokładne wymagania podaje wzorzec rasy FCI i klub rasy.',
+          Text(
+            tr('Dane orientacyjne – zakres dla suk i psów razem. Dokładne wymagania podaje wzorzec rasy FCI i klub rasy.'),
             style: TextStyle(color: K9.faint, fontSize: 12),
           ),
         ],
@@ -261,10 +262,10 @@ class _DogVsBreed extends StatelessWidget {
   Widget build(BuildContext context) {
     final w = dog.weightKg!;
     final (text, color) = w < info.weightMin
-        ? ('poniżej typowej masy rasy', K9.yellow)
+        ? (tr('poniżej typowej masy rasy'), K9.yellow)
         : w > info.weightMax
-            ? ('powyżej typowej masy rasy', K9.yellow)
-            : ('w typowym zakresie rasy', K9.green);
+            ? (tr('powyżej typowej masy rasy'), K9.yellow)
+            : (tr('w typowym zakresie rasy'), K9.green);
     final young = dog.birthDate != null && DateTime.now().difference(dog.birthDate!).inDays < 365;
     return K9Card(
       child: Row(children: [
@@ -272,9 +273,9 @@ class _DogVsBreed extends StatelessWidget {
         const SizedBox(width: 12),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('${dog.name}: ${fmtNum(w)} kg', style: const TextStyle(fontWeight: FontWeight.w700)),
+            Text(tr('{0}: {1} kg', [dog.name, fmtNum(w)]), style: const TextStyle(fontWeight: FontWeight.w700)),
             const SizedBox(height: 2),
-            Text(young ? 'Szczenię jeszcze rośnie – porównuj po 12. miesiącu.' : 'Masa $text.',
+            Text(young ? tr('Szczenię jeszcze rośnie – porównuj po 12. miesiącu.') : tr('Masa {0}.', [text]),
                 style: const TextStyle(color: K9.muted, fontSize: 13)),
           ]),
         ),

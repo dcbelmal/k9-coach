@@ -9,6 +9,7 @@ import '../widgets/common.dart';
 import 'dog_profile_fields.dart';
 import 'module_store.dart';
 import 'modules.dart';
+import '../l10n/l10n.dart';
 
 /// Kreator dodawania psa krok po kroku.
 class DogWizardScreen extends StatefulWidget {
@@ -30,7 +31,7 @@ class _DogWizardScreenState extends State<DogWizardScreen> {
 
   bool _validate() {
     if (step == 0 && name.text.trim().isEmpty) {
-      toast(context, 'Podaj imię psa');
+      toast(context, tr('Podaj imię psa'));
       return false;
     }
     return true;
@@ -64,7 +65,7 @@ class _DogWizardScreenState extends State<DogWizardScreen> {
     final last = step == titles.length - 1;
     return Scaffold(
       appBar: AppBar(
-        title: Text(titles[step]),
+        title: Text(tr(titles[step])),
         leading: step == 0 ? null : IconButton(icon: const Icon(Icons.arrow_back_rounded), onPressed: () => _go(step - 1)),
       ),
       body: Column(children: [
@@ -106,7 +107,7 @@ class _DogWizardScreenState extends State<DogWizardScreen> {
                         _go(step + 1);
                       }
                     },
-              child: Text(last ? 'Zaczynamy' : 'Dalej'),
+              child: Text(last ? tr('Zaczynamy') : tr('Dalej')),
             ),
           ),
         ),
@@ -142,32 +143,32 @@ class _DogWizardScreenState extends State<DogWizardScreen> {
         TextField(
           controller: name,
           textCapitalization: TextCapitalization.words,
-          decoration: const InputDecoration(labelText: 'Imię *'),
+          decoration: InputDecoration(labelText: tr('Imię *')),
         ),
         gap12,
         BreedField(dog: d, onChanged: () => setState(() {})),
         gap16,
         Segmented(
-            items: const ['Suka', 'Pies'], index: d.female ? 0 : 1, onChanged: (i) => setState(() => d.female = i == 0)),
+            items: [tr('Suka'), tr('Pies')], index: d.female ? 0 : 1, onChanged: (i) => setState(() => d.female = i == 0)),
       ]);
 
   Widget _body() => _page([
-        DateField(label: 'Data urodzenia', value: d.birthDate, onChanged: (v) => setState(() => d.birthDate = v)),
+        DateField(label: tr('Data urodzenia'), value: d.birthDate, onChanged: (v) => setState(() => d.birthDate = v)),
         gap12,
         TextField(
             controller: weight,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(labelText: 'Aktualna masa ciała (kg)')),
+            decoration: InputDecoration(labelText: tr('Aktualna masa ciała (kg)'))),
         gap12,
         TextField(
             controller: height,
             keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: 'Wysokość w kłębie (cm, opcjonalnie)')),
+            decoration: InputDecoration(labelText: tr('Wysokość w kłębie (cm, opcjonalnie)'))),
         gap12,
         Text(
           d.mixed
-              ? 'Dla mieszańca korzystam tylko z danych, które tu wpiszesz.'
-              : 'Masę możesz potem uzupełniać w Historii masy.',
+              ? tr('Dla mieszańca korzystam tylko z danych, które tu wpiszesz.')
+              : tr('Masę możesz potem uzupełniać w Historii masy.'),
           style: const TextStyle(color: K9.faint, fontSize: 12.5),
         ),
       ]);
@@ -181,7 +182,7 @@ class _DogWizardScreenState extends State<DogWizardScreen> {
     final on = AppModule.values.where((m) => m != AppModule.profile && m.autoEnabled(d, premium: ms.premium)).toList();
     final special = on.where((m) => m.rule != ModuleRule.always).toList();
     return _page([
-      Text('${d.name.isEmpty ? 'Pies' : d.name} – dobieram moduły',
+      Text(tr('{0} – dobieram moduły', [d.name.isEmpty ? trc('dog', 'Pies') : d.name]),
           style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
       const SizedBox(height: 6),
       Text(
@@ -192,16 +193,16 @@ class _DogWizardScreenState extends State<DogWizardScreen> {
       ),
       gap16,
       if (special.isNotEmpty) ...[
-        const Text('Specjalnie dla Twojego psa', style: TextStyle(fontWeight: FontWeight.w700)),
+        Text(tr('Specjalnie dla Twojego psa'), style: TextStyle(fontWeight: FontWeight.w700)),
         const SizedBox(height: 8),
         _chips(special, highlight: true),
         gap16,
       ],
-      const Text('Dla każdego psa', style: TextStyle(fontWeight: FontWeight.w700)),
+      Text(tr('Dla każdego psa'), style: TextStyle(fontWeight: FontWeight.w700)),
       const SizedBox(height: 8),
       _chips(on.where((m) => m.rule == ModuleRule.always).toList()),
       gap16,
-      const Text('Każdy moduł możesz później włączyć lub wyłączyć w Profil → Moduły.',
+      Text(tr('Każdy moduł możesz później włączyć lub wyłączyć w Profil → Moduły.'),
           style: TextStyle(color: K9.faint, fontSize: 12.5)),
     ]);
   }

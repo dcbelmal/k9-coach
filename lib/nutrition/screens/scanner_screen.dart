@@ -3,6 +3,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../../theme.dart';
 import '../../widgets/common.dart';
+import '../../l10n/l10n.dart';
 
 /// Skaner kodów EAN / QR. Zwraca odczytany tekst kodu.
 Future<String?> scanCode(BuildContext context) =>
@@ -51,16 +52,16 @@ class _ScannerScreenState extends State<ScannerScreen> {
     final v = await showDialog<String>(
       context: context,
       builder: (c) => AlertDialog(
-        title: const Text('Wpisz kod z opakowania'),
+        title: Text(tr('Wpisz kod z opakowania')),
         content: TextField(
           controller: ctl,
           autofocus: true,
           keyboardType: TextInputType.number,
-          decoration: const InputDecoration(labelText: 'Kod EAN (cyfry pod kreskami)'),
+          decoration: InputDecoration(labelText: tr('Kod EAN (cyfry pod kreskami)')),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(c), child: const Text('Anuluj')),
-          TextButton(onPressed: () => Navigator.pop(c, ctl.text.trim()), child: const Text('OK')),
+          TextButton(onPressed: () => Navigator.pop(c), child: Text(tr('Anuluj'))),
+          TextButton(onPressed: () => Navigator.pop(c, ctl.text.trim()), child: Text(tr('OK'))),
         ],
       ),
     );
@@ -73,10 +74,10 @@ class _ScannerScreenState extends State<ScannerScreen> {
       backgroundColor: Colors.black,
       appBar: AppBar(
         backgroundColor: Colors.black,
-        title: const Text('Skanuj kod'),
+        title: Text(tr('Skanuj kod')),
         actions: [
           IconButton(
-            tooltip: 'Latarka',
+            tooltip: tr('Latarka'),
             onPressed: () => controller.toggleTorch(),
             icon: const Icon(Icons.flashlight_on_rounded),
           ),
@@ -88,9 +89,9 @@ class _ScannerScreenState extends State<ScannerScreen> {
           onDetect: _onDetect,
           errorBuilder: (context, error) => EmptyState(
             icon: Icons.no_photography_rounded,
-            title: 'Brak dostępu do aparatu',
-            text: 'Zezwól aplikacji na użycie aparatu w ustawieniach telefonu albo wpisz kod ręcznie.',
-            action: 'Wpisz kod',
+            title: tr('Brak dostępu do aparatu'),
+            text: tr('Zezwól aplikacji na użycie aparatu w ustawieniach telefonu albo wpisz kod ręcznie.'),
+            action: tr('Wpisz kod'),
             onAction: _manual,
           ),
         ),
@@ -109,13 +110,13 @@ class _ScannerScreenState extends State<ScannerScreen> {
           right: 20,
           bottom: 24 + MediaQuery.viewPaddingOf(context).bottom,
           child: Column(children: [
-            const Text('Nakieruj aparat na kod kreskowy lub QR na opakowaniu',
+            Text(tr('Nakieruj aparat na kod kreskowy lub QR na opakowaniu'),
                 textAlign: TextAlign.center, style: TextStyle(color: Colors.white70)),
             const SizedBox(height: 12),
             OutlinedButton.icon(
               onPressed: _manual,
               icon: const Icon(Icons.keyboard_rounded),
-              label: const Text('Wpisz kod ręcznie'),
+              label: Text(tr('Wpisz kod ręcznie')),
             ),
           ]),
         ),

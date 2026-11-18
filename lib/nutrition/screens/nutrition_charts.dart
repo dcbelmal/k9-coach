@@ -7,6 +7,7 @@ import '../../store.dart';
 import '../../theme.dart';
 import '../../widgets/common.dart';
 import '../nutrition_store.dart';
+import '../../l10n/l10n.dart';
 
 final _n = NutritionStore.instance;
 
@@ -43,7 +44,7 @@ class _NutritionChartsCardState extends State<NutritionChartsCard> {
         final from = DateTime.now().subtract(const Duration(days: 120));
         final w = AppStore.instance.weights.where((e) => e.date.isAfter(from)).toList();
         chart = w.length < 2
-            ? const Center(child: Text('Za mało ważeń', style: TextStyle(color: K9.muted)))
+            ? Center(child: Text(tr('Za mało ważeń'), style: const TextStyle(color: K9.muted)))
             : _Line(
                 points: [for (final e in w) FlSpot(e.date.millisecondsSinceEpoch / 8.64e7, e.kg)],
                 target: AppStore.instance.dog?.targetWeightKg,
@@ -52,7 +53,7 @@ class _NutritionChartsCardState extends State<NutritionChartsCard> {
       default:
         final f = _n.mainForecast;
         if (f == null || f.dailyUse <= 0) {
-          chart = const Center(child: Text('Dodaj worek karmy w magazynie', style: TextStyle(color: K9.muted)));
+          chart = Center(child: Text(tr('Dodaj worek karmy w magazynie'), style: TextStyle(color: K9.muted)));
           caption = '';
         } else {
           final opened = dayOnly(f.bag.opened);
@@ -72,14 +73,13 @@ class _NutritionChartsCardState extends State<NutritionChartsCard> {
             forecast: [FlSpot(tx, f.remainingGrams / 1000), FlSpot(math.max(ex, tx + 1), 0)],
             label: (x) => fmtDayMonth(opened.add(Duration(days: x.round()))),
           );
-          caption = 'Zapas w worku (kg). Przerywana – prognoza: koniec ${fmtDateShort(f.emptyDate!)}, '
-              'zakup nowego worka ${fmtDateShort(f.buyDate!)}.';
+          caption = tr('Zapas w worku (kg). Przerywana – prognoza: koniec {0}, zakup nowego worka {1}.', [fmtDateShort(f.emptyDate!), fmtDateShort(f.buyDate!)]);
         }
     }
 
     return K9Card(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const SectionTitle('Wykresy', icon: Icons.insights_rounded),
+        SectionTitle(tr('Wykresy'), icon: Icons.insights_rounded),
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: Row(children: [
@@ -87,7 +87,7 @@ class _NutritionChartsCardState extends State<NutritionChartsCard> {
               Padding(
                 padding: const EdgeInsets.only(right: 8),
                 child: ChoiceChip(
-                  label: Text(_names[i]),
+                  label: Text(tr(_names[i])),
                   selected: metric == i,
                   showCheckmark: false,
                   selectedColor: K9.orange,
