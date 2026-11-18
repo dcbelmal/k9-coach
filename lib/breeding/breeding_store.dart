@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../dogs/dog_profiles.dart';
+
 import '../modules/module_store.dart';
 import '../modules/modules.dart';
 import '../notifications.dart';
@@ -24,8 +26,13 @@ class BreedingStore extends ChangeNotifier {
 
   Future<void> load() async {
     _prefs = await SharedPreferences.getInstance();
-    final raw = _prefs!.getString(_key);
-    if (raw == null) return;
+    final raw = _prefs!.getString(dogKey(_key));
+    matings = [];
+    remind = true;
+    if (raw == null) {
+      notifyListeners();
+      return;
+    }
     try {
       final j = jsonDecode(raw) as Map<String, dynamic>;
       matings = [for (final e in (j['matings'] as List? ?? [])) Mating.fromJson(e)];
@@ -34,13 +41,14 @@ class BreedingStore extends ChangeNotifier {
     } catch (e) {
       debugPrint('Hodowla: błąd odczytu $e');
     }
+    notifyListeners();
   }
 
   void _sort() => matings.sort((a, b) => b.first.compareTo(a.first));
 
   Future<void> _write() async {
     _prefs ??= await SharedPreferences.getInstance();
-    await _prefs!.setString(_key, jsonEncode({'matings': matings.map((m) => m.toJson()).toList(), 'remind': remind}));
+    await _prefs!.setString(dogKey(_key), jsonEncode({'matings': matings.map((m) => m.toJson()).toList(), 'remind': remind}));
   }
 
   Future<void> _save() async {

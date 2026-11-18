@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'breeding/breeding_store.dart';
 import 'champ_rules.dart';
+import 'dogs/dog_profiles.dart';
 import 'files/file_store.dart';
 import 'guides/guide_store.dart';
 import 'gallery/gallery_store.dart';
@@ -63,8 +64,20 @@ class AppStore extends ChangeNotifier {
 
   Future<void> load() async {
     _prefs = await SharedPreferences.getInstance();
-    final raw = _prefs.getString(_key);
-    if (raw == null) return;
+    dog = null;
+    weights = [];
+    health = [];
+    trainings = [];
+    events = [];
+    shows = [];
+    documents = [];
+    gear = [];
+    goals = [];
+    final raw = _prefs.getString(dogKey(_key));
+    if (raw == null) {
+      notifyListeners();
+      return;
+    }
     try {
       final j = jsonDecode(raw) as Map<String, dynamic>;
       dog = j['dog'] == null ? null : Dog.fromJson(j['dog']);
@@ -79,13 +92,15 @@ class AppStore extends ChangeNotifier {
     } catch (e) {
       debugPrint('Błąd odczytu danych: $e');
     }
+    notifyListeners();
   }
 
   Future<void> _save() async {
     _sort();
     notifyListeners();
+    if (dog != null) await DogProfiles.instance.registerActive();
     await _prefs.setString(
-        _key,
+        dogKey(_key),
         jsonEncode({
           'dog': dog?.toJson(),
           'weights': weights.map((e) => e.toJson()).toList(),

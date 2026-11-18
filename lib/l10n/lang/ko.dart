@@ -1795,4 +1795,15 @@ const strings = <String, String>{
   'Dyskwalifikacja': '실격',
   'Nie oceniono': '평가 없음',
   'międzynarodowa - CACIB': '국제 – CACIB',
+  // Kilka psów (0.11.0)
+  'Moje psy': '내 강아지',
+  'Każdy pies ma osobne treningi, zdrowie, żywienie i moduły.': '강아지마다 훈련, 건강, 영양, 모듈이 따로 있습니다.',
+  'Dodaj kolejnego psa': '다른 강아지 추가',
+  'Psy ({0})': '강아지 ({0})',
+  'Wróć': '뒤로',
+  'Przełącz psa albo dodaj kolejnego': '강아지 전환 또는 추가',
+  'Usuń profil psa': '강아지 프로필 삭제',
+  'Usuwa tego psa i wszystkie jego wpisy': '이 강아지와 모든 기록을 삭제합니다',
+  '{0} – profil, treningi i wszystkie wpisy': '{0} – 프로필, 훈련 및 모든 기록',
+  'Osobne treningi, zdrowie, żywienie i moduły dla każdego psa': '강아지별로 분리된 훈련, 건강, 영양, 모듈',
 };

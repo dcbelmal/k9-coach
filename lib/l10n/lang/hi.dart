@@ -1657,4 +1657,15 @@ const strings = <String, String>{
   'Dyskwalifikacja': 'अयोग्य',
   'Nie oceniono': 'ग्रेड नहीं दिया',
   'międzynarodowa - CACIB': 'अंतरराष्ट्रीय – CACIB',
+  // Kilka psów (0.11.0)
+  'Moje psy': 'मेरे कुत्ते',
+  'Każdy pies ma osobne treningi, zdrowie, żywienie i moduły.': 'हर कुत्ते का अपना प्रशिक्षण, स्वास्थ्य, पोषण और मॉड्यूल होते हैं।',
+  'Dodaj kolejnego psa': 'एक और कुत्ता जोड़ें',
+  'Psy ({0})': 'कुत्ते ({0})',
+  'Wróć': 'वापस',
+  'Przełącz psa albo dodaj kolejnego': 'कुत्ता बदलें या नया जोड़ें',
+  'Usuń profil psa': 'कुत्ते की प्रोफ़ाइल हटाएँ',
+  'Usuwa tego psa i wszystkie jego wpisy': 'इस कुत्ते और उसकी सभी प्रविष्टियों को हटाता है',
+  '{0} – profil, treningi i wszystkie wpisy': '{0} – प्रोफ़ाइल, प्रशिक्षण और सभी प्रविष्टियाँ',
+  'Osobne treningi, zdrowie, żywienie i moduły dla każdego psa': 'हर कुत्ते के लिए अलग प्रशिक्षण, स्वास्थ्य, पोषण और मॉड्यूल',
 };

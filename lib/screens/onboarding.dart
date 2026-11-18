@@ -1,5 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 
+import '../dogs/dog_profiles.dart';
 import '../store.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
@@ -48,6 +49,21 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ),
           ),
         ),
+        // Dodawanie kolejnego psa: można wrócić do poprzedniego.
+        if (DogProfiles.instance.ids.isNotEmpty)
+          SafeArea(
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: TextButton.icon(
+                  onPressed: () => DogProfiles.instance.cancelAdding(),
+                  icon: const Icon(Icons.arrow_back_rounded),
+                  label: Text(tr('Wróć')),
+                ),
+              ),
+            ),
+          ),
         SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
@@ -72,7 +88,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 child: FilledButton(
                   onPressed: () => Navigator.of(context)
                       .push(MaterialPageRoute(builder: (_) => const DogWizardScreen())),
-                  child: Text(tr('Dodaj swojego psa')),
+                  child: Text(DogProfiles.instance.ids.isEmpty ? tr('Dodaj swojego psa') : tr('Dodaj kolejnego psa')),
                 ),
               ),
               const SizedBox(height: 12),

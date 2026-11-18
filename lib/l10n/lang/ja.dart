@@ -1797,4 +1797,15 @@ const strings = <String, String>{
   'Dyskwalifikacja': '失格',
   'Nie oceniono': '未評価',
   'międzynarodowa - CACIB': '国際 – CACIB',
+  // Kilka psów (0.11.0)
+  'Moje psy': 'マイ犬',
+  'Każdy pies ma osobne treningi, zdrowie, żywienie i moduły.': '犬ごとにトレーニング、健康、食事、モジュールが分かれています。',
+  'Dodaj kolejnego psa': '別の犬を追加',
+  'Psy ({0})': '犬 ({0})',
+  'Wróć': '戻る',
+  'Przełącz psa albo dodaj kolejnego': '犬を切り替えるか追加する',
+  'Usuń profil psa': '犬のプロフィールを削除',
+  'Usuwa tego psa i wszystkie jego wpisy': 'この犬とすべての記録を削除します',
+  '{0} – profil, treningi i wszystkie wpisy': '{0} – プロフィール、トレーニング、すべての記録',
+  'Osobne treningi, zdrowie, żywienie i moduły dla każdego psa': '犬ごとに別々のトレーニング、健康、食事、モジュール',
 };

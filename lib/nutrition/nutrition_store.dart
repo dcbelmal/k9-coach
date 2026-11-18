@@ -4,6 +4,8 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../dogs/dog_profiles.dart';
+
 import '../files/file_store.dart';
 import '../models.dart';
 import '../notifications.dart';
@@ -60,18 +62,24 @@ class NutritionStore extends ChangeNotifier {
   Future<void> load() async {
     _prefs = await SharedPreferences.getInstance();
     // Każda zmiana psa lub treningów przelicza dzisiejszą dawkę.
-    app.addListener(() {
-      _planCache = null;
-      notifyListeners();
-    });
-    final raw = _prefs!.getString(_key);
-    if (raw == null) return;
+    if (!_listening) {
+      _listening = true;
+      app.addListener(() {
+        _planCache = null;
+        notifyListeners();
+      });
+    }
+    _planCache = null;
+    final raw = _prefs!.getString(dogKey(_key));
     try {
-      _fromJson(jsonDecode(raw) as Map<String, dynamic>);
+      _fromJson(raw == null ? const {} : jsonDecode(raw) as Map<String, dynamic>);
     } catch (e) {
       debugPrint('Błąd odczytu żywienia: $e');
     }
+    notifyListeners();
   }
+
+  bool _listening = false;
 
   void _fromJson(Map<String, dynamic> j) {
     products = [for (final e in (j['products'] as List? ?? [])) FoodProduct.fromJson(e)];
@@ -104,7 +112,7 @@ class NutritionStore extends ChangeNotifier {
     _planCache = null;
     notifyListeners();
     _prefs ??= await SharedPreferences.getInstance();
-    await _prefs!.setString(_key, jsonEncode(toJson()));
+    await _prefs!.setString(dogKey(_key), jsonEncode(toJson()));
     if (reschedule) await Notifications.instance.reschedule(app);
   }
 

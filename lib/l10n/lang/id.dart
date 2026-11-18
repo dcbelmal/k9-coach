@@ -1630,4 +1630,15 @@ const strings = <String, String>{
   'Dyskwalifikacja': 'Diskualifikasi',
   'Nie oceniono': 'Tidak dinilai',
   'międzynarodowa - CACIB': 'internasional – CACIB',
+  // Kilka psów (0.11.0)
+  'Moje psy': 'Anjing saya',
+  'Każdy pies ma osobne treningi, zdrowie, żywienie i moduły.': 'Setiap anjing punya latihan, kesehatan, nutrisi, dan modul sendiri.',
+  'Dodaj kolejnego psa': 'Tambah anjing lain',
+  'Psy ({0})': 'Anjing ({0})',
+  'Wróć': 'Kembali',
+  'Przełącz psa albo dodaj kolejnego': 'Ganti anjing atau tambah yang lain',
+  'Usuń profil psa': 'Hapus profil anjing',
+  'Usuwa tego psa i wszystkie jego wpisy': 'Menghapus anjing ini dan semua catatannya',
+  '{0} – profil, treningi i wszystkie wpisy': '{0} – profil, latihan, dan semua catatan',
+  'Osobne treningi, zdrowie, żywienie i moduły dla każdego psa': 'Latihan, kesehatan, nutrisi, dan modul terpisah untuk setiap anjing',
 };

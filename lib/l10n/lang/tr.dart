@@ -1662,4 +1662,15 @@ const strings = <String, String>{
   'Dyskwalifikacja': 'Diskalifiye',
   'Nie oceniono': 'Derecelendirilmedi',
   'międzynarodowa - CACIB': 'uluslararası – CACIB',
+  // Kilka psów (0.11.0)
+  'Moje psy': 'Köpeklerim',
+  'Każdy pies ma osobne treningi, zdrowie, żywienie i moduły.': 'Her köpeğin kendi antrenmanı, sağlığı, beslenmesi ve modülleri vardır.',
+  'Dodaj kolejnego psa': 'Başka köpek ekle',
+  'Psy ({0})': 'Köpekler ({0})',
+  'Wróć': 'Geri',
+  'Przełącz psa albo dodaj kolejnego': 'Köpek değiştir veya yenisini ekle',
+  'Usuń profil psa': 'Köpek profilini sil',
+  'Usuwa tego psa i wszystkie jego wpisy': 'Bu köpeği ve tüm kayıtlarını siler',
+  '{0} – profil, treningi i wszystkie wpisy': '{0} – profil, antrenmanlar ve tüm kayıtlar',
+  'Osobne treningi, zdrowie, żywienie i moduły dla każdego psa': 'Her köpek için ayrı antrenman, sağlık, beslenme ve modüller',
 };

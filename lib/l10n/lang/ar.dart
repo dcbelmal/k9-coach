@@ -1664,4 +1664,15 @@ const strings = <String, String>{
   'Dyskwalifikacja': 'استبعاد',
   'Nie oceniono': 'بدون تقييم',
   'międzynarodowa - CACIB': 'دولي – CACIB',
+  // Kilka psów (0.11.0)
+  'Moje psy': 'كلابي',
+  'Każdy pies ma osobne treningi, zdrowie, żywienie i moduły.': 'لكل كلب تدريباته وصحته وتغذيته ووحداته الخاصة.',
+  'Dodaj kolejnego psa': 'إضافة كلب آخر',
+  'Psy ({0})': 'الكلاب ({0})',
+  'Wróć': 'رجوع',
+  'Przełącz psa albo dodaj kolejnego': 'بدّل الكلب أو أضف كلبًا آخر',
+  'Usuń profil psa': 'حذف ملف الكلب',
+  'Usuwa tego psa i wszystkie jego wpisy': 'يحذف هذا الكلب وجميع سجلاته',
+  '{0} – profil, treningi i wszystkie wpisy': '{0} – الملف والتدريبات وجميع السجلات',
+  'Osobne treningi, zdrowie, żywienie i moduły dla każdego psa': 'تدريب وصحة وتغذية ووحدات منفصلة لكل كلب',
 };
