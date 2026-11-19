@@ -10,6 +10,7 @@ import '../modules/modules.dart';
 import '../modules/modules_ui.dart';
 import 'forms.dart';
 import '../l10n/l10n.dart';
+import '../dogs/dog_profiles.dart';
 
 Color dueColor(DateTime due) {
   final days = dayOnly(due).difference(dayOnly(DateTime.now())).inDays;
@@ -50,7 +51,10 @@ class HealthScreen extends StatelessWidget {
           final care = [AppModule.heat, AppModule.feeding, AppModule.foodStock, AppModule.weight]
               .where((m) => ModuleStore.instance.isEnabled(m))
               .toList();
-          return ListView(padding: const EdgeInsets.fromLTRB(16, 4, 16, 120), children: [
+          return ListView(
+              key: PageStorageKey('health-${DogProfiles.instance.activeId}'),
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),
+              children: [
             FadeSlideIn(
               child: K9Card(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

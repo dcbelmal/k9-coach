@@ -14,6 +14,8 @@ import '../gps/track.dart';
 import '../gps/weather.dart';
 import '../models.dart';
 import '../store.dart';
+import '../ui_prefs.dart';
+import '../dogs/dog_profiles.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import 'track_detail.dart';
@@ -21,10 +23,15 @@ import '../l10n/l10n.dart';
 
 final _rec = TrackRecorder.instance;
 
-Future<void> openGps(BuildContext context, {Discipline? discipline, TrainingSession? plan}) =>
-    openGpsWith(Navigator.of(context), discipline: discipline, plan: plan);
+Future<void> openGps(BuildContext context,
+        {Discipline? discipline, TrainingSession? plan, int? targetMin, double? targetKm}) =>
+    openGpsWith(Navigator.of(context),
+        discipline: discipline, plan: plan, targetMin: targetMin, targetKm: targetKm);
 
-Future<void> openGpsWith(NavigatorState nav, {Discipline? discipline, TrainingSession? plan}) {
+/// Otwiera ekran startu (albo trwający trening). Gdy nagrywanie trwa,
+/// ustawienia nie są zmieniane – wracamy do bieżącej sesji.
+Future<void> openGpsWith(NavigatorState nav,
+    {Discipline? discipline, TrainingSession? plan, int? targetMin, double? targetKm}) {
   if (_rec.state == RecState.idle) {
     _rec.plan = plan;
     if (plan != null) {
@@ -34,8 +41,8 @@ Future<void> openGpsWith(NavigatorState nav, {Discipline? discipline, TrainingSe
     } else {
       final d = discipline ?? AppStore.instance.lastDiscipline;
       if (d != null) _rec.discipline = d;
-      _rec.targetMin = 0;
-      _rec.targetKm = null;
+      _rec.targetMin = targetMin ?? 0;
+      _rec.targetKm = _rec.discipline.hasDistance ? targetKm : null;
     }
   }
   return nav.push(MaterialPageRoute(builder: (_) => const GpsScreen()));
@@ -183,7 +190,13 @@ class _GpsScreenState extends State<GpsScreen> {
       if (go != true) return;
     }
     follow = true;
+    final dogId = DogProfiles.instance.activeId;
     await _rec.start();
+    // Zapamiętujemy ustawienia dla tego psa, żeby następny trening ruszył jednym dotknięciem.
+    if (_rec.state != RecState.idle) {
+      await UiPrefs.instance.rememberStart(
+          _rec.dogId ?? dogId, QuickStart(_rec.discipline, targetMin: _rec.targetMin, targetKm: _rec.targetKm));
+    }
   }
 
   Future<void> _stop() async {

@@ -14,130 +14,393 @@ import '../theme.dart';
 import '../widgets/common.dart';
 import '../modules/dog_profile_fields.dart';
 import '../modules/modules_ui.dart';
+import '../modules/module_routes.dart';
+import '../modules/module_store.dart';
+import '../modules/modules.dart';
+import '../ui_prefs.dart';
+import 'shell.dart';
 import '../modules/premium_screen.dart';
 import 'forms.dart';
 import 'stats.dart';
 import '../l10n/l10n.dart';
 import '../l10n/language_picker.dart';
 
-class ProfileScreen extends StatefulWidget {
+/// Zakładka Pies: tylko informacje o psie, w stałych sekcjach.
+/// Ustawienia aplikacji, Premium i moduły są na osobnym ekranie (ikona koła zębatego).
+class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
-  @override
-  State<ProfileScreen> createState() => _ProfileScreenState();
-}
-
-class _ProfileScreenState extends State<ProfileScreen> {
-  int tab = 0;
 
   @override
   Widget build(BuildContext context) {
     final s = AppStore.instance;
     return ListenableBuilder(
-      listenable: s,
+      listenable: Listenable.merge([s, modulesListenable]),
       builder: (context, _) {
         final dog = s.dog!;
+        final ms = ModuleStore.instance;
+        List<AppModule> on(List<AppModule> l) => [for (final m in l) if (ms.isEnabled(m)) m];
+        final training = on([for (final m in AppModule.values) if (m.section == ModuleSection.training) m])
+            .where((m) => !_specialised.contains(m))
+            .toList();
         return SafeArea(
           bottom: false,
-          child: ListView(padding: const EdgeInsets.fromLTRB(16, 8, 16, 120), children: [
-            Row(children: [
-              Expanded(
-                  child: Text(tr('Profil psa'), style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800))),
-              IconButton(
-                onPressed: () => showDogSwitcher(context),
-                tooltip: tr('Moje psy'),
-                icon: const Icon(Icons.swap_horiz_rounded, color: K9.orange),
+          child: ListView(
+            key: PageStorageKey('profile-${DogProfiles.instance.activeId}'),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
+            children: [
+              Row(children: [
+                Expanded(
+                    child: Text(tr('Profil psa'), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800))),
+                IconButton(
+                  onPressed: () => showDogSwitcher(context),
+                  tooltip: tr('Moje psy'),
+                  icon: const Icon(Icons.swap_horiz_rounded, color: K9.orange),
+                ),
+                IconButton(
+                  onPressed: () => openAppSettings(context),
+                  tooltip: tr('Ustawienia aplikacji'),
+                  icon: const Icon(Icons.settings_outlined, color: K9.orange),
+                ),
+              ]),
+              gap12,
+              _PhotoCard(dog: dog),
+              gap16,
+              _BasicData(dog: dog),
+              gap12,
+              _Measurements(dog: dog, s: s),
+              _ModuleSection(
+                title: tr('Zdrowie'),
+                icon: Icons.favorite_border_rounded,
+                tiles: [
+                  _Tile(Icons.favorite_rounded, tr('Wszystkie wpisy'), () => goToTab(2)),
+                  for (final m in on([AppModule.vaccinations, AppModule.deworming])) _Tile.module(context, m),
+                ],
               ),
-              IconButton(tooltip: tr('Edytuj'), 
-                onPressed: () => Navigator.of(context)
-                    .push(MaterialPageRoute(builder: (_) => DogEditScreen(existing: dog))),
-                icon: const Icon(Icons.edit_outlined, color: K9.orange),
+              _ModuleSection(
+                title: tr('Żywienie'),
+                icon: Icons.restaurant_rounded,
+                tiles: [for (final m in on([AppModule.feeding, AppModule.foodStock])) _Tile.module(context, m)],
               ),
-            ]),
-            gap12,
-            ClipRRect(
-              borderRadius: BorderRadius.circular(K9.radius),
-              child: SizedBox(
-                height: 220,
-                child: Stack(fit: StackFit.expand, children: [
-                  Hero(tag: 'dog-photo', child: DogPhoto(dog: dog)),
-                  const DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.centerLeft,
-                        end: Alignment.centerRight,
-                        colors: [Color(0xEE0B0B0C), Color(0x330B0B0C)],
-                      ),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.all(18),
-                    child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          Row(children: [
-                            Text(dog.name,
-                                style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800)),
-                            const SizedBox(width: 6),
-                            Icon(dog.female ? Icons.female_rounded : Icons.male_rounded, color: K9.orange),
-                          ]),
-                          SizedBox(
-                            width: 200,
-                            child: Text(dog.breed,
-                                style: const TextStyle(color: Color(0xFFCFCFD4), fontSize: 14)),
-                          ),
-                        ]),
-                  ),
-                  Positioned(
-                    right: 10,
-                    bottom: 10,
-                    child: IconButton.filled(tooltip: tr('Zmień zdjęcie'), 
-                      style: IconButton.styleFrom(backgroundColor: Colors.black54),
-                      onPressed: () => pickDogPhoto(context, dog),
-                      icon: const Icon(Icons.photo_camera_outlined, color: K9.text),
-                    ),
-                  ),
-                ]),
+              _ModuleSection(
+                title: tr('Dokumenty, galeria i notatki'),
+                icon: Icons.folder_open_rounded,
+                tiles: [
+                  for (final m in on([AppModule.documents, AppModule.gallery])) _Tile.module(context, m),
+                  _Tile(Icons.sticky_note_2_rounded, tr('Notatki'), () => _openNotes(context, dog)),
+                ],
               ),
-            ),
-            gap16,
-            Segmented(
-                items: [tr('Dane'), tr('Waga'), tr('Notatki')], index: tab, onChanged: (i) => setState(() => tab = i)),
-            gap12,
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 250),
-              child: switch (tab) {
-                0 => _DataTab(key: const ValueKey(0), dog: dog),
-                1 => WeightHistory(key: const ValueKey(1), s: s),
-                _ => DogNotesEditor(key: const ValueKey(2), dog: dog),
-              },
-            ),
-            if (currentDogBreed != null) ...[
+              _ModuleSection(
+                title: tr('Rozród i cieczka'),
+                icon: Icons.water_drop_outlined,
+                tiles: [
+                  for (final m in on([AppModule.heat, AppModule.breeding, AppModule.reproduction, AppModule.breedingDocs]))
+                    _Tile.module(context, m),
+                ],
+              ),
+              _ModuleSection(
+                title: tr('Wystawy i pozostałe'),
+                icon: Icons.emoji_events_outlined,
+                tiles: [
+                  for (final m in on([
+                    AppModule.shows,
+                    AppModule.evaluations,
+                    AppModule.walks,
+                    AppModule.calendar,
+                    AppModule.goals,
+                    AppModule.gear,
+                    AppModule.breedAtlas,
+                  ]))
+                    _Tile.module(context, m),
+                  for (final m in training) _Tile.module(context, m),
+                ],
+              ),
               gap12,
               K9Card(
-                onTap: () => openBreed(context, currentDogBreed!),
-                child: Row(children: [
-                  IconBadge(Icons.menu_book_rounded, K9.orange),
-                  SizedBox(width: 12),
-                  Expanded(
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(tr('O rasie'), style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-                      SizedBox(height: 2),
-                      Text(tr('Wzorzec FCI, masa, ruch, sporty i badania'),
-                          style: TextStyle(color: K9.muted, fontSize: 13)),
-                    ]),
-                  ),
-                  Icon(Icons.chevron_right_rounded, color: K9.faint),
-                ]),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                child: ListRow(
+                  icon: Icons.settings_outlined,
+                  color: K9.orange,
+                  title: tr('Ustawienia aplikacji'),
+                  subtitle: tr('Język, powiadomienia, moduły, Premium, psy'),
+                  trailing: const Icon(Icons.chevron_right_rounded, color: K9.muted),
+                  onTap: () => openAppSettings(context),
+                ),
               ),
             ],
-            const SizedBox(height: 24),
-            const AllModulesCard(),
-            const SizedBox(height: 16),
-            const _Settings(),
-          ]),
+          ),
         );
       },
+    );
+  }
+}
+
+/// Moduły wystaw i rozrodu są już w swoich sekcjach – nie dublujemy ich.
+const _specialised = {AppModule.shows, AppModule.evaluations, AppModule.reproduction, AppModule.breedingDocs};
+
+void _openNotes(BuildContext context, Dog dog) => Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => Scaffold(
+        appBar: AppBar(title: Text(tr('Notatki'))),
+        body: ListView(padding: const EdgeInsets.fromLTRB(16, 4, 16, 32), children: [DogNotesEditor(dog: dog)]),
+      ),
+    ));
+
+/// Ustawienia aplikacji jako osobny ekran.
+void openAppSettings(BuildContext context) => Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => Scaffold(
+        appBar: AppBar(title: Text(tr('Ustawienia aplikacji'))),
+        body: ListView(padding: const EdgeInsets.fromLTRB(16, 4, 16, 32), children: const [_Settings()]),
+      ),
+    ));
+
+class _PhotoCard extends StatelessWidget {
+  final Dog dog;
+  const _PhotoCard({required this.dog});
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(K9.radius),
+      child: SizedBox(
+        height: 180,
+        child: Stack(fit: StackFit.expand, children: [
+          Hero(tag: 'dog-photo', child: DogPhoto(dog: dog)),
+          const DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+                colors: [Color(0xEE0B0B0C), Color(0x330B0B0C)],
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 18, 72, 18),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.end, children: [
+              Row(children: [
+                Flexible(
+                  child: Text(dog.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800)),
+                ),
+                const SizedBox(width: 6),
+                Icon(dog.female ? Icons.female_rounded : Icons.male_rounded, color: K9.orange),
+              ]),
+              if (dog.breed.isNotEmpty)
+                Text(dog.breed,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Color(0xFFCFCFD4), fontSize: 14)),
+            ]),
+          ),
+          Positioned(
+            right: 10,
+            bottom: 10,
+            child: IconButton.filled(
+              tooltip: tr('Zmień zdjęcie'),
+              style: IconButton.styleFrom(backgroundColor: Colors.black54),
+              onPressed: () => pickDogPhoto(context, dog),
+              icon: const Icon(Icons.photo_camera_outlined, color: K9.text),
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
+/// Nagłówek sekcji profilu: ikona, tytuł i opcjonalny przycisk.
+class _SectionHead extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String? action;
+  final VoidCallback? onAction;
+  const _SectionHead(this.icon, this.title, {this.action, this.onAction});
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Row(children: [
+          Icon(icon, color: K9.orange, size: 20),
+          const SizedBox(width: 8),
+          Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16))),
+          if (action != null)
+            TextButton(
+              onPressed: onAction,
+              style: TextButton.styleFrom(minimumSize: const Size(48, 40)),
+              child: Text(action!, style: const TextStyle(color: K9.orange, fontWeight: FontWeight.w700)),
+            ),
+        ]),
+      );
+}
+
+class _BasicData extends StatelessWidget {
+  final Dog dog;
+  const _BasicData({required this.dog});
+
+  @override
+  Widget build(BuildContext context) {
+    final breed = currentDogBreed;
+    final rows = <(IconData, String, String)>[
+      (dog.female ? Icons.female_rounded : Icons.male_rounded, tr('Płeć'), dog.sexLabel),
+      (Icons.health_and_safety_outlined, tr('Rozród'), dog.reproLabel),
+      (
+        Icons.cake_outlined,
+        tr('Urodzony'),
+        dog.birthDate == null ? '—' : [fmtDate(dog.birthDate!), dog.ageLabel].where((e) => e.isNotEmpty).join(' · ')
+      ),
+      (Icons.local_fire_department_outlined, tr('Aktywność'), dog.activity?.label ?? '—'),
+      (Icons.flag_circle_outlined, tr('Cel użytkowania'), dog.purpose?.label ?? '—'),
+      (Icons.route_outlined, tr('Cel tygodniowy'), tr('{0} km', [fmtKm(dog.weeklyKmGoal)])),
+      (Icons.memory_rounded, tr('Nr chipa'), dog.chip.isEmpty ? '—' : dog.chip),
+      (Icons.badge_outlined, tr('Nr rodowodu'), dog.pedigree.isEmpty ? '—' : dog.pedigree),
+      (Icons.category_outlined, tr('Grupa FCI'), dog.fciGroup == null ? '—' : tr('Grupa {0}', [romanNumerals[dog.fciGroup! - 1]])),
+    ];
+    return K9Card(
+      padding: const EdgeInsets.fromLTRB(16, 10, 8, 6),
+      child: Column(children: [
+        _SectionHead(Icons.badge_outlined, tr('Dane podstawowe'),
+            action: tr('Edytuj'),
+            onAction: () =>
+                Navigator.of(context).push(MaterialPageRoute(builder: (_) => DogEditScreen(existing: dog)))),
+        for (final (i, r) in rows.indexed) ...[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(0, 9, 8, 9),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Icon(r.$1, size: 19, color: K9.muted),
+              const SizedBox(width: 12),
+              Expanded(flex: 2, child: Text(r.$2, style: const TextStyle(color: Color(0xFFCFCFD4)))),
+              const SizedBox(width: 8),
+              Expanded(
+                flex: 3,
+                child: Text(r.$3, textAlign: TextAlign.end, style: const TextStyle(fontWeight: FontWeight.w600)),
+              ),
+            ]),
+          ),
+          if (i < rows.length - 1) const Divider(height: 1, color: K9.border),
+        ],
+        if (breed != null)
+          ListRow(
+            icon: Icons.menu_book_rounded,
+            color: K9.orange,
+            title: tr('O rasie'),
+            subtitle: tr('Wzorzec FCI, masa, ruch, sporty i badania'),
+            trailing: const Icon(Icons.chevron_right_rounded, color: K9.muted),
+            onTap: () => openBreed(context, breed),
+          ),
+      ]),
+    );
+  }
+}
+
+class _Measurements extends StatelessWidget {
+  final Dog dog;
+  final AppStore s;
+  const _Measurements({required this.dog, required this.s});
+
+  @override
+  Widget build(BuildContext context) {
+    String bcs(int b) => b < 4 ? tr('szczupły') : (b <= 5 ? tr('optymalna') : tr('nadwaga'));
+    return K9Card(
+      padding: const EdgeInsets.fromLTRB(16, 10, 8, 12),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Expanded(child: _SectionHead(Icons.monitor_weight_outlined, tr('Pomiary i masa ciała'))),
+          IconButton(
+            tooltip: tr('Dodaj pomiar'),
+            onPressed: () => openWeightForm(context),
+            icon: const Icon(Icons.add_circle_outline_rounded, color: K9.orange),
+          ),
+        ]),
+        Padding(
+          padding: const EdgeInsets.only(right: 8),
+          child: Wrap(runSpacing: 10, children: [
+            FractionallySizedBox(
+                widthFactor: 0.5,
+                child: StatValue(
+                    label: tr('Waga'), value: dog.weightKg == null ? '—' : fmtNum(dog.weightKg!), unit: 'kg')),
+            FractionallySizedBox(
+                widthFactor: 0.5,
+                child: StatValue(
+                    label: tr('Docelowa'),
+                    value: dog.targetWeightKg == null ? '—' : fmtNum(dog.targetWeightKg!),
+                    unit: 'kg')),
+            FractionallySizedBox(
+                widthFactor: 0.5,
+                child: StatValue(
+                    label: tr('W kłębie'), value: dog.heightCm == null ? '—' : '${dog.heightCm!.round()}', unit: 'cm')),
+            FractionallySizedBox(
+                widthFactor: 0.5,
+                child: StatValue(
+                    label: dog.bcs == null ? tr('BCS') : bcs(dog.bcs!), value: dog.bcs == null ? '—' : '${dog.bcs}', unit: '/9')),
+          ]),
+        ),
+        if (s.weights.length >= 2) ...[
+          const SizedBox(height: 12),
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: SizedBox(height: 130, child: WeightChart(weights: s.weights, target: dog.targetWeightKg)),
+          ),
+        ],
+        const SizedBox(height: 4),
+        TextButton.icon(
+          onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => Scaffold(
+              appBar: AppBar(title: Text(tr('Historia masy'))),
+              body: ListView(padding: const EdgeInsets.fromLTRB(16, 4, 16, 32), children: [WeightHistory(s: s)]),
+            ),
+          )),
+          icon: const Icon(Icons.show_chart_rounded),
+          label: Text(tr('Wszystkie pomiary ({0})', [s.weights.length])),
+        ),
+      ]),
+    );
+  }
+}
+
+class _Tile {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  const _Tile(this.icon, this.label, this.onTap);
+  _Tile.module(BuildContext context, AppModule m)
+      : icon = m.icon,
+        label = m.label,
+        onTap = (() => openModule(context, m));
+}
+
+/// Sekcja z kafelkami funkcji. Bez włączonych funkcji – sekcja znika.
+class _ModuleSection extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final List<_Tile> tiles;
+  const _ModuleSection({required this.title, required this.icon, required this.tiles});
+
+  @override
+  Widget build(BuildContext context) {
+    if (tiles.isEmpty) return const SizedBox.shrink();
+    final rows = <List<_Tile>>[for (var i = 0; i < tiles.length; i += 4) tiles.sublist(i, (i + 4).clamp(0, tiles.length))];
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: K9Card(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          _SectionHead(icon, title),
+          for (final (ri, r) in rows.indexed) ...[
+            if (ri > 0) const SizedBox(height: 12),
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              for (var i = 0; i < 4; i++) ...[
+                if (i > 0) const SizedBox(width: 10),
+                Expanded(
+                  child: i < r.length
+                      ? LabeledTile(icon: r[i].icon, label: r[i].label, onTap: r[i].onTap)
+                      : const SizedBox(),
+                ),
+              ],
+            ]),
+          ],
+        ]),
+      ),
     );
   }
 }
@@ -154,49 +417,6 @@ Future<void> pickDogPhoto(BuildContext context, Dog dog) async {
   } catch (e) {
     if (context.mounted) toast(context, tr('Nie udało się wczytać zdjęcia'));
   }
-}
-
-class _DataTab extends StatelessWidget {
-  final Dog dog;
-  const _DataTab({super.key, required this.dog});
-
-  @override
-  Widget build(BuildContext context) {
-    final rows = <(IconData, String, String)>[
-      (dog.female ? Icons.female_rounded : Icons.male_rounded, tr('Płeć'), '${dog.sexLabel} · ${dog.reproLabel.toLowerCase()}'),
-      (Icons.local_fire_department_outlined, tr('Aktywność'), dog.activity?.label ?? '—'),
-      (Icons.flag_circle_outlined, tr('Cel użytkowania'), dog.purpose?.label ?? '—'),
-      (Icons.cake_outlined, tr('Data urodzenia'), dog.birthDate == null ? '—' : fmtDate(dog.birthDate!)),
-      (Icons.hourglass_bottom_rounded, tr('Wiek'), dog.ageLabel.isEmpty ? '—' : dog.ageLabel),
-      (Icons.monitor_weight_outlined, tr('Waga'), dog.weightKg == null ? '—' : tr('{0} kg', [fmtNum(dog.weightKg!)])),
-      (Icons.flag_outlined, tr('Waga docelowa'), dog.targetWeightKg == null ? '—' : tr('{0} kg', [fmtNum(dog.targetWeightKg!)])),
-      (Icons.height_rounded, tr('Wysokość w kłębie'), dog.heightCm == null ? '—' : tr('{0} cm', [dog.heightCm!.round()])),
-      (Icons.shield_outlined, tr('BCS (kondycja)'), dog.bcs == null ? '—' : '${dog.bcs}/9${_bcsLabel(dog.bcs!)}'),
-      (Icons.memory_rounded, tr('Nr chipa'), dog.chip.isEmpty ? '—' : dog.chip),
-      (Icons.badge_outlined, tr('Nr rodowodu'), dog.pedigree.isEmpty ? '—' : dog.pedigree),
-      (Icons.category_outlined, tr('Grupa FCI'), dog.fciGroup == null ? '—' : tr('Grupa {0}', [romanNumerals[dog.fciGroup! - 1]])),
-      (Icons.route_outlined, tr('Cel tygodniowy'), tr('{0} km', [fmtKm(dog.weeklyKmGoal)])),
-    ];
-    return K9Card(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      child: Column(children: [
-        for (final (i, r) in rows.indexed) ...[
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 11),
-            child: Row(children: [
-              Icon(r.$1, size: 19, color: K9.muted),
-              const SizedBox(width: 12),
-              Expanded(child: Text(r.$2, style: const TextStyle(color: Color(0xFFCFCFD4)))),
-              Text(r.$3, style: const TextStyle(fontWeight: FontWeight.w600)),
-            ]),
-          ),
-          if (i < rows.length - 1) const Divider(height: 1, color: K9.border),
-        ],
-      ]),
-    );
-  }
-
-  String _bcsLabel(int b) => b < 4 ? tr(' – szczupły') : (b <= 5 ? tr(' – optymalna') : tr(' – nadwaga'));
 }
 
 class WeightHistory extends StatelessWidget {
@@ -324,16 +544,20 @@ class _Settings extends StatelessWidget {
           subtitle: tr('Usuwa tego psa i wszystkie jego wpisy'),
           onTap: () async {
             final name = s.dog?.name ?? '';
+            final id = DogProfiles.instance.activeId;
             if (await confirmDelete(context, tr('{0} – profil, treningi i wszystkie wpisy', [name]))) {
               if (!context.mounted) return;
-              await saveGuarded(context, DogProfiles.instance.deleteActive, done: tr('Usunięto'));
+              if (await saveGuarded(context, DogProfiles.instance.deleteActive, done: tr('Usunięto'))) {
+                await UiPrefs.instance.forgetDog(id);
+                if (context.mounted && Navigator.of(context).canPop()) Navigator.of(context).pop();
+              }
             }
           },
         ),
         Padding(
           padding: EdgeInsets.symmetric(vertical: 10),
-          child: Text(tr('Valkor Coach · wersja {0} · dane zapisane tylko na tym telefonie', ['0.12']),
-              textAlign: TextAlign.center, style: TextStyle(color: K9.faint, fontSize: 11.5)),
+          child: Text(tr('Valkor Coach · wersja {0} · dane zapisane tylko na tym telefonie', ['0.13']),
+              textAlign: TextAlign.center, style: TextStyle(color: K9.muted, fontSize: 11.5)),
         ),
       ]),
     );

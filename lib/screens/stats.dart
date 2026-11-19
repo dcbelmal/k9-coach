@@ -79,7 +79,10 @@ class _StatsScreenState extends State<StatsScreen> {
         return SafeArea(
           bottom: false,
           top: !widget.embedded,
-          child: ListView(padding: EdgeInsets.fromLTRB(16, widget.embedded ? 0 : 8, 16, 120), children: [
+          child: ListView(
+              key: PageStorageKey('stats-${widget.embedded}'),
+              padding: EdgeInsets.fromLTRB(16, widget.embedded ? 0 : 8, 16, 120),
+              children: [
             if (!widget.embedded) ...[
               Row(children: [
                 Icon(Icons.bar_chart_rounded, color: K9.orange),
