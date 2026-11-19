@@ -162,6 +162,7 @@ const breedInfos = <String, BreedInfo>{
   'podhalanski': BreedInfo(252, 60, 70, 36, 59, 10, 12, 2, _hed),
   'white_swiss': BreedInfo(347, 53, 66, 25, 40, 12, 14, 4, ['HD', 'ED', 'MDR1', 'DM']),
   'corgi_pembroke': BreedInfo(39, 25, 30, 9, 12, 12, 15, 3, ['DM', 'vWD', 'Oczy', 'HD', 'Kręgosłup']),
+  'corgi_cardigan': BreedInfo(38, 27, 32, 11, 17, 12, 15, 3, ['PRA', 'DM', 'Oczy', 'HD', 'Kręgosłup']),
   'kelpie': BreedInfo(293, 43, 51, 11, 20, 12, 15, 5, ['HD', 'Oczy', 'CEA', 'PRA', 'CL']),
   'mudi': BreedInfo(238, 38, 47, 8, 13, 12, 14, 5, _hedEye),
   'pumi': BreedInfo(56, 38, 47, 8, 15, 12, 14, 4, ['HD', 'Rzepki', 'DM']),

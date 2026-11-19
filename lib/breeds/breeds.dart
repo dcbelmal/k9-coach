@@ -96,6 +96,7 @@ const breeds = <Breed>[
   ]),
   Breed('white_swiss', 'Biały owczarek szwajcarski', 1, ['bos', 'berger blanc suisse']),
   Breed('corgi_pembroke', 'Welsh corgi pembroke', 1, ['corgi']),
+  Breed('corgi_cardigan', 'Welsh corgi cardigan', 1, ['corgi', 'cardigan']),
   Breed('kelpie', 'Australijski kelpie', 1, ['kelpie']),
   Breed('mudi', 'Mudi', 1),
   Breed('pumi', 'Pumi', 1),

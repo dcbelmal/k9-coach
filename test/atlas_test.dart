@@ -23,7 +23,7 @@ void main() {
       }
       expect(breedInfos.keys.toSet(), ids, reason: 'breedInfos zawiera rasy spoza bazy');
       expect(breedProfiles.keys.toSet(), ids, reason: 'breedProfiles zawiera rasy spoza bazy');
-      expect(breeds.length, 134);
+      expect(breeds.length, 135);
     });
 
     test('zakresy wymiarów i numery FCI są sensowne', () {
@@ -169,6 +169,8 @@ void main() {
       expect(fit('corgi_pembroke', 'canicross'), Fit.b);
       expect(fit('corgi_pembroke', 'bikejoring'), Fit.c);
       expect(fit('corgi_pembroke', 'herding'), Fit.a);
+      expect(fit('corgi_cardigan', 'canicross'), Fit.b);
+      expect(fit('corgi_cardigan', 'bikejoring'), Fit.c);
       expect(fit('dachshund', 'canicross'), Fit.c);
       expect(fit('dachshund', 'agility'), Fit.c);
       expect(fit('dachshund', 'tracking'), Fit.a);

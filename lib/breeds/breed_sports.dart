@@ -741,19 +741,23 @@ final _rules = <String, _F? Function(_C)>{
   'tricks': _tricks,
 };
 
+/// Corgi (pembroke i cardigan): ta sama budowa – krótkie kończyny, długi tułów.
+const _corgi = <String, _F>{
+  'canicross': _F(Fit.b, 'Aktywny pies pasterski, ale krótkie kończyny i długi tułów – tylko rekreacyjnie.', [
+    'Krótkie dystanse w tempie kłusa, bez mocnego ciągnięcia.',
+    _lHarness,
+    'Utrzymuj szczupłą sylwetkę.',
+  ]),
+  'agility': _F(Fit.b, 'Zwinny i chętny do pracy – agility możliwe w niższych klasach wysokości.', [
+    'Niższe skoki; ostrożnie ze slalomem i palisadą (obciążenie kręgosłupa).',
+    _lJoints,
+  ]),
+};
+
 /// Wyjątki dla konkretnych ras, gdy ogólna reguła nie oddaje rzeczywistości.
 const _overrides = <String, Map<String, _F>>{
-  'corgi_pembroke': {
-    'canicross': _F(Fit.b, 'Aktywny pies pasterski, ale krótkie kończyny i długi tułów – tylko rekreacyjnie.', [
-      'Krótkie dystanse w tempie kłusa, bez mocnego ciągnięcia.',
-      _lHarness,
-      'Utrzymuj szczupłą sylwetkę.',
-    ]),
-    'agility': _F(Fit.b, 'Zwinny i chętny do pracy – agility możliwe w niższych klasach wysokości.', [
-      'Niższe skoki; ostrożnie ze slalomem i palisadą (obciążenie kręgosłupa).',
-      _lJoints,
-    ]),
-  },
+  'corgi_pembroke': _corgi,
+  'corgi_cardigan': _corgi,
   'cavalier': {
     'canicross': _F(
       Fit.b,
