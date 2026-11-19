@@ -189,11 +189,15 @@ void main() {
     });
 
     test('kluczowe przypadki z audytu', () {
-      expect(fit('corgi_pembroke', 'canicross'), Fit.b);
+      expect(fit('corgi_pembroke', 'canicross'), Fit.c);
       expect(fit('corgi_pembroke', 'bikejoring'), Fit.c);
       expect(fit('corgi_pembroke', 'herding'), Fit.a);
-      expect(fit('corgi_cardigan', 'canicross'), Fit.b);
+      expect(fit('corgi_cardigan', 'canicross'), Fit.c);
       expect(fit('corgi_cardigan', 'bikejoring'), Fit.c);
+      // Rasy krótkonożne oceniane spójnie: canicross (ciągnięcie) = C.
+      for (final id in ['corgi_pembroke', 'corgi_cardigan', 'dachshund', 'basset']) {
+        expect(fit(id, 'canicross'), Fit.c, reason: id);
+      }
       expect(fit('dachshund', 'canicross'), Fit.c);
       expect(fit('dachshund', 'agility'), Fit.c);
       expect(fit('dachshund', 'tracking'), Fit.a);

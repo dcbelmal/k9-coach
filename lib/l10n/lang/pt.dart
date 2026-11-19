@@ -1993,6 +1993,7 @@ const strings = <String, String>{
   'Rasa użytkowa, ale rzadziej szkolona w IGP – przydatność zależy od charakteru i motywacji psa.': 'Raça de trabalho, mas menos treinada em IGP – a aptidão depende do caráter e da motivação do cão.',
   'Aktywny pies pasterski, ale krótkie kończyny i długi tułów – tylko rekreacyjnie.': 'Cão pastor ativo, mas patas curtas e corpo comprido – só de forma recreativa.',
   'Krótkie dystanse w tempie kłusa, bez mocnego ciągnięcia.': 'Distâncias curtas a trote, sem puxar com força.',
+  'Rekreacyjny trucht na luźnej smyczy, bez ciągnięcia i na krótkich odcinkach, to nie canicross – można go rozważyć u zdrowego, szczupłego psa po konsultacji z lekarzem.': 'Um trote recreativo com trela solta, sem puxar e em trechos curtos, não é canicross – pode ser considerado num cão saudável e magro após consultar o veterinário.',
   'Utrzymuj szczupłą sylwetkę.': 'Mantenha o cão magro.',
   'Krótkie kończyny i długi kręgosłup – bieg w uprzęży z ciągnięciem obciąża kręgosłup (ryzyko dyskopatii).': 'Patas curtas e coluna comprida – correr e puxar com peitoral sobrecarrega a coluna (risco de hérnia discal).',
   'Zamiast tego: marsze bez ciągnięcia, nosework, tropienie, rally-O.': 'Em vez disso: passeios sem puxar, nosework, rastreio, rally-O.',

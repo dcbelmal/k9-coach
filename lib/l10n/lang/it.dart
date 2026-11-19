@@ -1983,6 +1983,7 @@ const strings = <String, String>{
   'Rasa użytkowa, ale rzadziej szkolona w IGP – przydatność zależy od charakteru i motywacji psa.': 'Razza da lavoro, ma meno addestrata in IGP – l\'idoneità dipende dal carattere e dalla motivazione del cane.',
   'Aktywny pies pasterski, ale krótkie kończyny i długi tułów – tylko rekreacyjnie.': 'Cane da pastore attivo, ma zampe corte e corpo lungo – solo a livello amatoriale.',
   'Krótkie dystanse w tempie kłusa, bez mocnego ciągnięcia.': 'Brevi distanze al trotto, senza tirare con forza.',
+  'Rekreacyjny trucht na luźnej smyczy, bez ciągnięcia i na krótkich odcinkach, to nie canicross – można go rozważyć u zdrowego, szczupłego psa po konsultacji z lekarzem.': 'Una corsetta con guinzaglio lento, senza tirare e su brevi tratti, non è canicross: si può valutare per un cane sano e magro dopo aver sentito il veterinario.',
   'Utrzymuj szczupłą sylwetkę.': 'Mantieni il cane magro.',
   'Krótkie kończyny i długi kręgosłup – bieg w uprzęży z ciągnięciem obciąża kręgosłup (ryzyko dyskopatii).': 'Zampe corte e colonna lunga – correre e tirare in pettorina sollecita la colonna (rischio di ernia del disco).',
   'Zamiast tego: marsze bez ciągnięcia, nosework, tropienie, rally-O.': 'In alternativa: passeggiate senza tirare, nosework, pista, rally-O.',

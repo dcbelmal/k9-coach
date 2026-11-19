@@ -2054,6 +2054,7 @@ const strings = <String, String>{
   'Rasa użytkowa, ale rzadziej szkolona w IGP – przydatność zależy od charakteru i motywacji psa.': '工作犬种，但较少进行IGP训练——是否适合取决于犬只的性格和动力。',
   'Aktywny pies pasterski, ale krótkie kończyny i długi tułów – tylko rekreacyjnie.': '活跃的牧羊犬，但腿短身长——仅限休闲。',
   'Krótkie dystanse w tempie kłusa, bez mocnego ciągnięcia.': '以小跑完成短距离，不要用力拉。',
+  'Rekreacyjny trucht na luźnej smyczy, bez ciągnięcia i na krótkich odcinkach, to nie canicross – można go rozważyć u zdrowego, szczupłego psa po konsultacji z lekarzem.': '松绳、不拉拽、短距离的休闲慢跑不属于狗狗越野跑（canicross）——健康偏瘦的狗可在咨询兽医后考虑。',
   'Utrzymuj szczupłą sylwetkę.': '保持犬只体型偏瘦。',
   'Krótkie kończyny i długi kręgosłup – bieg w uprzęży z ciągnięciem obciąża kręgosłup (ryzyko dyskopatii).': '腿短、脊柱长——穿胸背带奔跑和拉行会增加脊柱负担（椎间盘疾病风险）。',
   'Zamiast tego: marsze bez ciągnięcia, nosework, tropienie, rally-O.': '替代活动：不拉绳的散步、嗅闻游戏、追踪、拉力赛服从（Rally-O）。',

@@ -8,6 +8,7 @@ import '../theme.dart';
 import '../widgets/common.dart';
 import 'zkwp_calendar.dart';
 import '../l10n/l10n.dart';
+import '../date_math.dart';
 
 final _s = AppStore.instance;
 
@@ -286,7 +287,7 @@ class _ChampRow extends StatelessWidget {
               color: done ? K9.green : K9.faint, size: 20),
           const SizedBox(width: 10),
           Expanded(child: Text(st.champ.label, style: const TextStyle(fontWeight: FontWeight.w600))),
-          Text(st.cannotVerify ? tr('Nie można zweryfikować') : st.summary,
+          Text(st.cannotVerify ? tr('Nie można zweryfikować') : (done ? tr('Warunki spełnione') : st.summary),
               style: TextStyle(color: st.cannotVerify ? K9.yellow : K9.muted, fontSize: 12.5)),
           const Icon(Icons.chevron_right_rounded, color: K9.faint, size: 18),
         ]),
@@ -331,6 +332,12 @@ void _showRules(BuildContext context, ChampStatus st) {
               Expanded(child: Text(r.text, style: const TextStyle(fontSize: 14.5))),
             ]),
           ),
+        if (st.achieved) ...[
+          gap12,
+          Text(
+              tr('Wymagania są spełnione według Twoich wpisów. To nie jest przyznanie tytułu – tytuł nadaje ZKwP (lub FCI dla C.I.B.) po złożeniu wniosku z kopiami kart ocen.'),
+              style: const TextStyle(color: K9.yellow, fontSize: 12.5)),
+        ],
         gap16,
         K9Card(
           color: K9.cardHi,
@@ -387,7 +394,7 @@ class _ShowForm extends StatefulWidget {
 
 class _ShowFormState extends State<_ShowForm> {
   late final e = widget.existing == null
-      ? ShowEntry(id: newId(), name: '', date: widget.date ?? dayOnly(DateTime.now()).add(const Duration(days: 30, hours: 9)))
+      ? ShowEntry(id: newId(), name: '', date: widget.date ?? dayOnly(DateTime.now()).plusDays(30).copyWith(hour: 9))
       : ShowEntry.fromJson(widget.existing!.toJson());
   late final name = TextEditingController(text: e.name);
   late final place = TextEditingController(text: e.place);
@@ -418,7 +425,7 @@ class _ShowFormState extends State<_ShowForm> {
 
   @override
   Widget build(BuildContext context) {
-    final past = e.date.isBefore(DateTime.now().add(const Duration(days: 1)));
+    final past = e.date.isBefore(DateTime.now().plusDays(1));
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       SheetTitle(widget.existing == null ? tr('Nowa wystawa') : tr('Wystawa'),
           onDelete: widget.existing == null

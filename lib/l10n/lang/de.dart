@@ -1999,6 +1999,7 @@ const strings = <String, String>{
   'Rasa użytkowa, ale rzadziej szkolona w IGP – przydatność zależy od charakteru i motywacji psa.': 'Gebrauchshunderasse, aber seltener im IGP ausgebildet – die Eignung hängt von Wesen und Trieb des Hundes ab.',
   'Aktywny pies pasterski, ale krótkie kończyny i długi tułów – tylko rekreacyjnie.': 'Aktiver Hütehund, aber kurze Beine und langer Rumpf – nur als Freizeitsport.',
   'Krótkie dystanse w tempie kłusa, bez mocnego ciągnięcia.': 'Kurze Strecken im Trab, ohne starkes Ziehen.',
+  'Rekreacyjny trucht na luźnej smyczy, bez ciągnięcia i na krótkich odcinkach, to nie canicross – można go rozważyć u zdrowego, szczupłego psa po konsultacji z lekarzem.': 'Lockeres Joggen an lockerer Leine, ohne Ziehen und auf kurzen Strecken, ist kein Canicross – bei einem gesunden, schlanken Hund nach Rücksprache mit dem Tierarzt denkbar.',
   'Utrzymuj szczupłą sylwetkę.': 'Den Hund schlank halten.',
   'Krótkie kończyny i długi kręgosłup – bieg w uprzęży z ciągnięciem obciąża kręgosłup (ryzyko dyskopatii).': 'Kurze Beine und lange Wirbelsäule – Laufen und Ziehen im Geschirr belastet die Wirbelsäule (Risiko eines Bandscheibenvorfalls).',
   'Zamiast tego: marsze bez ciągnięcia, nosework, tropienie, rally-O.': 'Stattdessen: Spaziergänge ohne Ziehen, Nasenarbeit, Fährte, Rally-O.',

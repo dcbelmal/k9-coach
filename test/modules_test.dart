@@ -69,7 +69,7 @@ void main() {
       expect(late.intervalFromHistory, isTrue);
       // średnia z 181 i 184 dni
       expect(late.intervalDays, 183);
-      expect(late.nextStart, DateTime(2026, 1, 1).add(const Duration(days: 183)));
+      expect(late.nextStart, DateTime(2026, 7, 3));
     });
 
     test('jedna cieczka – domyślnie ok. 6 miesięcy', () {

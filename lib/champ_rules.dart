@@ -1,6 +1,7 @@
 import 'models.dart';
 import 'models_ext.dart';
 import 'l10n/l10n.dart';
+import 'date_math.dart';
 
 /// Podstawa reguł (sprawdzone 19.11.2026):
 /// * Regulamin Wystaw Psów Rasowych ZKwP, rozdz. IV.5 „Championaty krajowe”
@@ -79,7 +80,7 @@ Req _distinctReq(String text, (int, int) counts, int need, String missingHint) {
 int _spanDays(List<ShowEntry> l) {
   if (l.length < 2) return 0;
   final d = l.map((e) => e.date).toList()..sort();
-  return d.last.difference(d.first).inDays;
+  return d.last.difference(d.first).inCalDays;
 }
 
 bool _sixMonths(List<ShowEntry> l) {
@@ -195,7 +196,10 @@ ChampStatus evaluate(Championship c, List<ShowEntry> shows,
     case Championship.grand:
       final l = withT(ShowTitle.cwc).where((e) => e.showClass == ShowClass.champion && e.type == ShowType.international).toList();
       final parts = [
-        Req(tr('tytuł Champion Polski'), plChampion ?? false),
+        if (plChampion == null)
+          Req(tr('tytuł Champion Polski – wymagania wg wpisów spełnione, ale brak potwierdzenia przyznania tytułu (zaznacz w Celach, gdy ZKwP go zatwierdzi)'), false, unknown: true)
+        else
+          Req(tr('zatwierdzony tytuł Champion Polski'), plChampion),
         Req(tr('3 × CWC w klasie championów na wystawach międzynarodowych (masz {0})', [l.length]), l.length >= 3),
         _distinctReq(tr('od 3 różnych sędziów (potwierdzonych: {0})', [judgeCounts(l).$1]), judgeCounts(l), 3, _missingJudge),
       ];

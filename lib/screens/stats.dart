@@ -10,6 +10,7 @@ import '../widgets/common.dart';
 import 'forms.dart';
 import 'home.dart';
 import '../l10n/l10n.dart';
+import '../date_math.dart';
 
 class StatsScreen extends StatefulWidget {
   /// W zakładce Trening: bez własnego nagłówka i marginesu u góry.
@@ -33,16 +34,16 @@ class _StatsScreenState extends State<StatsScreen> {
         final s = startOfWeek(now);
         return (
           s,
-          s.add(const Duration(days: 7)),
+          s.plusDays(7),
           [
             for (var i = 0; i < 7; i++)
-              (s.add(Duration(days: i)), s.add(Duration(days: i + 1)), fmtWeekday(s.add(Duration(days: i))))
+              (s.plusDays(i), s.plusDays(i + 1), fmtWeekday(s.plusDays(i)))
           ]
         );
       case 1:
         final s = DateTime(now.year, now.month, 1);
         final e = DateTime(now.year, now.month + 1, 1);
-        final n = e.difference(s).inDays;
+        final n = e.difference(s).inCalDays;
         return (
           s,
           e,
@@ -344,8 +345,8 @@ class _LoadCard extends StatelessWidget {
       for (var i = 7; i >= 0; i--)
         s.doneTrainings
             .where((t) =>
-                !t.date.isBefore(w0.subtract(Duration(days: 7 * i))) &&
-                t.date.isBefore(w0.subtract(Duration(days: 7 * (i - 1)))))
+                !t.date.isBefore(w0.plusDays(-(7 * i))) &&
+                t.date.isBefore(w0.plusDays(-(7 * (i - 1)))))
             .fold(0.0, (a, t) => a + t.load)
     ];
     final maxW = weeks.fold(0.0, math.max);
@@ -474,7 +475,7 @@ class WeightChart extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t0 = weights.first.date;
-    double x(DateTime d) => d.difference(t0).inDays.toDouble();
+    double x(DateTime d) => d.difference(t0).inCalDays.toDouble();
     final ys = [...weights.map((e) => e.kg), ?target];
     final minY = (ys.reduce(math.min) - 1).floorToDouble();
     final maxY = (ys.reduce(math.max) + 1).ceilToDouble();
@@ -526,7 +527,7 @@ class WeightChart extends StatelessWidget {
               interval: span <= 0 ? 1 : span / 3,
               getTitlesWidget: (v, m) => Padding(
                 padding: const EdgeInsets.only(top: 6),
-                child: Text(fmtDateShort(t0.add(Duration(days: v.round()))),
+                child: Text(fmtDateShort(t0.plusDays(v.round())),
                     style: const TextStyle(color: K9.muted, fontSize: 10.5)),
               ),
             ),

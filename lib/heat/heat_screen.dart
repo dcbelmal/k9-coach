@@ -7,6 +7,7 @@ import '../widgets/common.dart';
 import 'heat_logic.dart';
 import 'heat_store.dart';
 import '../l10n/l10n.dart';
+import '../date_math.dart';
 
 void openHeat(BuildContext context) =>
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => const HeatScreen()));
@@ -201,7 +202,7 @@ class _History extends StatelessWidget {
             subtitle: [
               if (c.lengthDays != null) '${c.lengthDays} dni',
               if (i + 1 < cycles.length)
-                'odstęp ${dayOnly(c.start).difference(dayOnly(cycles[i + 1].start)).inDays} dni',
+                'odstęp ${dayOnly(c.start).difference(dayOnly(cycles[i + 1].start)).inCalDays} dni',
               if (c.ovulation != null) tr('owulacja {0}', [fmtDateShort(c.ovulation!)]),
               if (c.tests.isNotEmpty) tr('badania: {0}', [c.tests.length]),
               if (c.notes.isNotEmpty) c.notes,
@@ -355,7 +356,10 @@ class _HeatFormState extends State<_HeatForm> {
         Padding(
           padding: const EdgeInsets.only(top: 4),
           child: Text(
-              tr('Opis poziomu progesteronu jest orientacyjny (wg literatury). Laboratoria mają różne normy – wynik i dzień krycia interpretuje lekarz weterynarii.'),
+              [
+                if (progesteroneSeriesNote(tests) != null) progesteroneSeriesNote(tests)!,
+                tr('Opis poziomu progesteronu jest orientacyjny (wg literatury). Laboratoria mają różne normy – wynik i dzień krycia interpretuje lekarz weterynarii.'),
+              ].join(' '),
               style: const TextStyle(color: K9.faint, fontSize: 11.5)),
         ),
       gap12,
@@ -371,7 +375,7 @@ class _HeatFormState extends State<_HeatForm> {
             toast(context, tr('Koniec nie może być przed początkiem'));
             return;
           }
-          if (ovulation != null && (ovulation!.isBefore(start) || ovulation!.difference(start).inDays > 40)) {
+          if (ovulation != null && (ovulation!.isBefore(start) || ovulation!.difference(start).inCalDays > 40)) {
             toast(context, tr('Data owulacji musi przypadać w trakcie tej cieczki'));
             return;
           }

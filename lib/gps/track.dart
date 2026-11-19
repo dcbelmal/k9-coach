@@ -86,6 +86,9 @@ class Track {
     return out;
   }
 
+  /// Najwyższa wiarygodna prędkość psa z człowiekiem/rowerem w zapisie GPS.
+  static const maxPlausibleKmh = 50.0;
+
   /// Seria prędkości (km/h) co ~[step] sekund, wygładzona – do wykresu.
   List<(double, double)> speedSeries({double step = 15}) {
     final res = <(double, double)>[];
@@ -100,7 +103,10 @@ class Track {
           }
           final dt = s[b].t - s[a].t;
           // Krótkie okno na końcu segmentu (kilka sekund) daje zawyżone prędkości z szumu GPS.
-          if (dt >= step / 2) res.add((s[b].t, math.min(m / dt * 3.6, 60)));
+          // Okna szybsze niż [maxPlausibleKmh] to błąd GPS – pomijamy je zamiast
+          // przycinać, żeby nie pokazywać fałszywej „prędkości maksymalnej”.
+          final v = dt > 0 ? m / dt * 3.6 : 0.0;
+          if (dt >= step / 2 && v <= maxPlausibleKmh) res.add((s[b].t, v));
           a = b;
         }
       }

@@ -10,6 +10,7 @@ import 'champ_rules.dart';
 import 'dogs/dog_profiles.dart';
 import 'files/file_store.dart';
 import 'gps/demo_track.dart';
+import 'gps/track.dart';
 import 'heat/heat_store.dart';
 import 'models.dart';
 import 'models_ext.dart';
@@ -17,12 +18,13 @@ import 'notifications.dart';
 import 'nutrition/nutrition_store.dart';
 import 'storage/safe_prefs.dart';
 import 'l10n/l10n.dart';
+import 'date_math.dart';
 
 DateTime dayOnly(DateTime d) => DateTime(d.year, d.month, d.day);
 bool sameDay(DateTime a, DateTime b) =>
     a.year == b.year && a.month == b.month && a.day == b.day;
 DateTime startOfWeek(DateTime d) =>
-    dayOnly(d).subtract(Duration(days: d.weekday - 1));
+    dayOnly(d).plusDays(-(d.weekday - 1));
 
 /// Monitor obciążenia treningowego: porównanie obciążenia z 7 dni ze średnią
 /// tygodniową z 28 dni (ACWR, sesyjne RPE × minuty).
@@ -474,7 +476,7 @@ class AppStore extends ChangeNotifier {
 
   PeriodStats get thisWeek {
     final s = startOfWeek(DateTime.now());
-    return statsBetween(s, s.add(const Duration(days: 7)));
+    return statsBetween(s, s.plusDays(7));
   }
 
   /// Suma obciążenia w przedziale. Każdy trening liczony raz (po ID), nawet
@@ -492,10 +494,10 @@ class AppStore extends ChangeNotifier {
   Readiness get readiness => readinessAt(DateTime.now());
 
   Readiness readinessAt(DateTime now) {
-    final end = dayOnly(now).add(const Duration(days: 1));
-    final acute = _loadBetween(end.subtract(const Duration(days: 7)), end);
-    final chronic = _loadBetween(end.subtract(const Duration(days: 28)), end) / 4;
-    final since = end.subtract(const Duration(days: 3));
+    final end = dayOnly(now).plusDays(1);
+    final acute = _loadBetween(end.plusDays(-7), end);
+    final chronic = _loadBetween(end.plusDays(-28), end) / 4;
+    final since = end.plusDays(-3);
     final concerns = <String>{
       for (final t in doneTrainings)
         if (!t.date.isBefore(since) && t.date.isBefore(end)) ...t.concerns
@@ -515,7 +517,7 @@ class AppStore extends ChangeNotifier {
           concerns: concerns);
     }
     // Za krótka historia: średnia z 4 tygodni nie jest jeszcze miarodajna.
-    if (first == null || end.difference(dayOnly(first)).inDays < 21) {
+    if (first == null || end.difference(dayOnly(first)).inCalDays < 21) {
       return Readiness(50, 0, tr('Za krótka historia'),
           withConcerns(tr('Porównanie obciążenia ma sens po ok. 3–4 tygodniach zapisów. Do tego czasu zwiększaj obciążenie stopniowo i obserwuj psa.')), 0,
           concerns: concerns);
@@ -553,7 +555,7 @@ class AppStore extends ChangeNotifier {
       });
 
   List<AgendaItem> agendaFor(DateTime day) =>
-      agendaBetween(dayOnly(day), dayOnly(day).add(const Duration(days: 1)));
+      agendaBetween(dayOnly(day), dayOnly(day).plusDays(1));
 
   List<AgendaItem> agendaBetween(DateTime from, DateTime to) {
     bool inRange(DateTime d) => !d.isBefore(from) && d.isBefore(to);
@@ -630,7 +632,7 @@ class AppStore extends ChangeNotifier {
 
   List<AgendaItem> upcoming({int days = 60, int limit = 4}) {
     final now = DateTime.now();
-    return agendaBetween(now, now.add(Duration(days: days)))
+    return agendaBetween(now, now.plusDays(days))
         .where((i) => !(i.source is TrainingSession && (i.source as TrainingSession).done))
         .take(limit)
         .toList();
@@ -684,8 +686,10 @@ class AppStore extends ChangeNotifier {
   ChampStatus champStatus(Championship c) {
     bool? pl;
     if (c == Championship.grand) {
-      pl = champStatus(Championship.pl).achieved ||
-          goals.any((g) => g.championship == Championship.pl && g.done);
+      // Grand Championat wymaga ZATWIERDZONEGO tytułu CH.PL. Spełnienie wymagań
+      // wg wpisów to jeszcze nie przyznanie tytułu – wtedy status „nie wiadomo”.
+      final confirmed = goals.any((g) => g.championship == Championship.pl && g.done);
+      pl = confirmed ? true : (champStatus(Championship.pl).achieved ? null : false);
     }
     return evaluate(c, shows,
         workingTrialBreed: isWorkingTrialBreed(dog), workingTrialPassed: workingTrialPassed, plChampion: pl);
@@ -707,9 +711,9 @@ class AppStore extends ChangeNotifier {
     if (g.maxKm != null && g.maxKm! > 0) w = gearKm(g) / g.maxKm!;
     final r = g.replaceDate;
     if (r != null && g.purchased != null) {
-      final total = r.difference(g.purchased!).inDays;
+      final total = r.difference(g.purchased!).inCalDays;
       if (total > 0) {
-        final used = DateTime.now().difference(g.purchased!).inDays / total;
+        final used = DateTime.now().difference(g.purchased!).inCalDays / total;
         if (used > w) w = used;
       }
     }
@@ -720,7 +724,7 @@ class AppStore extends ChangeNotifier {
     if (weights.isEmpty) return dog?.weightKg ?? 0;
     WeightEntry best = weights.first;
     for (final w in weights) {
-      if ((w.date.difference(d).inDays).abs() < (best.date.difference(d).inDays).abs()) best = w;
+      if ((w.date.difference(d).inCalDays).abs() < (best.date.difference(d).inCalDays).abs()) best = w;
     }
     return best.kg;
   }
@@ -729,7 +733,7 @@ class AppStore extends ChangeNotifier {
   (double, String) goalProgress(Goal g) {
     switch (g.type) {
       case GoalType.km:
-        final to = g.deadline == null ? DateTime.now().add(const Duration(days: 1)) : g.deadline!.add(const Duration(days: 1));
+        final to = g.deadline == null ? DateTime.now().plusDays(1) : g.deadline!.plusDays(1);
         final km = statsBetween(g.start, to).km;
         final t = g.target ?? 0;
         return (t <= 0 ? 0 : km / t, '${km.toStringAsFixed(0)} / ${t.toStringAsFixed(0)} km');
@@ -785,7 +789,7 @@ class AppStore extends ChangeNotifier {
       for (var i = 0; i < 10; i++)
         WeightEntry(
             id: newId() + i.toString(),
-            date: today.subtract(Duration(days: (9 - i) * 21)),
+            date: today.plusDays(-((9 - i) * 21)),
             kg: double.parse((17.2 + i * 0.37 + rnd.nextDouble() * 0.3).toStringAsFixed(1)))
     ];
     weights.last.kg = 20.5;
@@ -795,44 +799,44 @@ class AppStore extends ChangeNotifier {
           id: 'h1',
           category: HealthCategory.vaccination,
           title: tr('Szczepienie przeciw wściekliźnie'),
-          date: today.subtract(const Duration(days: 355)),
-          nextDue: today.add(const Duration(days: 10))),
+          date: today.plusDays(-355),
+          nextDue: today.plusDays(10)),
       HealthRecord(
           id: 'h2',
           category: HealthCategory.vaccination,
           title: tr('DHPPi + L4'),
-          date: today.subtract(const Duration(days: 120)),
-          nextDue: today.add(const Duration(days: 245))),
+          date: today.plusDays(-120),
+          nextDue: today.plusDays(245)),
       HealthRecord(
           id: 'h3',
           category: HealthCategory.deworming,
           title: tr('Milbemax'),
-          date: today.subtract(const Duration(days: 40)),
-          nextDue: today.add(const Duration(days: 50))),
+          date: today.plusDays(-40),
+          nextDue: today.plusDays(50)),
       HealthRecord(
           id: 'h4',
           category: HealthCategory.ticks,
           title: tr('Bravecto'),
-          date: today.subtract(const Duration(days: 70)),
-          nextDue: today.add(const Duration(days: 20))),
+          date: today.plusDays(-70),
+          nextDue: today.plusDays(20)),
       HealthRecord(
           id: 'h5',
           category: HealthCategory.tests,
           title: tr('HD/ED wstępne'),
-          date: today.subtract(const Duration(days: 30)),
+          date: today.plusDays(-30),
           notes: tr('HD A, ED 0')),
       HealthRecord(
           id: 'h6',
           category: HealthCategory.vet,
           title: tr('Kontrola ogólna'),
-          date: today.subtract(const Duration(days: 30)),
+          date: today.plusDays(-30),
           notes: tr('Wszystko w porządku')),
       HealthRecord(
           id: 'h7',
           category: HealthCategory.supplements,
           title: tr('Antiflexi'),
-          date: today.subtract(const Duration(days: 14)),
-          nextDue: today.add(const Duration(days: 16))),
+          date: today.plusDays(-14),
+          nextDue: today.plusDays(16)),
     ];
 
     trainings = [];
@@ -848,7 +852,7 @@ class AppStore extends ChangeNotifier {
     for (var d = 84; d >= 1; d--) {
       if (rnd.nextDouble() < 0.28) continue;
       final disc = pattern[(84 - d) % pattern.length];
-      final day = today.subtract(Duration(days: d)).add(Duration(hours: 17 + rnd.nextInt(3)));
+      final day = today.plusDays(-d).add(Duration(hours: 17 + rnd.nextInt(3)));
       final km = disc.hasDistance && disc != Discipline.recovery
           ? double.parse((3 + rnd.nextDouble() * (disc == Discipline.bikejoring ? 10 : 5))
               .toStringAsFixed(1))
@@ -868,7 +872,7 @@ class AppStore extends ChangeNotifier {
       if (t.discipline != Discipline.canicross && t.discipline != Discipline.bikejoring) continue;
       final bike = t.discipline == Discipline.bikejoring;
       final trk = demoTrack(t.distanceKm!, bike ? 150 + rnd.nextDouble() * 30 : 250 + rnd.nextDouble() * 40, rnd);
-      final splits = trk.splits().where((e) => e.meters >= 1000).map((e) => e.seconds);
+      final splits = trk.splits().where((e) => e.meters >= 1000 && e.seconds >= 3600 / Track.maxPlausibleKmh).map((e) => e.seconds);
       final secs = trk.points.last.t;
       t.distanceKm = double.parse((trk.meters / 1000).toStringAsFixed(2));
       t.movingSec = secs.round();
@@ -915,7 +919,7 @@ class AppStore extends ChangeNotifier {
           id: 's1',
           name: tr('Krajowa Wystawa Psów Rasowych'),
           place: tr('Poznań'),
-          date: today.subtract(const Duration(days: 150)),
+          date: today.plusDays(-150),
           type: ShowType.national,
           showClass: ShowClass.junior,
           status: ShowStatus.done,
@@ -927,7 +931,7 @@ class AppStore extends ChangeNotifier {
           id: 's2',
           name: tr('Międzynarodowa Wystawa Psów'),
           place: tr('Kraków'),
-          date: today.subtract(const Duration(days: 95)),
+          date: today.plusDays(-95),
           type: ShowType.international,
           showClass: ShowClass.junior,
           status: ShowStatus.done,
@@ -939,7 +943,7 @@ class AppStore extends ChangeNotifier {
           id: 's3',
           name: tr('Krajowa Wystawa Psów Rasowych'),
           place: tr('Łódź'),
-          date: today.subtract(const Duration(days: 40)),
+          date: today.plusDays(-40),
           type: ShowType.national,
           showClass: ShowClass.intermediate,
           status: ShowStatus.done,
@@ -955,7 +959,7 @@ class AppStore extends ChangeNotifier {
           type: ShowType.international,
           showClass: ShowClass.intermediate,
           status: ShowStatus.planned,
-          entryDeadline: today.add(const Duration(days: 6)),
+          entryDeadline: today.plusDays(6),
           fee: 180),
     ];
     events.removeWhere((e) => e.id == 'e1');
@@ -963,8 +967,8 @@ class AppStore extends ChangeNotifier {
       DogDocument(id: 'd1', type: DocType.pedigree, title: tr('Rodowód ZKwP'), number: tr('PKR.I-12345'), issued: DateTime(now.year - 1, 8, 1)),
       DogDocument(id: 'd2', type: DocType.passport, title: tr('Paszport UE'), number: tr('PL 0123456'), issued: DateTime(now.year - 1, 7, 15)),
       DogDocument(id: 'd3', type: DocType.healthBook, title: tr('Książeczka zdrowia')),
-      DogDocument(id: 'd4', type: DocType.results, title: tr('HD/ED wstępne'), issued: today.subtract(const Duration(days: 30)), notes: tr('HD A, ED 0')),
-      DogDocument(id: 'd5', type: DocType.license, title: tr('Licencja sportowa IGP'), number: 'L-2026-071', expires: today.add(const Duration(days: 75))),
+      DogDocument(id: 'd4', type: DocType.results, title: tr('HD/ED wstępne'), issued: today.plusDays(-30), notes: tr('HD A, ED 0')),
+      DogDocument(id: 'd5', type: DocType.license, title: tr('Licencja sportowa IGP'), number: 'L-2026-071', expires: today.plusDays(75)),
     ];
     gear = [
       GearItem(
@@ -972,7 +976,7 @@ class AppStore extends ChangeNotifier {
           category: GearCategory.harness,
           name: tr('Szelki canicross'),
           brand: tr('Non-stop Freemotion'),
-          purchased: today.subtract(const Duration(days: 200)),
+          purchased: today.plusDays(-200),
           price: 389,
           replaceAfterMonths: 18,
           maxKm: 1500,
@@ -982,7 +986,7 @@ class AppStore extends ChangeNotifier {
           category: GearCategory.bungee,
           name: tr('Linka z amortyzatorem'),
           brand: tr('Non-stop'),
-          purchased: today.subtract(const Duration(days: 330)),
+          purchased: today.plusDays(-330),
           price: 149,
           replaceAfterMonths: 12,
           maxKm: 800,
@@ -992,17 +996,17 @@ class AppStore extends ChangeNotifier {
           category: GearCategory.bike,
           name: tr('Rower MTB'),
           brand: tr('Kross'),
-          purchased: today.subtract(const Duration(days: 500)),
+          purchased: today.plusDays(-500),
           price: 3200,
           disciplines: {Discipline.bikejoring},
           notes: tr('Przegląd co 6 miesięcy')),
     ];
     goals = [
-      Goal(id: 'c1', type: GoalType.exam, title: tr('BH-VT'), start: today.subtract(const Duration(days: 200)), done: true, doneDate: today.subtract(const Duration(days: 60))),
-      Goal(id: 'c2', type: GoalType.exam, title: tr('IGP 1'), start: today.subtract(const Duration(days: 50)), deadline: DateTime(now.year + 1, 5, 1), manualProgress: 0.6),
-      Goal(id: 'c3', type: GoalType.title, title: tr('Champion Polski'), start: today.subtract(const Duration(days: 150)), championship: Championship.pl),
+      Goal(id: 'c1', type: GoalType.exam, title: tr('BH-VT'), start: today.plusDays(-200), done: true, doneDate: today.plusDays(-60)),
+      Goal(id: 'c2', type: GoalType.exam, title: tr('IGP 1'), start: today.plusDays(-50), deadline: DateTime(now.year + 1, 5, 1), manualProgress: 0.6),
+      Goal(id: 'c3', type: GoalType.title, title: tr('Champion Polski'), start: today.plusDays(-150), championship: Championship.pl),
       Goal(id: 'c4', type: GoalType.km, title: tr('1000 km w roku'), start: DateTime(now.year), deadline: DateTime(now.year, 12, 31), target: 1000),
-      Goal(id: 'c5', type: GoalType.weight, title: tr('Waga docelowa 22 kg'), start: today.subtract(const Duration(days: 180)), target: 22),
+      Goal(id: 'c5', type: GoalType.weight, title: tr('Waga docelowa 22 kg'), start: today.plusDays(-180), target: 22),
     ];
     await NutritionStore.instance.loadDemo();
     await HeatStore.instance.loadDemo();

@@ -2071,6 +2071,7 @@ const strings = <String, String>{
   'Rasa użytkowa, ale rzadziej szkolona w IGP – przydatność zależy od charakteru i motywacji psa.': 'Служебная порода, но реже готовится к IGP – пригодность зависит от характера и мотивации собаки.',
   'Aktywny pies pasterski, ale krótkie kończyny i długi tułów – tylko rekreacyjnie.': 'Активная пастушья собака, но короткие лапы и длинное тело – только для отдыха.',
   'Krótkie dystanse w tempie kłusa, bez mocnego ciągnięcia.': 'Короткие дистанции рысью, без сильной тяги.',
+  'Rekreacyjny trucht na luźnej smyczy, bez ciągnięcia i na krótkich odcinkach, to nie canicross – można go rozważyć u zdrowego, szczupłego psa po konsultacji z lekarzem.': 'Спокойная пробежка на свободном поводке, без тяги и на коротких отрезках, — это не каникросс; для здоровой поджарой собаки возможна после консультации с ветеринаром.',
   'Utrzymuj szczupłą sylwetkę.': 'Поддерживайте стройную фигуру собаки.',
   'Krótkie kończyny i długi kręgosłup – bieg w uprzęży z ciągnięciem obciąża kręgosłup (ryzyko dyskopatii).': 'Короткие лапы и длинный позвоночник – бег и тяга в шлейке нагружают позвоночник (риск дископатии).',
   'Zamiast tego: marsze bez ciągnięcia, nosework, tropienie, rally-O.': 'Вместо этого: прогулки без тяги, носовая работа, следовая работа, ралли-О.',

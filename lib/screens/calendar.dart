@@ -9,6 +9,7 @@ import 'forms.dart';
 import 'home.dart';
 import 'shows.dart';
 import '../l10n/l10n.dart';
+import '../date_math.dart';
 
 /// Kalendarz jako osobny ekran (otwierany ze Start, Treningu i modułów).
 void openCalendar(BuildContext context) => Navigator.of(context)
@@ -34,7 +35,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
       builder: (context, _) {
         final first = DateTime(month.year, month.month, 1);
         final next = DateTime(month.year, month.month + 1, 1);
-        final daysInMonth = next.difference(first).inDays;
+        final daysInMonth = next.difference(first).inCalDays;
         final offset = first.weekday - 1;
         final monthItems = s.agendaBetween(first, next);
         final byDay = <int, List<AgendaItem>>{};

@@ -2012,6 +2012,7 @@ const strings = <String, String>{
   'Praca umysłowa o małym obciążeniu – odpowiednia dla każdego psa.': 'Low-impact mental work – suitable for every dog.',
   'Aktywny pies pasterski, ale krótkie kończyny i długi tułów – tylko rekreacyjnie.': 'Active herding dog, but short legs and a long body – recreational only.',
   'Krótkie dystanse w tempie kłusa, bez mocnego ciągnięcia.': 'Short distances at a trot, without strong pulling.',
+  'Rekreacyjny trucht na luźnej smyczy, bez ciągnięcia i na krótkich odcinkach, to nie canicross – można go rozważyć u zdrowego, szczupłego psa po konsultacji z lekarzem.': 'A relaxed jog on a loose lead, without pulling and over short stretches, is not canicross – it may be considered for a healthy, lean dog after talking to a vet.',
   'Utrzymuj szczupłą sylwetkę.': 'Keep the dog lean.',
   'Zwinny i chętny do pracy – agility możliwe w niższych klasach wysokości.': 'Agile and eager – agility is possible in lower height classes.',
   'Niższe skoki; ostrożnie ze slalomem i palisadą (obciążenie kręgosłupa).': 'Lower jumps; take care with weaves and the A-frame (spinal strain).',

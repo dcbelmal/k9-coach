@@ -2054,6 +2054,7 @@ const strings = <String, String>{
   'Rasa użytkowa, ale rzadziej szkolona w IGP – przydatność zależy od charakteru i motywacji psa.': '使役犬種だが、IGPで訓練されることは少ない – 適性は犬の性格と意欲によります。',
   'Aktywny pies pasterski, ale krótkie kończyny i długi tułów – tylko rekreacyjnie.': '活発な牧羊犬ですが、脚が短く胴が長い – レクリエーションのみ。',
   'Krótkie dystanse w tempie kłusa, bez mocnego ciągnięcia.': '速歩で短い距離を、強く引かせずに。',
+  'Rekreacyjny trucht na luźnej smyczy, bez ciągnięcia i na krótkich odcinkach, to nie canicross – można go rozważyć u zdrowego, szczupłego psa po konsultacji z lekarzem.': 'リードを緩めたまま、引かせずに短い距離を軽く走るのはカニクロスではありません。健康で痩せ型の犬なら獣医師に相談のうえ検討できます。',
   'Utrzymuj szczupłą sylwetkę.': '犬をスリムに保ちましょう。',
   'Krótkie kończyny i długi kręgosłup – bieg w uprzęży z ciągnięciem obciąża kręgosłup (ryzyko dyskopatii).': '短い脚と長い背骨 – ハーネスで走って引くと背骨に負担がかかります（椎間板疾患のリスク）。',
   'Zamiast tego: marsze bez ciągnięcia, nosework, tropienie, rally-O.': '代わりに：引っ張らない散歩、ノーズワーク、足跡追及、ラリーO。',

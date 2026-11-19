@@ -185,6 +185,10 @@ class _GoalFormState extends State<_GoalForm> {
         Wrap(spacing: 8, runSpacing: 8, children: [
           for (final e in examPresets) _chip(e, title.text == e, () => title.text = e),
         ]),
+        const SizedBox(height: 8),
+        Text(
+            tr('Wymagania egzaminu (wiek psa, przebieg, punktacja, dopuszczenie) sprawdź w aktualnym regulaminie organizatora (ZKwP, FCI). Regulamin IGP FCI zmienił się od 1.01.2025. Aplikacja nie zastępuje regulaminu.'),
+            style: const TextStyle(color: K9.faint, fontSize: 12)),
         gap12,
       ],
       if (g.type == GoalType.title) ...[

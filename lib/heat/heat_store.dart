@@ -15,6 +15,7 @@ import '../notifications.dart';
 import '../store.dart';
 import 'heat_logic.dart';
 import '../l10n/l10n.dart';
+import '../date_math.dart';
 
 /// Moduł „Cykl i cieczka” – dane zapisane osobno (klucz valkor_heat_v1).
 class HeatStore extends ChangeNotifier {
@@ -98,7 +99,7 @@ class HeatStore extends ChangeNotifier {
     DateTime at(DateTime d, int h) => DateTime(d.year, d.month, d.day, h);
     final next = st.nextStart;
     if (next != null) {
-      out.add((at(next.subtract(const Duration(days: 7)), 9), tr('Za ok. tydzień cieczka'),
+      out.add((at(next.plusDays(-7), 9), tr('Za ok. tydzień cieczka'),
           tr('{0}: przewidywany początek {1}.{2}. Obserwuj sukę.', [name, next.day, next.month.toString().padLeft(2, '0')])));
       out.add((at(next, 9), tr('Spodziewana cieczka'), tr('{0}: dziś przewidywany początek. Zapisz, gdy się zacznie.', [name])));
     }
@@ -106,11 +107,11 @@ class HeatStore extends ChangeNotifier {
     if (cur != null) {
       final s = dayOnly(cur.start);
       if (cur.ovulation == null) {
-        out.add((at(s.add(const Duration(days: HeatLogic.testFromDay - 1)), 8), tr('Cieczka: planujesz krycie?'),
+        out.add((at(s.plusDays(HeatLogic.testFromDay - 1), 8), tr('Cieczka: planujesz krycie?'),
             tr('{0}: jeśli planujesz krycie, ustal z lekarzem weterynarii termin badania progesteronu. Suka może być płodna przez całą cieczkę – pilnuj jej na spacerach.', [name])));
       }
       if (cur.end == null) {
-        out.add((at(s.add(Duration(days: st.typicalLengthDays + 1)), 18), tr('Czy cieczka się skończyła?'),
+        out.add((at(s.plusDays(st.typicalLengthDays + 1), 18), tr('Czy cieczka się skończyła?'),
             tr('{0}: zapisz koniec cieczki, żeby prognoza była dokładniejsza.', [name])));
       }
     }
@@ -125,14 +126,14 @@ class HeatStore extends ChangeNotifier {
 
   Future<void> loadDemo() async {
     final today = dayOnly(DateTime.now());
-    final s1 = today.subtract(const Duration(days: 178));
+    final s1 = today.plusDays(-178);
     cycles = [
       HeatCycle(
           id: 'hc1',
-          start: s1.subtract(const Duration(days: 185)),
-          end: s1.subtract(const Duration(days: 165)),
+          start: s1.plusDays(-185),
+          end: s1.plusDays(-165),
           notes: tr('Pierwsza cieczka')),
-      HeatCycle(id: 'hc2', start: s1, end: s1.add(const Duration(days: 20))),
+      HeatCycle(id: 'hc2', start: s1, end: s1.plusDays(20)),
     ];
     await _save(reschedule: false);
   }

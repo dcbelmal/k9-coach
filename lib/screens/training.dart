@@ -13,6 +13,7 @@ import 'training_start.dart';
 import 'gps_screen.dart';
 import '../dogs/dog_profiles.dart';
 import '../l10n/l10n.dart';
+import '../date_math.dart';
 
 /// Który segment zakładki Trening jest otwarty (0 dyscypliny … 3 statystyki).
 final trainingTab = ValueNotifier<int>(0);
@@ -201,9 +202,9 @@ class _WeekPlanState extends State<WeekPlan> {
   }
 
   int _weekNumber(DateTime d) {
-    final thursday = d.add(Duration(days: 4 - d.weekday));
+    final thursday = d.plusDays(4 - d.weekday);
     final firstJan = DateTime(thursday.year, 1, 1);
-    return thursday.difference(firstJan).inDays ~/ 7 + 1;
+    return thursday.difference(firstJan).inCalDays ~/ 7 + 1;
   }
 
   @override
@@ -217,22 +218,22 @@ class _WeekPlanState extends State<WeekPlan> {
           children: [
         Row(children: [
           IconButton(tooltip: tr('Poprzedni'), 
-              onPressed: () => setState(() => week = week.subtract(const Duration(days: 7))),
+              onPressed: () => setState(() => week = week.plusDays(-7)),
               icon: const Icon(Icons.chevron_left_rounded, color: K9.orange)),
           Expanded(
             child: Column(children: [
               Text(tr('Tydzień {0}', [_weekNumber(week)]),
                   style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-              Text('${fmtDateShort(week)} – ${fmtDateShort(week.add(const Duration(days: 6)))}',
+              Text('${fmtDateShort(week)} – ${fmtDateShort(week.plusDays(6))}',
                   style: const TextStyle(color: K9.muted, fontSize: 12.5)),
             ]),
           ),
           IconButton(tooltip: tr('Następny'), 
-              onPressed: () => setState(() => week = week.add(const Duration(days: 7))),
+              onPressed: () => setState(() => week = week.plusDays(7)),
               icon: const Icon(Icons.chevron_right_rounded, color: K9.orange)),
         ]),
         const SizedBox(height: 8),
-        for (var i = 0; i < 7; i++) _DayRow(day: week.add(Duration(days: i)), s: s),
+        for (var i = 0; i < 7; i++) _DayRow(day: week.plusDays(i), s: s),
       ]),
     );
   }
