@@ -1,8 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:k9_coach/breeds/breed_info.dart';
 import 'package:k9_coach/breeds/breed_profile.dart';
+import 'package:k9_coach/breeds/breed_sex.dart';
 import 'package:k9_coach/breeds/breed_sports.dart';
+import 'package:k9_coach/breeds/breed_temperament.dart';
 import 'package:k9_coach/breeds/breeds.dart';
+import 'package:k9_coach/l10n/l10n.dart';
 import 'package:k9_coach/l10n/lang/en.dart' as en;
 
 /// Testy integralności Atlasu ras – pilnują, żeby kolejne zmiany danych
@@ -23,7 +26,7 @@ void main() {
       }
       expect(breedInfos.keys.toSet(), ids, reason: 'breedInfos zawiera rasy spoza bazy');
       expect(breedProfiles.keys.toSet(), ids, reason: 'breedProfiles zawiera rasy spoza bazy');
-      expect(breeds.length, 134);
+      expect(breeds.length, 135);
     });
 
     test('zakresy wymiarów i numery FCI są sensowne', () {
@@ -40,6 +43,26 @@ void main() {
           expect(testDescriptions.containsKey(t), isTrue, reason: '${b.id}: $t');
         }
         expect(i.testKeys.toSet().length, i.testKeys.length, reason: 'powtórzone badanie: ${b.id}');
+      }
+    });
+
+    test('wymiary według płci pasują do zakresu ogólnego', () {
+      for (final e in breedSexDims.entries) {
+        final i = breedInfos[e.key];
+        expect(i, isNotNull, reason: 'brak rasy ${e.key}');
+        final d = e.value;
+        for (final h in [d.maleHeight, d.femaleHeight].whereType<Span>()) {
+          expect(h.min, greaterThanOrEqualTo(i!.heightMin - 1), reason: '${e.key} wzrost');
+          expect(h.upper, lessThanOrEqualTo(i.heightMax + 1), reason: '${e.key} wzrost');
+          if (h.max != null) expect(h.max!, greaterThanOrEqualTo(h.min), reason: e.key);
+        }
+        for (final w in [d.maleWeight, d.femaleWeight].whereType<Span>()) {
+          expect(w.min, greaterThanOrEqualTo(i!.weightMin - 1), reason: '${e.key} masa');
+          expect(w.upper, lessThanOrEqualTo(i.weightMax + 1), reason: '${e.key} masa');
+        }
+        if (d.maleHeight != null && d.femaleHeight != null) {
+          expect(d.maleHeight!.min, greaterThanOrEqualTo(d.femaleHeight!.min), reason: '${e.key}: psy niższe od suk');
+        }
       }
     });
 
@@ -169,6 +192,8 @@ void main() {
       expect(fit('corgi_pembroke', 'canicross'), Fit.b);
       expect(fit('corgi_pembroke', 'bikejoring'), Fit.c);
       expect(fit('corgi_pembroke', 'herding'), Fit.a);
+      expect(fit('corgi_cardigan', 'canicross'), Fit.b);
+      expect(fit('corgi_cardigan', 'bikejoring'), Fit.c);
       expect(fit('dachshund', 'canicross'), Fit.c);
       expect(fit('dachshund', 'agility'), Fit.c);
       expect(fit('dachshund', 'tracking'), Fit.a);
@@ -255,6 +280,29 @@ void main() {
         'Dummy',
       };
       final missing = keys.where((k) => !international.contains(k) && !en.strings.containsKey(k)).toList();
+      expect(missing, isEmpty, reason: missing.join('\n'));
+    });
+
+    test('uzasadnienia i ograniczenia sportów są przetłumaczone na wszystkie języki', () {
+      final keys = <String>{
+        for (final b in breeds)
+          for (final f in sportFitsFor(b.id)) ...[f.reasonPl, ...f.limitsPl],
+        'Charakter i temperament',
+        'Według wzorca FCI',
+        'Psy i suki',
+        'min. {0} {1}',
+        'ok. {0} {1}',
+      };
+      for (final lang in appLanguages.where((l) => l.code != 'pl')) {
+        final missing = keys.where((k) => !lang.strings.containsKey(k)).toList();
+        expect(missing, isEmpty, reason: '${lang.code}: ${missing.join('\n')}');
+      }
+    });
+
+    test('każda rasa ma opis charakteru przetłumaczony na angielski', () {
+      final without = breeds.where((b) => !hasTemperament(b.id)).map((b) => b.id).toList();
+      expect(without, isEmpty);
+      final missing = temperamentKeys.where((k) => !en.strings.containsKey(k)).toList();
       expect(missing, isEmpty, reason: missing.join('\n'));
     });
   });

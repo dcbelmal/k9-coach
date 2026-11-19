@@ -127,6 +127,7 @@ const breedProfiles = <String, BreedProfile>{
   'podhalanski': BreedProfile('Tatra Shepherd Dog', _R.lgd, {_T.heatSensitive}),
   'white_swiss': BreedProfile('White Swiss Shepherd Dog', _R.shepherdWorking),
   'corgi_pembroke': BreedProfile('Welsh Corgi (Pembroke)', _R.herding, {_T.longBack, _T.ivdd}),
+  'corgi_cardigan': BreedProfile('Welsh Corgi (Cardigan)', _R.herding, {_T.longBack, _T.ivdd}),
   'kelpie': BreedProfile('Australian Kelpie', _R.herding, {_T.endurance, _T.agile}),
   'mudi': BreedProfile('Mudi', _R.herding, {_T.agile}),
   'pumi': BreedProfile('Pumi', _R.herding, {_T.agile}),
