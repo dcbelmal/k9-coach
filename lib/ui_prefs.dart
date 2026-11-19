@@ -11,16 +11,32 @@ class QuickStart {
   final Discipline discipline;
   final int targetMin;
   final double? targetKm;
-  const QuickStart(this.discipline, {this.targetMin = 0, this.targetKm});
 
-  Map<String, dynamic> toJson() => {'d': discipline.name, 'min': targetMin, if (targetKm != null) 'km': targetKm};
+  /// Kiedy zapamiętano ustawienia (null = zapis sprzed wersji 0.13.1).
+  final DateTime? at;
+  const QuickStart(this.discipline, {this.targetMin = 0, this.targetKm, this.at});
 
+  Map<String, dynamic> toJson() => {
+        'd': discipline.name,
+        'min': targetMin,
+        if (targetKm != null) 'km': targetKm,
+        if (at != null) 'at': at!.millisecondsSinceEpoch,
+      };
+
+  /// Odczyt odporny na uszkodzony zapis: zły typ albo wartość spoza zakresu
+  /// daje wartość domyślną zamiast wyjątku. Nieznana dyscyplina = brak ustawień.
   static QuickStart? fromJson(Object? j) {
     if (j is! Map) return null;
     final d = Discipline.values.where((e) => e.name == j['d']).firstOrNull;
     if (d == null) return null;
+    final min = j['min'];
+    final km = j['km'];
+    final at = j['at'];
+    final kmVal = km is num && km.isFinite && km > 0 && km <= 500 ? km.toDouble() : null;
     return QuickStart(d,
-        targetMin: (j['min'] as num?)?.toInt() ?? 0, targetKm: (j['km'] as num?)?.toDouble());
+        targetMin: min is num && min.isFinite && min > 0 && min <= 24 * 60 ? min.toInt() : 0,
+        targetKm: d.hasDistance ? kmVal : null,
+        at: at is int && at > 0 ? DateTime.fromMillisecondsSinceEpoch(at) : null);
   }
 }
 
@@ -60,12 +76,16 @@ class UiPrefs extends ChangeNotifier {
       final p = await SharedPreferences.getInstance();
       final raw = p.getString(_key);
       if (raw != null) {
-        final j = jsonDecode(raw) as Map<String, dynamic>;
+        final j = jsonDecode(raw);
+        if (j is! Map) throw const FormatException('valkor_ui_v1: oczekiwano obiektu');
         final q = j['quick'];
         if (q is Map) {
           for (final e in q.entries) {
-            final v = QuickStart.fromJson(e.value);
-            if (v != null) _quick['${e.key}'] = v;
+            // Jeden uszkodzony wpis nie kasuje ustawień pozostałych psów.
+            try {
+              final v = QuickStart.fromJson(e.value);
+              if (v != null) _quick['${e.key}'] = v;
+            } catch (_) {}
           }
         }
         final h = j['hidden'];
@@ -80,21 +100,27 @@ class UiPrefs extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> _save() async {
-    final p = await SharedPreferences.getInstance();
-    await SafePrefs.setString(
-        p,
-        _key,
-        jsonEncode({
-          'quick': {for (final e in _quick.entries) e.key: e.value.toJson()},
-          'hidden': [for (final c in hidden) c.name],
-        }));
-  }
+  /// Zapisy po kolei: każdy zapisuje aktualny stan w chwili wykonania, więc
+  /// przy szybkich zmianach (np. przełączanie psów) ostatni zapis jest zawsze
+  /// najnowszy i żaden starszy go nie nadpisze.
+  final _queue = SerialQueue();
+
+  Future<void> _save() => _queue.run(() async {
+        final p = await SharedPreferences.getInstance();
+        await SafePrefs.setString(
+            p,
+            _key,
+            jsonEncode({
+              'quick': {for (final e in _quick.entries) e.key: e.value.toJson()},
+              'hidden': [for (final c in hidden) c.name],
+            }));
+      });
 
   /// Zapamiętanie ustawień po rozpoczęciu treningu. Błąd zapisu nie przerywa
   /// treningu: to tylko wygoda, więc go zgłaszamy do logu i idziemy dalej.
   Future<void> rememberStart(String dogId, QuickStart q) async {
-    _quick[dogId] = q;
+    _quick[dogId] = QuickStart(q.discipline,
+        targetMin: q.targetMin, targetKm: q.discipline.hasDistance ? q.targetKm : null, at: q.at ?? DateTime.now());
     notifyListeners();
     try {
       await _save();
@@ -124,12 +150,15 @@ class UiPrefs extends ChangeNotifier {
     try {
       await _save();
     } catch (e) {
-      if (was) {
-        hidden.remove(c);
-      } else {
-        hidden.add(c);
+      // Cofamy tylko, jeśli w międzyczasie nikt nie zmienił tej karty ponownie.
+      if (shows(c) == show) {
+        if (was) {
+          hidden.remove(c);
+        } else {
+          hidden.add(c);
+        }
+        notifyListeners();
       }
-      notifyListeners();
       rethrow;
     }
   }

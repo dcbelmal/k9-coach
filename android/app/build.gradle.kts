@@ -33,17 +33,25 @@ android {
     // Stały klucz podpisu: każda nowa wersja instaluje się na poprzednią bez utraty danych.
     // Wersja release jest podpisywana WYŁĄCZNIE tym kluczem – bez niego budowa
     // kończy się błędem (nigdy nie podpisujemy release kluczem debug).
+    // Klucza NIE ma w repozytorium. CI odtwarza go z sekretu KEYSTORE_BASE64
+    // do katalogu tymczasowego i podaje ścieżkę:
+    //   KEYSTORE_PATH     – ścieżka do pliku .p12 (poza repozytorium),
     //   KEYSTORE_PASSWORD – hasło (sekret GitHub),
-    //   KEYSTORE_PATH     – opcjonalnie ścieżka do pliku .p12 dostarczonego przez CI
-    //                       z sekretu KEYSTORE_BASE64; bez niej: android/app/valkor-release.p12.
+    //   KEY_ALIAS         – opcjonalnie, domyślnie "valkor".
     val keystorePassword = System.getenv("KEYSTORE_PASSWORD")
-    val keystoreFile = System.getenv("KEYSTORE_PATH")?.takeIf { it.isNotBlank() }?.let { file(it) }
-        ?: file("valkor-release.p12")
-    val releaseSigningReady = !keystorePassword.isNullOrEmpty() && keystoreFile.isFile
+    val keystorePath = System.getenv("KEYSTORE_PATH")?.takeIf { it.isNotBlank() }
+    val keystoreFile = keystorePath?.let { file(it) }
+    val signingProblem = when {
+        keystorePath == null -> "brak zmiennej KEYSTORE_PATH (ścieżka do pliku klucza .p12)"
+        keystoreFile?.isFile != true -> "plik klucza nie istnieje: $keystorePath"
+        keystorePassword.isNullOrEmpty() -> "brak hasła KEYSTORE_PASSWORD"
+        else -> null
+    }
+    val releaseSigningReady = signingProblem == null
     signingConfigs {
         if (releaseSigningReady) {
             create("valkor") {
-                storeFile = keystoreFile
+                storeFile = keystoreFile!!
                 storeType = "PKCS12"
                 storePassword = keystorePassword
                 keyAlias = System.getenv("KEY_ALIAS")?.takeIf { it.isNotBlank() } ?: "valkor"
@@ -67,7 +75,8 @@ android {
         }
         if (wantsRelease && !releaseSigningReady) {
             throw GradleException(
-                "Brak klucza podpisu wersji release. Ustaw KEYSTORE_PASSWORD (i opcjonalnie KEYSTORE_PATH) " +
+                "Nie można podpisać wersji release: $signingProblem. " +
+                    "Ustaw KEYSTORE_PATH i KEYSTORE_PASSWORD (w CI: sekrety KEYSTORE_BASE64 i KEYSTORE_PASSWORD) " +
                     "albo zbuduj wersję testową: flutter build apk --debug. " +
                     "Release nigdy nie jest podpisywany kluczem debug, bo taki APK nie zainstaluje się na poprzednią wersję."
             )

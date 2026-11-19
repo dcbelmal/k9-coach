@@ -12,3 +12,7 @@ GeneratedPluginRegistrant.java
 key.properties
 **/*.keystore
 **/*.jks
+
+# Klucze podpisu nigdy nie trafiają do repozytorium (CI: sekret KEYSTORE_BASE64).
+*.p12
+*.pfx

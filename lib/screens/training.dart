@@ -190,7 +190,15 @@ class WeekPlan extends StatefulWidget {
 }
 
 class _WeekPlanState extends State<WeekPlan> {
-  DateTime week = startOfWeek(DateTime.now());
+  // Oglądany tydzień przetrwa zmianę zakładki (PageStorage), osobno dla psa.
+  String get _id => 'plan-week-${DogProfiles.instance.activeId}';
+  late DateTime _week =
+      PageStorage.maybeOf(context)?.readState(context, identifier: _id) as DateTime? ?? startOfWeek(DateTime.now());
+  DateTime get week => _week;
+  set week(DateTime v) {
+    _week = v;
+    PageStorage.maybeOf(context)?.writeState(context, v, identifier: _id);
+  }
 
   int _weekNumber(DateTime d) {
     final thursday = d.add(Duration(days: 4 - d.weekday));
@@ -330,7 +338,14 @@ class _History extends StatefulWidget {
 
 /// Historia z filtrem dyscypliny (pokazujemy tylko dyscypliny, które są w historii).
 class _HistoryState extends State<_History> {
-  Discipline? filter;
+  // Wybrany filtr przetrwa zmianę zakładki (PageStorage), osobno dla psa.
+  String get _id => 'history-filter-${DogProfiles.instance.activeId}';
+  late Discipline? _filter = PageStorage.maybeOf(context)?.readState(context, identifier: _id) as Discipline?;
+  Discipline? get filter => _filter;
+  set filter(Discipline? v) {
+    _filter = v;
+    PageStorage.maybeOf(context)?.writeState(context, v, identifier: _id);
+  }
 
   @override
   Widget build(BuildContext context) {

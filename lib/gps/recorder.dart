@@ -151,6 +151,8 @@ class TrackRecorder extends ChangeNotifier {
   }
 
   Future<void> start() async {
+    // Nigdy dwa nagrania naraz: drugi start nie może wyzerować trwającej sesji.
+    if (state != RecState.idle) return;
     segments = [[]];
     laps = [];
     meters = 0;
