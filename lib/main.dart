@@ -1,3 +1,4 @@
+import 'ui_prefs.dart';
 import 'dart:async';
 import 'dart:ui' show PlatformDispatcher;
 
@@ -48,6 +49,7 @@ Future<void> main() async {
     return true;
   };
   await OnlineConsent.instance.load();
+  await UiPrefs.instance.load();
   await DogProfiles.instance.load();
   await AppStore.instance.load();
   await NutritionStore.instance.load();

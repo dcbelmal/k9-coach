@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:k9_coach/ui_prefs.dart';
 import 'package:k9_coach/dogs/dog_profiles.dart';
 import 'package:k9_coach/files/file_store.dart';
 import 'package:k9_coach/gallery/gallery_store.dart';
@@ -104,6 +105,7 @@ Future<void> restartApp() async {
   await GalleryStore.instance.load();
   await BreedingStore.instance.load();
   await GuideStore.instance.load();
+  await UiPrefs.instance.load();
 }
 
 /// Katalog plików aplikacji w katalogu tymczasowym.

@@ -8,8 +8,10 @@ import '../gps/records.dart';
 import 'calendar.dart';
 import 'forms.dart';
 import 'stats.dart';
-import 'gps_screen.dart';
 import 'track_detail.dart';
+import 'training_start.dart';
+import 'gps_screen.dart';
+import '../dogs/dog_profiles.dart';
 import '../l10n/l10n.dart';
 
 /// Który segment zakładki Trening jest otwarty (0 dyscypliny … 3 statystyki).
@@ -107,9 +109,10 @@ class _Disciplines extends StatelessWidget {
     return ListenableBuilder(
       listenable: s,
       builder: (context, _) => ListView(
+        key: PageStorageKey('training-disc-${DogProfiles.instance.activeId}'),
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 120),
         children: [
-          FadeSlideIn(index: 0, child: const GpsStartCard()),
+          const StartTrainingButton(),
           const SizedBox(height: 10),
           for (final (i, d) in Discipline.values.indexed) ...[
             FadeSlideIn(index: i, child: _DisciplineCard(d: d, s: s)),
@@ -200,7 +203,10 @@ class _WeekPlanState extends State<WeekPlan> {
     final s = AppStore.instance;
     return ListenableBuilder(
       listenable: s,
-      builder: (context, _) => ListView(padding: const EdgeInsets.fromLTRB(16, 0, 16, 120), children: [
+      builder: (context, _) => ListView(
+          key: PageStorageKey('training-plan-${DogProfiles.instance.activeId}'),
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 120),
+          children: [
         Row(children: [
           IconButton(tooltip: tr('Poprzedni'), 
               onPressed: () => setState(() => week = week.subtract(const Duration(days: 7))),
@@ -367,6 +373,7 @@ class _HistoryState extends State<_History> {
         return TrainingHistoryList(
           items: f == null ? all : all.where((t) => t.discipline == f).toList(),
           header: header,
+          storageKey: PageStorageKey('training-history-${DogProfiles.instance.activeId}-${f?.name}'),
         );
       },
     );
@@ -376,7 +383,9 @@ class _HistoryState extends State<_History> {
 class TrainingHistoryList extends StatelessWidget {
   final List<TrainingSession> items;
   final Widget? header;
-  const TrainingHistoryList({super.key, required this.items, this.header});
+  /// Klucz do zapamiętania pozycji przewijania (np. przy zmianie zakładek).
+  final Key? storageKey;
+  const TrainingHistoryList({super.key, required this.items, this.header, this.storageKey});
 
   @override
   Widget build(BuildContext context) {
@@ -423,7 +432,8 @@ class TrainingHistoryList extends StatelessWidget {
         ),
       ));
     }
-    return ListView(padding: const EdgeInsets.fromLTRB(16, 0, 16, 120), children: children);
+    return ListView(
+        key: storageKey, padding: const EdgeInsets.fromLTRB(16, 0, 16, 120), children: children);
   }
 }
 
@@ -492,33 +502,6 @@ class DisciplineScreen extends StatelessWidget {
           );
         },
       ),
-    );
-  }
-}
-
-/// Duża karta "Trening z GPS" na liście dyscyplin.
-class GpsStartCard extends StatelessWidget {
-  const GpsStartCard({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return K9Card(
-      gradient: K9.orangeGradient,
-      onTap: () => openGps(context),
-      child: Row(children: [
-        Icon(Icons.route_rounded, color: Colors.black, size: 32),
-        SizedBox(width: 14),
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(tr('Trening z GPS'),
-                style: TextStyle(color: Colors.black, fontSize: 17, fontWeight: FontWeight.w800)),
-            SizedBox(height: 2),
-            Text(tr('Mapa, tempo, kilometry i rekordy'),
-                style: TextStyle(color: Colors.black87, fontSize: 12.5)),
-          ]),
-        ),
-        Icon(Icons.play_circle_fill_rounded, color: Colors.black, size: 36),
-      ]),
     );
   }
 }

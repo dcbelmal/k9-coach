@@ -193,6 +193,13 @@ class _FadeSlideInState extends State<FadeSlideIn> with SingleTickerProviderStat
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // „Usuń animacje” w ustawieniach dostępności telefonu: bez wjazdu kart.
+    if (MediaQuery.disableAnimationsOf(context)) _c.value = 1;
+  }
+
+  @override
   void dispose() {
     _c.dispose();
     super.dispose();
@@ -295,20 +302,31 @@ class Segmented extends StatelessWidget {
           Row(children: [
             for (var i = 0; i < items.length; i++)
               Expanded(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => onChanged(i),
-                  child: SizedBox(
-                    height: 38,
-                    child: Center(
-                      child: AnimatedDefaultTextStyle(
-                        duration: const Duration(milliseconds: 200),
-                        style: TextStyle(
-                            fontFamily: 'Inter',
-                            fontWeight: FontWeight.w700,
-                            fontSize: 14,
-                            color: i == index ? Colors.black : K9.muted),
-                        child: Text(items[i]),
+                child: Semantics(
+                  button: true,
+                  selected: i == index,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => onChanged(i),
+                    child: SizedBox(
+                      height: 44,
+                      child: Center(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          // Długie słowo (np. „Dyscypliny” na małym ekranie) zmniejsza się zamiast wychodzić poza pole.
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: AnimatedDefaultTextStyle(
+                              duration: const Duration(milliseconds: 200),
+                              style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14,
+                                  color: i == index ? Colors.black : K9.muted),
+                              child: Text(items[i], maxLines: 1),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ),

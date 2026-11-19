@@ -37,12 +37,21 @@ class _ShellState extends State<Shell> {
 
   @override
   Widget build(BuildContext context) {
+    final calm = MediaQuery.disableAnimationsOf(context);
     return ValueListenableBuilder<int>(
       valueListenable: tabIndex,
-      builder: (context, i, _) => Scaffold(
+      // Wstecz na innej zakładce wraca na Start, dopiero na Start zamyka aplikację.
+      builder: (context, i, _) => PopScope(
+        canPop: i == 0,
+        onPopInvokedWithResult: (did, _) {
+          if (!did) goToTab(0);
+        },
+        child: Scaffold(
         extendBody: true,
+        // Każda zakładka jest budowana od nowa (zawsze aktualne dane psa),
+        // a pozycję przewijania przywraca PageStorage (klucze w listach zakładek).
         body: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 260),
+          duration: calm ? Duration.zero : const Duration(milliseconds: 200),
           switchInCurve: Curves.easeOutCubic,
           transitionBuilder: (child, a) => FadeTransition(
             opacity: a,
@@ -60,6 +69,7 @@ class _ShellState extends State<Shell> {
           ),
         ),
         bottomNavigationBar: _BottomBar(index: i),
+        ),
       ),
     );
   }
