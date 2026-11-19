@@ -330,7 +330,7 @@ class _TypesCardState extends State<_TypesCard> {
   }
 }
 
-/// Obciążenie treningowe i ryzyko przetrenowania (ostatnie 8 tygodni).
+/// Monitor obciążenia treningowego (ostatnie 8 tygodni).
 class _LoadCard extends StatelessWidget {
   final AppStore s;
   const _LoadCard({required this.s});
@@ -353,7 +353,7 @@ class _LoadCard extends StatelessWidget {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
           Expanded(
-              child: Text(tr('Obciążenie i regeneracja'), style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700))),
+              child: Text(tr('Monitor obciążenia treningowego'), style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700))),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(color: c.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(10)),
@@ -414,7 +414,7 @@ class _LoadCard extends StatelessWidget {
         Text(
             r.ratio == 0
                 ? tr('Obciążenie = czas × intensywność (RPE).')
-                : tr('Stosunek obciążenia 7 dni do średniej z 4 tygodni: {0} (bezpiecznie 0,8–1,3).', [fmtNum(r.ratio, 2)]),
+                : tr('Obciążenie 7 dni / średnia tygodniowa z 4 tygodni: {0}. Umowny zakres „jak zwykle” 0,8–1,3 – to orientacyjny wskaźnik zmiany obciążenia (ACWR), niezwalidowany u psów i nie mierzy zmęczenia.', [fmtNum(r.ratio, 2)]),
             style: const TextStyle(color: K9.faint, fontSize: 11.5)),
       ]),
     );

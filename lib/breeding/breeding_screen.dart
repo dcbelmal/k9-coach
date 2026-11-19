@@ -55,6 +55,8 @@ class BreedingScreen extends StatelessWidget {
               FadeSlideIn(index: 1, child: _StatusButtons(m: active)),
               gap12,
               FadeSlideIn(index: 2, child: _Timeline(m: active, now: now)),
+              gap12,
+              const FadeSlideIn(index: 3, child: UrgentSignsCard()),
             ] else if (dog.female)
               const FadeSlideIn(child: _Calculator())
             else
@@ -81,7 +83,7 @@ class BreedingScreen extends StatelessWidget {
             ],
             gap12,
             Text(
-              tr('Terminy są orientacyjne. Przebieg ciąży i porodu konsultuj z weterynarzem.'),
+              tr('Terminy są orientacyjne. Bez owulacji potwierdzonej badaniem okno porodu jest szerokie. Przebieg ciąży, żywienie i poród konsultuj z lekarzem weterynarii.'),
               style: TextStyle(color: K9.faint, fontSize: 12),
             ),
           ]);
@@ -116,7 +118,7 @@ class _PregnancyCard extends StatelessWidget {
             stroke: 9,
             center: Column(mainAxisSize: MainAxisSize.min, children: [
               Text('$day', style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800, height: 1)),
-              Text(tr('dzień'), style: TextStyle(color: K9.muted, fontSize: 11)),
+              Text(PregnancyCalc.fromOvulation(m) ? tr('od owulacji') : tr('od krycia'), style: TextStyle(color: K9.muted, fontSize: 11)),
             ]),
           ),
           const SizedBox(width: 16),
@@ -139,24 +141,54 @@ class _PregnancyCard extends StatelessWidget {
         Row(children: [
           Expanded(
             child: StatValue(
-              label: tr('Przewidywany poród'),
+              label: tr('Przewidywany poród (ok.)'),
               value: fmtDateShort(PregnancyCalc.due(m)),
             ),
           ),
           Expanded(
             child: StatValue(
               label: tr('Do porodu'),
-              value: left >= 0 ? '$left' : tr('po terminie'),
+              value: PregnancyCalc.daysToWindowEnd(m, now) < 0 ? tr('po terminie') : (left >= 0 ? '$left' : tr('w oknie')),
               unit: left >= 0 ? tr('dni') : null,
             ),
           ),
         ]),
         const SizedBox(height: 10),
         Text(
-          tr('Okno porodu: {0} – {1}{2}', [fmtDateShort(from), fmtDateShort(to), m.ovulation != null ? tr(' (liczone od owulacji)') : '']),
+          tr('Okno porodu: {0} – {1}{2}', [fmtDateShort(from), fmtDateShort(to), m.ovulation != null ? tr(' (liczone od owulacji)') : tr(' (szerokie – liczone od krycia; owulacja z badania zawęża okno)')]),
           style: const TextStyle(color: Color(0xFFCFCFD4), fontSize: 13),
         ),
       ]),
+    );
+  }
+}
+
+/// Objawy wymagające pilnego kontaktu z lekarzem weterynarii.
+class UrgentSignsCard extends StatelessWidget {
+  const UrgentSignsCard({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return K9Card(
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          tilePadding: EdgeInsets.zero,
+          childrenPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.local_hospital_rounded, color: K9.red),
+          title: Text(tr('Kiedy pilnie dzwonić do weterynarza'), style: const TextStyle(fontWeight: FontWeight.w700)),
+          children: [
+            for (final s in PregnancyCalc.urgentSigns)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Text('•  ', style: TextStyle(color: K9.red)),
+                  Expanded(child: Text(tr(s), style: const TextStyle(fontSize: 13, height: 1.3))),
+                ]),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -295,7 +327,7 @@ class _CalculatorState extends State<_Calculator> {
           Expanded(child: StatValue(label: tr('Okno porodu'), value: '${fmtDateShort(from)} – ${fmtDateShort(to)}')),
         ]),
         const SizedBox(height: 10),
-        Text(tr('USG: {0} – {1} · RTG: od {2}', [fmtDateShort(mating.add(const Duration(days: 25))), fmtDateShort(mating.add(const Duration(days: 30))), fmtDateShort(mating.add(const Duration(days: 45)))]),
+        Text(tr('USG: zwykle od {0} · RTG: od {1} (liczenie szczeniąt najdokładniej po {2})', [fmtDateShort(mating.add(const Duration(days: 28))), fmtDateShort(mating.add(const Duration(days: 45))), fmtDateShort(mating.add(const Duration(days: 55)))]),
             style: const TextStyle(color: K9.muted, fontSize: 13)),
         const SizedBox(height: 14),
         FilledButton.icon(
@@ -345,7 +377,7 @@ class _Litters extends StatelessWidget {
             subtitle: [
               '${m.litter!.puppies.length} szczeniąt (${m.litter!.males} ps., ${m.litter!.females} s.)',
               _age(m.litter!.ageDays(now)),
-              if (m.litter!.puppies.any((p) => p.losing)) 'spadek wagi!',
+              if (m.litter!.puppies.any((p) => PuppyGrowth.alert(p, m.litter!.born) == 2)) tr('spadek wagi – sprawdź'),
             ].join(' · '),
             onTap: () => openLitter(context, m),
           ),
@@ -419,9 +451,9 @@ class PregnancyHomeCard extends StatelessWidget {
                       style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
                   const SizedBox(height: 2),
                   Text(
-                    left >= 0
-                        ? tr('Poród ok. {0} ({1})', [fmtDateShort(PregnancyCalc.due(m)), _countdown(left)])
-                        : tr('Po terminie – skontaktuj się z weterynarzem'),
+                    PregnancyCalc.daysToWindowEnd(m, now) < 0
+                        ? tr('Po terminie – skontaktuj się z weterynarzem')
+                        : tr('Poród ok. {0} ({1})', [fmtDateShort(PregnancyCalc.due(m)), _countdown(left)]),
                     style: const TextStyle(color: K9.muted, fontSize: 13),
                   ),
                   if (next != null && next.day != PregnancyCalc.typical)
@@ -501,7 +533,7 @@ class _MatingFormState extends State<_MatingForm> {
             onChanged: (v) => setState(() => ovulation = v)),
         Padding(
           padding: EdgeInsets.only(left: 4, top: 6),
-          child: Text(tr('Jeśli znasz dzień owulacji, termin porodu będzie dokładniejszy (63 dni ± 1).'),
+          child: Text(tr('Jeśli lekarz potwierdził owulację (np. progesteron), termin porodu będzie dokładniejszy: 63 dni ± 1 od owulacji. Od samego krycia poród następuje zwykle po 57–72 dniach.'),
               style: TextStyle(color: K9.faint, fontSize: 12)),
         ),
       ],

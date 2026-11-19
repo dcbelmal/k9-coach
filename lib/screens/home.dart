@@ -291,11 +291,11 @@ class _WeekStats extends StatelessWidget {
         SectionTitle(tr('Ten tydzień'), icon: Icons.bar_chart_rounded),
         Row(children: [
           RingGauge(
-            value: r.score / 100,
+            value: r.ratio == 0 ? 0 : (r.ratio / 2).clamp(0.0, 1.0),
             size: 64,
             stroke: 7,
             color: c,
-            center: Text('${r.score}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, height: 1)),
+            center: Text(r.ratio == 0 ? '—' : fmtNum(r.ratio, 1), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, height: 1)),
           ),
           const SizedBox(width: 14),
           Expanded(

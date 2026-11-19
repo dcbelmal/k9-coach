@@ -24,14 +24,22 @@ bool sameDay(DateTime a, DateTime b) =>
 DateTime startOfWeek(DateTime d) =>
     dayOnly(d).subtract(Duration(days: d.weekday - 1));
 
-/// Stan gotowości psa na podstawie stosunku obciążenia ostrego do przewlekłego (ACWR).
+/// Monitor obciążenia treningowego: porównanie obciążenia z 7 dni ze średnią
+/// tygodniową z 28 dni (ACWR, sesyjne RPE × minuty).
+///
+/// To wskaźnik zmiany obciążenia, a nie ocena gotowości organizmu. ACWR nie jest
+/// zwalidowaną metodą diagnozowania przetrenowania u psów (badania dotyczą
+/// głównie sportowców), a progi 0,8 / 1,3 / 1,5 są umowne. Gotowość ocenia
+/// opiekun na podstawie samopoczucia psa – stąd [concerns].
 class Readiness {
-  final int score; // 0-100
+  final int score; // 0-100 – podobieństwo do zwykłego obciążenia (nie „gotowość”)
   final double ratio;
   final String label;
   final String advice;
-  final int level; // 0 = za mało, 1 = optymalnie, 2 = uwaga, 3 = ryzyko
-  const Readiness(this.score, this.ratio, this.label, this.advice, this.level);
+  final int level; // 0 = za mało danych / niżej niż zwykle, 1 = jak zwykle, 2 = szybki wzrost, 3 = dużo wyżej
+  /// Sygnały gorszej regeneracji zaznaczone w ostatnich 3 dniach.
+  final List<String> concerns;
+  const Readiness(this.score, this.ratio, this.label, this.advice, this.level, {this.concerns = const []});
 }
 
 class PeriodStats {
@@ -469,34 +477,68 @@ class AppStore extends ChangeNotifier {
     return statsBetween(s, s.add(const Duration(days: 7)));
   }
 
-  double _loadBetween(DateTime from, DateTime to) => doneTrainings
-      .where((t) => !t.date.isBefore(from) && t.date.isBefore(to))
-      .fold(0.0, (a, t) => a + t.load);
+  /// Suma obciążenia w przedziale. Każdy trening liczony raz (po ID), nawet
+  /// gdyby ten sam wpis trafił na listę dwa razy (np. po odzyskaniu szkicu GPS).
+  double _loadBetween(DateTime from, DateTime to) {
+    final seen = <String>{};
+    var sum = 0.0;
+    for (final t in doneTrainings) {
+      if (t.date.isBefore(from) || !t.date.isBefore(to) || !seen.add(t.id)) continue;
+      sum += t.load;
+    }
+    return sum;
+  }
 
-  Readiness get readiness {
-    final now = DateTime.now();
+  Readiness get readiness => readinessAt(DateTime.now());
+
+  Readiness readinessAt(DateTime now) {
     final end = dayOnly(now).add(const Duration(days: 1));
     final acute = _loadBetween(end.subtract(const Duration(days: 7)), end);
     final chronic = _loadBetween(end.subtract(const Duration(days: 28)), end) / 4;
+    final since = end.subtract(const Duration(days: 3));
+    final concerns = <String>{
+      for (final t in doneTrainings)
+        if (!t.date.isBefore(since) && t.date.isBefore(end)) ...t.concerns
+    }.toList();
+    String withConcerns(String advice) => concerns.isEmpty
+        ? advice
+        : tr('Zaznaczono: {0}. Bez względu na wskaźnik zaplanuj lżejszy dzień, a sztywność, kulawiznę lub utrzymujące się objawy skonsultuj z lekarzem weterynarii.',
+            [concerns.map((c) => tr(c).toLowerCase()).join(', ')]);
+
+    DateTime? first;
+    for (final t in doneTrainings) {
+      if (first == null || t.date.isBefore(first)) first = t.date;
+    }
     if (chronic < 1 && acute < 1) {
       return Readiness(50, 0, tr('Brak danych'),
-          tr('Dodaj kilka treningów, a policzę formę i ryzyko przetrenowania.'), 0);
+          withConcerns(tr('Dodaj kilka treningów, a porównam obciążenie z ostatnich 7 dni ze zwykłym.')), 0,
+          concerns: concerns);
+    }
+    // Za krótka historia: średnia z 4 tygodni nie jest jeszcze miarodajna.
+    if (first == null || end.difference(dayOnly(first)).inDays < 21) {
+      return Readiness(50, 0, tr('Za krótka historia'),
+          withConcerns(tr('Porównanie obciążenia ma sens po ok. 3–4 tygodniach zapisów. Do tego czasu zwiększaj obciążenie stopniowo i obserwuj psa.')), 0,
+          concerns: concerns);
     }
     final ratio = chronic < 1 ? 2.0 : acute / chronic;
-    // Wynik: 100 przy ratio 1.05, spada w obie strony.
+    // Wynik: 100 przy ratio ok. 1 (obciążenie jak zwykle), spada w obie strony.
     final score = (100 - (ratio - 1.05).abs() * 90).clamp(5, 100).round();
     if (ratio < 0.8) {
-      return Readiness(score, ratio, tr('Wypoczęty'),
-          tr('Obciążenie spadło. Pies jest gotowy na mocniejszy trening.'), 0);
+      return Readiness(score, ratio, tr('Obciążenie niższe niż zwykle'),
+          withConcerns(tr('Ostatnie 7 dni były lżejsze niż zwykle. To nie oznacza pełnej regeneracji – przed mocniejszym treningiem oceń samopoczucie psa.')), 0,
+          concerns: concerns);
     } else if (ratio <= 1.3) {
-      return Readiness(score, ratio, tr('Optymalna forma'),
-          tr('Obciążenie w bezpiecznym zakresie. Kontynuuj plan.'), 1);
+      return Readiness(score, ratio, tr('Obciążenie podobne do zwykłego'),
+          withConcerns(tr('Obciążenie zbliżone do ostatnich tygodni. Kieruj się też samopoczuciem psa.')), 1,
+          concerns: concerns);
     } else if (ratio <= 1.5) {
-      return Readiness(score, ratio, tr('Uwaga'),
-          tr('Obciążenie rośnie szybko. Zaplanuj lżejszy dzień lub regenerację.'), 2);
+      return Readiness(score, ratio, tr('Obciążenie rośnie szybko'),
+          withConcerns(tr('Ten tydzień jest wyraźnie cięższy niż zwykle. Rozważ lżejszy dzień lub regenerację.')), 2,
+          concerns: concerns);
     }
-    return Readiness(score, ratio, tr('Ryzyko przetrenowania'),
-        tr('Ten tydzień jest dużo cięższy niż zwykle. Zalecany dzień regeneracji.'), 3);
+    return Readiness(score, ratio, tr('Obciążenie dużo wyższe niż zwykle'),
+        withConcerns(tr('Ten tydzień jest dużo cięższy niż zwykle. Nagły wzrost obciążenia może zwiększać ryzyko urazu – zaplanuj dzień regeneracji.')), 3,
+        concerns: concerns);
   }
 
   // --- Kalendarz -----------------------------------------------------------

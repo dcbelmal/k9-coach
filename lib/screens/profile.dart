@@ -629,9 +629,12 @@ class _DogEditScreenState extends State<DogEditScreen> {
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           title: Text(tr('Rasa podlega próbom pracy')),
-          subtitle: Text(tr('Wpływa na wymagania do Championa Międzynarodowego'),
+          subtitle: Text(
+              d.workingTrial == null
+                  ? tr('Nie ustawiono – sprawdź w nomenklaturze FCI swojej rasy (wpływa na wymagania C.I.B.)')
+                  : tr('Wpływa na wymagania do Championa Międzynarodowego'),
               style: TextStyle(color: K9.muted, fontSize: 12.5)),
-          value: isWorkingTrialBreed(d),
+          value: isWorkingTrialBreed(d) ?? false,
           onChanged: (v) => setState(() => d.workingTrial = v),
         ),
         Segmented(items: [tr('Suka'), tr('Pies')], index: d.female ? 0 : 1, onChanged: (i) => setState(() => d.female = i == 0)),

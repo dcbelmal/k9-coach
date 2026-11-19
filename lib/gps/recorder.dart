@@ -209,8 +209,12 @@ class TrackRecorder extends ChangeNotifier {
       final prev = seg.last;
       final d = const Distance()(prev.ll, LatLng(p.latitude, p.longitude));
       final dt = t - prev.t;
+      if (dt <= 0 && d > 10) return; // dwa odczyty w tej samej chwili daleko od siebie – błąd
       if (dt > 0 && d / dt > 16) return; // skok GPS (>57 km/h)
       if (d < 2) return;
+      // Dryf w miejscu: przesunięcie mniejsze niż połowa dokładności przy niemal
+      // zerowej prędkości z GPS – nie dodajemy fałszywych metrów na postoju.
+      if (p.speed >= 0 && p.speed < 0.3 && d < p.accuracy * 0.5) return;
       meters += d;
       currentSpeedKmh = p.speed >= 0 ? p.speed * 3.6 : (dt > 0 ? d / dt * 3.6 : null);
     }

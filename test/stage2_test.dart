@@ -8,12 +8,12 @@ import 'package:k9_coach/modules/modules.dart';
 
 void main() {
   group('Kalkulator ciąży', () {
-    test('termin 63 dni od krycia i okno 58–68', () {
+    test('termin 63 dni od krycia i szerokie okno 57–72', () {
       final m = Mating(id: 'a', dates: [DateTime(2026, 1, 1), DateTime(2026, 1, 3)]);
       expect(PregnancyCalc.due(m), DateTime(2026, 3, 5));
       final (from, to) = PregnancyCalc.window(m);
-      expect(from, DateTime(2026, 2, 28));
-      expect(to, DateTime(2026, 3, 12)); // 68 dni od ostatniego krycia
+      expect(from, DateTime(2026, 2, 27)); // 57 dni od pierwszego krycia
+      expect(to, DateTime(2026, 3, 16)); // 72 dni od ostatniego krycia
       expect(PregnancyCalc.dayOf(m, DateTime(2026, 1, 29, 15)), 28);
     });
 

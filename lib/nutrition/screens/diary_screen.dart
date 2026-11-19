@@ -167,7 +167,9 @@ class _DiaryScreenState extends State<DiaryScreen> {
               color: t.discipline.color,
               title: t.discipline.label,
               subtitle:
-                  tr('{0}{1} · +{2} kcal', [fmtDuration(t.durationMin), t.distanceKm != null ? tr(' · {0} km', [fmtKm(t.distanceKm!)]) : '', Energy.trainingKcal(t, kg).round()]),
+                  Energy.trainingKcal(t, kg) > 0
+                      ? tr('{0}{1} · +{2} kcal', [fmtDuration(t.durationMin), t.distanceKm != null ? tr(' · {0} km', [fmtKm(t.distanceKm!)]) : '', Energy.trainingKcal(t, kg).round()])
+                      : tr('{0}{1} · w zapotrzebowaniu bazowym', [fmtDuration(t.durationMin), t.distanceKm != null ? tr(' · {0} km', [fmtKm(t.distanceKm!)]) : '']),
               trailing: const SizedBox(),
             ),
         ]),

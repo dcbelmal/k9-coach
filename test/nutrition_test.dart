@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:k9_coach/models.dart';
 import 'package:k9_coach/nutrition/catalog.dart';
@@ -40,8 +42,10 @@ void main() {
         dog: dog(), settings: NutritionSettings(), trainingsToday: [], entriesToday: [], kcalPerGram: 4, now: now);
     final withRun = computeDailyPlan(
         dog: dog(), settings: NutritionSettings(), trainingsToday: [t], entriesToday: [], kcalPerGram: 4, now: now);
-    expect(withRun.trainingKcal, closeTo(20 * 5 * 1.1, 0.01));
-    expect(withRun.targetKcal - base.targetKcal, closeTo(110, 0.5));
+    // Koszt netto biegu wg Taylora i wsp.: 10,7 × 20^-0,316 J/(kg·m) ≈ 0,99 kcal/kg/km.
+    final perKgKm = 10.7 * math.pow(20, -0.316) / 4.184;
+    expect(withRun.trainingKcal, closeTo(20 * 5 * perKgKm, 0.01));
+    expect(withRun.targetKcal - base.targetKcal, closeTo(20 * 5 * perKgKm, 0.5));
 
     final treats = [FeedingEntry(id: 'x', date: now, kind: FeedKind.treat, grams: 30, kcal: 100)];
     final withTreats = computeDailyPlan(
@@ -66,7 +70,7 @@ void main() {
         kcalPerGram: 4,
         now: now);
     expect(p.basisKg, 25);
-    expect(p.targetKcal, closeTo(Energy.rer(25) * 1.1, 1));
+    expect(p.targetKcal, closeTo(Energy.rer(25) * 1.0, 1)); // WSAVA: 1,0 × RER masy docelowej
   });
 
   test('szczenię ma większe zapotrzebowanie', () {

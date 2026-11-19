@@ -124,7 +124,7 @@ const guides = <AppModule, Guide>{
   ),
   AppModule.socialization: Guide(
     AppModule.socialization,
-    'Szczenię najłatwiej oswaja świat do ok. 16. tygodnia życia, ale dorosły pies też się uczy. Pokazuj nowe rzeczy z dystansu, krótko i z nagrodą. Pies może zawsze się wycofać.',
+    'Szczenię najłatwiej oswaja świat w okresie wrażliwym (ok. 3.–14. tydzień życia), później idzie to wolniej, ale dorosły pies też się uczy. Pokazuj nowe rzeczy z dystansu, krótko i z nagrodą. Pies może zawsze się wycofać.',
     statusLabels: ['Do poznania', 'Oswajamy', 'Bez stresu'],
     [
       GuideExercise('so_people', 'Różni ludzie', 'Spokój przy obcych osobach.', [
@@ -136,7 +136,7 @@ const guides = <AppModule, Guide>{
         'Wybieraj spokojne, zrównoważone psy znajomych.',
         'Krótkie powitania (3 sekundy), potem odwołaj i nagródź.',
         'Unikaj przypadkowych psów na smyczy i zatłoczonych wybiegów.',
-      ], 'Jedno złe doświadczenie potrafi zostać na długo.'),
+      ], 'Jedno złe doświadczenie potrafi zostać na długo. Szczenię przed pełnym szczepieniem poznaje tylko zdrowe, zaszczepione psy w czystym miejscu – zapytaj lekarza o bezpieczny plan.'),
       GuideExercise('so_sounds', 'Dźwięki', 'Brak lęku przed hałasem.', [
         'Odtwarzaj nagrania: burza, fajerwerki, odkurzacz, dzwonek, płacz dziecka.',
         'Zacznij bardzo cicho podczas jedzenia lub zabawy.',
@@ -212,7 +212,7 @@ const guides = <AppModule, Guide>{
   ),
   AppModule.agility: Guide(
     AppModule.agility,
-    'Agility to tor przeszkód pokonywany na czas. Zaczynamy od podstaw prowadzenia i niskich przeszkód. Pełne skoki dopiero po zakończeniu wzrostu (12–18 mies. zależnie od rasy).',
+    'Agility to tor przeszkód pokonywany na czas. Zaczynamy od podstaw prowadzenia i niskich przeszkód. Pełna wysokość skoków, przeszkody kontaktowe w pełnej wysokości i dużo powtórzeń slalomu dopiero po zakończeniu wzrostu (zwykle 12–18 mies., u ras dużych i olbrzymich później – w razie wątpliwości zapytaj lekarza). Przed każdym treningiem rozgrzewka; pies powinien mieć dobrą kondycję i prawidłową masę ciała.',
     discipline: Discipline.condition,
     [
       GuideExercise('ag_handling', 'Prowadzenie po obu stronach', 'Pies biegnie przy lewej i prawej nodze.', [
@@ -233,8 +233,8 @@ const guides = <AppModule, Guide>{
       GuideExercise('ag_weave', 'Slalom', 'Wejście w slalom i rytm.', [
         'Zacznij od 2 tyczek (metoda 2×2): pies przechodzi między nimi.',
         'Dodawaj kolejne pary i zmieniaj kąt wejścia.',
-        'Zawsze wejście z prawym barkiem psa przy pierwszej tyczce.',
-      ], 'To najtrudniejsza przeszkoda – potrzebuje miesięcy.'),
+        'Pierwsza tyczka zawsze przy lewym barku psa – pies wchodzi między 1. a 2. tyczkę od jej prawej strony.',
+      ], 'To najtrudniejsza przeszkoda – potrzebuje miesięcy. U młodego psa tylko krótkie sesje, bo slalom mocno obciąża kręgosłup i barki.'),
       GuideExercise('ag_contact', 'Strefy kontaktowe', 'Pies dotyka strefy na kładce, A-ramie, huśtawce.', [
         'Naucz pozycji na końcu deski: 2 łapy na desce, 2 na ziemi.',
         'Najpierw na niskiej desce na ziemi, potem na przeszkodzie.',
@@ -268,9 +268,9 @@ const guides = <AppModule, Guide>{
         'Ucz „wolno” przed stromymi zejściami.',
       ], 'Te same komendy przydadzą się w canicrossie.'),
       GuideExercise('dt_distance', 'Budowanie dystansu', 'Bezpieczne zwiększanie kilometrów.', [
-        'Zwiększaj tygodniowy dystans maksymalnie o ok. 10%.',
+        'Zwiększaj tygodniowy dystans stopniowo – orientacyjnie o ok. 10% (to umowna zasada ze sportu ludzi, nie granica bezpieczeństwa).',
         'Co 3–4 tygodnie lżejszy tydzień.',
-        'Długie trasy tylko z dorosłym, zdrowym psem.',
+        'Długie trasy tylko z dorosłym psem po zakończeniu wzrostu i po kontroli u weterynarza. Szczenię i senior – krótkie odcinki.',
       ], 'Dystans tygodniowy widzisz w Statystykach.'),
       GuideExercise('dt_terrain', 'Teren i przewyższenia', 'Pies radzi sobie w górach i lesie.', [
         'Zacznij od pagórków, potem dłuższe podejścia.',
@@ -296,7 +296,7 @@ const guides = <AppModule, Guide>{
   ),
   AppModule.protection: Guide(
     AppModule.protection,
-    'Obrona (dział C w IGP) to sport, nie szkolenie psa do atakowania ludzi. Ćwicz wyłącznie w klubie, pod okiem doświadczonego pozoranta i instruktora.',
+    'Obrona (dział C w IGP) to sport, nie szkolenie psa do atakowania ludzi. Ćwicz wyłącznie w klubie, pod okiem doświadczonego pozoranta i instruktora. Pies musi być zdrowy i dojrzały fizycznie – u młodego psa tylko zabawa i budowanie chwytu bez szarpania i obciążeń.',
     discipline: Discipline.igp,
     warning: 'Nie ćwicz obrony samodzielnie. Do egzaminu IGP pies musi mieć zdany BH-VT.',
     [
@@ -308,7 +308,7 @@ const guides = <AppModule, Guide>{
       GuideExercise('pr_grip', 'Pełny, spokojny chwyt', 'Chwyt całym pyskiem, bez przechwytywania.', [
         'Pozorant prezentuje szarpak/rękaw tak, by ułatwić pełny chwyt.',
         'Nagrodą jest wygrana zdobycz.',
-        'Pozorant stopniowo dodaje lekki nacisk i ruch.',
+        'Pozorant stopniowo dodaje lekki nacisk i ruch – u młodego psa bez podnoszenia i gwałtownego szarpania.',
       ], 'Jakość chwytu buduje się latami – bez pośpiechu.'),
       GuideExercise('pr_out', 'Puść (aus)', 'Pies puszcza na komendę i pilnuje.', [
         'Pozorant zamiera, zdobycz staje się „martwa”.',
@@ -326,7 +326,7 @@ const guides = <AppModule, Guide>{
         'Nagradzaj skupienie i spokój.',
       ], 'Kontrola jest tak samo ważna jak chwyt.'),
       GuideExercise('pr_attack', 'Atak z ruchu', 'Pewny chwyt w ruchu – tylko u przygotowanego psa.', [
-        'Wyłącznie po opanowaniu chwytu i „puść”.',
+        'Wyłącznie u dorosłego, przygotowanego kondycyjnie psa, po opanowaniu chwytu i „puść”.',
         'Pozorant ustala odległość i tempo.',
         'Kończ po udanym powtórzeniu.',
       ], 'Decyzję o kolejnych krokach podejmuje instruktor.'),

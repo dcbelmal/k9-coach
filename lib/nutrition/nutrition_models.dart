@@ -325,12 +325,13 @@ enum NutritionGoal {
 enum ActivityLevel {
   low('Spokojny', 'Mało ruchu poza treningami', 0.85),
   normal('Umiarkowany', 'Codzienne spacery, zwykła aktywność', 1.0),
-  high('Bardzo aktywny', 'Dużo swobodnego biegania, pies pracujący', 1.2);
+  high('Bardzo aktywny', 'Dużo swobodnego biegania lub codzienna praca (poza zapisanymi treningami)', 1.2);
 
   final String _label;
   String get label => tr(_label);
   final String _hint;
   String get hint => tr(_hint);
+  /// Dawny mnożnik aktywności (nieużywany w obliczeniach od 0.15 – patrz Energy.adultFactor).
   final double factor;
   const ActivityLevel(this._label, this._hint, this.factor);
 }

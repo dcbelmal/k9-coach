@@ -376,7 +376,10 @@ class NutritionStore extends ChangeNotifier {
     final dog = app.dog;
     if (dog == null || (dog.weightKg ?? 0) <= 0) return null;
     final today = dayOnly(DateTime.now());
-    final key = '${today.toIso8601String()}|${app.trainings.length}|${dog.weightKg}|${dog.targetWeightKg}|${entries.length}';
+    final st = settings;
+    final key = '${today.toIso8601String()}|${app.trainings.length}|${dog.weightKg}|${dog.targetWeightKg}|${dog.bcs}|'
+        '${dog.birthDate}|${dog.breedId}|${entries.length}|${st.goal}|${st.activity}|${st.neutered}|${st.adjustPct}|'
+        '${mainProduct?.kcalPerGram}';
     if (_planCache != null && _planKey == key) return _planCache;
     _planKey = key;
     _planCache = planFor(today);
