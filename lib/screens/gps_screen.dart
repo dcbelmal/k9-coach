@@ -200,12 +200,13 @@ class _GpsScreenState extends State<GpsScreen> {
       }
     }
     if (!mounted) return;
-    if (weather != null && weather!.risk == 2 && _rec.discipline.hasDistance) {
+    final heat = _heat();
+    if (weather != null && heat != null && heat.level == 2 && _rec.discipline.hasDistance) {
       final go = await showDialog<bool>(
         context: context,
         builder: (c) => AlertDialog(
-          title: Text(tr('Za gorąco')),
-          content: Text(tr('{0}°C, odczuwalna {1}°C.\n\n{2}', [fmtNum(weather!.temp), fmtNum(weather!.feels), weather!.advice])),
+          title: Text(tr('Wysokie ryzyko przegrzania')),
+          content: Text(tr('{0}°C, odczuwalna {1}°C.\n\n{2}', [fmtNum(weather!.temp), fmtNum(weather!.feels), [heat.advice, if (heat.reasons.isNotEmpty) tr('Czynniki: {0}.', [heat.reasons.join(', ')])].join('\n\n')])),
           actions: [
             TextButton(onPressed: () => Navigator.pop(c, false), child: Text(tr('Rezygnuję'))),
             TextButton(onPressed: () => Navigator.pop(c, true), child: Text(tr('Startuję mimo to'))),
@@ -686,6 +687,18 @@ class _GpsScreenState extends State<GpsScreen> {
     );
   }
 
+  /// Ocena ryzyka cieplnego dla wybranej dyscypliny, planowanego czasu i psa.
+  HeatAssessment? _heat() {
+    final w = weather;
+    if (w == null) return null;
+    final d = _rec.discipline;
+    final high = d == Discipline.canicross || d == Discipline.bikejoring || d == Discipline.condition;
+    return w.assess(
+        highIntensity: high,
+        plannedMin: _rec.targetMin > 0 ? _rec.targetMin : null,
+        dog: HeatDogFactors.of(AppStore.instance.dog));
+  }
+
   Widget _weatherCard() {
     if (weatherLoading) {
       return K9Card(
@@ -707,7 +720,7 @@ class _GpsScreenState extends State<GpsScreen> {
             SizedBox(width: 12),
             Expanded(
               child: Text(
-                tr('Brak danych o pogodzie. Przy ponad 15°C biegnij krócej i zabierz wodę.'),
+                tr('Brak danych o pogodzie. W ciepły, wilgotny lub słoneczny dzień biegnij krócej, rób przerwy w cieniu i zabierz wodę.'),
                 style: TextStyle(color: K9.muted, fontSize: 13),
               ),
             ),
@@ -715,7 +728,8 @@ class _GpsScreenState extends State<GpsScreen> {
         ),
       );
     }
-    final c = switch (w.risk) {
+    final h = _heat()!;
+    final c = switch (h.level) {
       2 => K9.red,
       1 => K9.yellow,
       _ => K9.green,
@@ -724,7 +738,7 @@ class _GpsScreenState extends State<GpsScreen> {
       gradient: LinearGradient(colors: [K9.card, c.withValues(alpha: 0.18)]),
       child: Row(
         children: [
-          IconBadge(w.risk == 0 ? Icons.wb_sunny_rounded : Icons.thermostat_rounded, c),
+          IconBadge(h.level == 0 ? Icons.wb_sunny_rounded : Icons.thermostat_rounded, c),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -735,7 +749,14 @@ class _GpsScreenState extends State<GpsScreen> {
                   style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 4),
-                Text(w.advice, style: TextStyle(color: c, fontSize: 12.5)),
+                Text(h.advice, style: TextStyle(color: c, fontSize: 12.5)),
+                if (h.reasons.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(tr('Czynniki: {0}.', [h.reasons.join(', ')]), style: const TextStyle(color: K9.muted, fontSize: 12)),
+                  ),
+                Text(tr('Temperatura odczuwalna liczona jest dla ludzi – pies chłodzi się dyszeniem, więc wilgotność i słońce znaczą dla niego więcej. To szacunek, nie gwarancja bezpieczeństwa.'),
+                    style: const TextStyle(color: K9.faint, fontSize: 11)),
               ],
             ),
           ),

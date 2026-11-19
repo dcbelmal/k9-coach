@@ -99,7 +99,8 @@ class Track {
             m += _dist(s[k - 1].ll, s[k].ll);
           }
           final dt = s[b].t - s[a].t;
-          if (dt > 0) res.add((s[b].t, math.min(m / dt * 3.6, 60)));
+          // Krótkie okno na końcu segmentu (kilka sekund) daje zawyżone prędkości z szumu GPS.
+          if (dt >= step / 2) res.add((s[b].t, math.min(m / dt * 3.6, 60)));
           a = b;
         }
       }
