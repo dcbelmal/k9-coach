@@ -13,6 +13,7 @@ import '../nutrition/screens/products_screen.dart';
 import '../nutrition/screens/treat_training_screen.dart';
 import 'shows.dart';
 import '../l10n/l10n.dart';
+import '../modules/modules_ui.dart';
 
 final _store = AppStore.instance;
 
@@ -90,7 +91,7 @@ class _TrainingFormState extends State<_TrainingForm> {
   void initState() {
     super.initState();
     final e = widget.existing;
-    disc = e?.discipline ?? widget.discipline ?? Discipline.igp;
+    disc = e?.discipline ?? widget.discipline ?? _store.lastDiscipline ?? Discipline.igp;
     final now = DateTime.now();
     date = e?.date ?? widget.date ?? DateTime(now.year, now.month, now.day, now.hour, 0);
     done = e?.done ?? !widget.planned;
@@ -120,7 +121,7 @@ class _TrainingFormState extends State<_TrainingForm> {
               : () async {
                   if (await confirmDelete(context, 'trening')) {
                     if (!context.mounted) return;
-                    if (!await saveGuarded(context, () => _store.deleteTraining(widget.existing!))) {
+                    if (!await saveGuarded(context, () => _store.deleteTraining(widget.existing!), done: tr('Usunięto'))) {
                       return;
                     }
                     if (context.mounted) Navigator.pop(context);
@@ -324,7 +325,7 @@ class _HealthFormState extends State<_HealthForm> {
               : () async {
                   if (await confirmDelete(context, 'wpis')) {
                     if (!context.mounted) return;
-                    if (!await saveGuarded(context, () => _store.deleteHealth(widget.existing!))) {
+                    if (!await saveGuarded(context, () => _store.deleteHealth(widget.existing!), done: tr('Usunięto'))) {
                       return;
                     }
                     if (context.mounted) Navigator.pop(context);
@@ -487,7 +488,7 @@ class _EventFormState extends State<_EventForm> {
               : () async {
                   if (await confirmDelete(context, 'wydarzenie')) {
                     if (!context.mounted) return;
-                    if (!await saveGuarded(context, () => _store.deleteEvent(widget.existing!))) {
+                    if (!await saveGuarded(context, () => _store.deleteEvent(widget.existing!), done: tr('Usunięto'))) {
                       return;
                     }
                     if (context.mounted) Navigator.pop(context);
@@ -618,94 +619,104 @@ class _WeightFormState extends State<_WeightForm> {
 }
 
 /// Szybkie dodawanie (środkowy przycisk „+”).
+/// Wszystko widoczne od razu, w grupach. Trening na górze jako duże przyciski.
 Future<void> openQuickAdd(BuildContext context) {
-  // Wszystkie ikony w jednym kolorze Valkor. Najczęstsze na wierzchu, reszta pod „Więcej”.
-  final main = <(IconData, String, VoidCallback)>[
-    (Icons.route_rounded, tr('Trening GPS'), () => openGps(context)),
-    (Icons.directions_run_rounded, tr('Trening'), () => openTrainingForm(context)),
-    (Icons.restaurant_rounded, tr('Karmienie'), () => openFeedingForm(context)),
-    (Icons.vaccines_rounded, tr('Zdrowie'), () => openHealthForm(context)),
-    (Icons.monitor_weight_rounded, tr('Waga'), () => openWeightForm(context)),
-    (Icons.event_rounded, tr('Wydarzenie'), () => openEventForm(context)),
-  ];
-  final more = <(IconData, String, VoidCallback)>[
+  final groups = <(String, List<(IconData, String, VoidCallback)>)>[
     (
-      Icons.event_available_rounded,
-      tr('Plan treningu'),
-      () => openTrainingForm(context,
-          planned: true, date: dayOnly(DateTime.now()).add(const Duration(days: 1, hours: 17)))
+      tr('Codziennie'),
+      [
+        (Icons.restaurant_rounded, tr('Karmienie'), () => openFeedingForm(context)),
+        (Icons.cookie_rounded, tr('Przysmak'), () => openFeedingForm(context, kind: FeedKind.treat)),
+        (Icons.monitor_weight_rounded, tr('Waga'), () => openWeightForm(context)),
+        (
+          Icons.event_available_rounded,
+          tr('Plan treningu'),
+          () => openTrainingForm(context,
+              planned: true, date: dayOnly(DateTime.now()).add(const Duration(days: 1, hours: 17)))
+        ),
+      ]
     ),
-    (Icons.cookie_rounded, tr('Przysmak'), () => openFeedingForm(context, kind: FeedKind.treat)),
-    (Icons.qr_code_scanner_rounded, tr('Skanuj karmę'), () => addProductFlow(context)),
-    (Icons.sports_rounded, tr('Trening z nagrodami'), () => openTreatTraining(context)),
-    (Icons.emoji_events_rounded, tr('Wystawa'), () => openShowForm(context)),
-    (Icons.description_rounded, tr('Dokument'), () => openDocumentForm(context)),
-    (Icons.backpack_rounded, tr('Sprzęt'), () => openGearForm(context)),
+    (
+      tr('Zdrowie i dokumenty'),
+      [
+        (Icons.vaccines_rounded, tr('Zdrowie'), () => openHealthForm(context)),
+        (Icons.description_rounded, tr('Dokument'), () => openDocumentForm(context)),
+        (Icons.event_rounded, tr('Wydarzenie'), () => openEventForm(context)),
+        (Icons.qr_code_scanner_rounded, tr('Skanuj karmę'), () => addProductFlow(context)),
+      ]
+    ),
+    (
+      tr('Sport i wystawy'),
+      [
+        (Icons.emoji_events_rounded, tr('Wystawa'), () => openShowForm(context)),
+        (Icons.backpack_rounded, tr('Sprzęt'), () => openGearForm(context)),
+        (Icons.sports_rounded, tr('Trening z nagrodami'), () => openTreatTraining(context)),
+      ]
+    ),
   ];
-  var showMore = false;
   return showModalBottomSheet(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
     builder: (c) {
-      Widget tile((IconData, String, VoidCallback) e) => K9Card(
-            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 6),
-            onTap: () {
-              Navigator.pop(c);
-              e.$3();
-            },
-            child: Column(children: [
-              IconBadge(e.$1, K9.orange, size: 46),
-              const SizedBox(height: 10),
-              Text(e.$2,
-                  textAlign: TextAlign.center,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
-            ]),
-          );
-      Widget grid(List<(IconData, String, VoidCallback)> items) => GridView.count(
-            crossAxisCount: 3,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: 12,
-            crossAxisSpacing: 12,
-            childAspectRatio: 1.05,
-            padding: EdgeInsets.zero,
-            children: [for (final e in items) tile(e)],
-          );
-      Widget row((IconData, String, VoidCallback) e) => ListRow(
-            icon: e.$1,
-            color: K9.orange,
-            title: e.$2,
-            onTap: () {
-              Navigator.pop(c);
-              e.$3();
-            },
-          );
-      return StatefulBuilder(
-        builder: (c2, setState) => SingleChildScrollView(
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(20, 0, 20, 28 + MediaQuery.viewPaddingOf(c).bottom),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                SheetTitle(tr('Dodaj')),
-                grid(main),
-                const SizedBox(height: 8),
-                TextButton.icon(
-                  onPressed: () => setState(() => showMore = !showMore),
-                  icon: Icon(showMore ? Icons.expand_less_rounded : Icons.expand_more_rounded),
-                  label: Text(showMore ? tr('Mniej') : tr('Więcej')),
+      void go(VoidCallback f) {
+        Navigator.pop(c);
+        f();
+      }
+
+      Widget groupGrid(List<(IconData, String, VoidCallback)> items) => Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (var i = 0; i < 4; i++) ...[
+                if (i > 0) const SizedBox(width: 10),
+                Expanded(
+                  child: i < items.length
+                      ? LabeledTile(icon: items[i].$1, label: items[i].$2, onTap: () => go(items[i].$3))
+                      : const SizedBox(),
                 ),
-                if (showMore)
-                  K9Card(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                    child: Column(children: [for (final e in more) row(e)]),
-                  ),
               ],
-            ),
+            ],
+          );
+      Widget label(String t) => Padding(
+            padding: const EdgeInsets.only(top: 18, bottom: 10),
+            child: Text(t.toUpperCase(),
+                style: const TextStyle(
+                    fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 1, color: K9.muted)),
+          );
+      return SingleChildScrollView(
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(20, 0, 20, 28 + MediaQuery.viewPaddingOf(c).bottom),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SheetTitle(tr('Dodaj')),
+              label(tr('Trening')),
+              Row(children: [
+                Expanded(
+                  child: SizedBox(
+                    height: 54,
+                    child: FilledButton.icon(
+                      onPressed: () => go(() => openGps(context)),
+                      icon: const Icon(Icons.route_rounded),
+                      label: Text(tr('Z GPS'), maxLines: 1, overflow: TextOverflow.ellipsis),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: SizedBox(
+                    height: 54,
+                    child: OutlinedButton.icon(
+                      onPressed: () => go(() => openTrainingForm(context)),
+                      icon: const Icon(Icons.edit_note_rounded),
+                      label: Text(tr('Ręcznie'), maxLines: 1, overflow: TextOverflow.ellipsis),
+                    ),
+                  ),
+                ),
+              ]),
+              for (final g in groups) ...[label(g.$1), groupGrid(g.$2)],
+            ],
           ),
         ),
       );

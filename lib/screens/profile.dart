@@ -47,7 +47,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 tooltip: tr('Moje psy'),
                 icon: const Icon(Icons.swap_horiz_rounded, color: K9.orange),
               ),
-              IconButton(
+              IconButton(tooltip: tr('Edytuj'), 
                 onPressed: () => Navigator.of(context)
                     .push(MaterialPageRoute(builder: (_) => DogEditScreen(existing: dog))),
                 icon: const Icon(Icons.edit_outlined, color: K9.orange),
@@ -91,7 +91,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   Positioned(
                     right: 10,
                     bottom: 10,
-                    child: IconButton.filled(
+                    child: IconButton.filled(tooltip: tr('Zmień zdjęcie'), 
                       style: IconButton.styleFrom(backgroundColor: Colors.black54),
                       onPressed: () => pickDogPhoto(context, dog),
                       icon: const Icon(Icons.photo_camera_outlined, color: K9.text),
@@ -227,7 +227,7 @@ class WeightHistory extends StatelessWidget {
               contentPadding: EdgeInsets.zero,
               title: Text(tr('{0} kg', [fmtNum(e.kg)]), style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
               subtitle: Text(fmtDate(e.date), style: const TextStyle(color: K9.muted)),
-              trailing: IconButton(
+              trailing: IconButton(tooltip: tr('Usuń'), 
                 icon: const Icon(Icons.delete_outline_rounded, color: K9.faint, size: 20),
                 onPressed: () async {
                   if (await confirmDelete(context, tr('pomiar {0} kg', [fmtNum(e.kg)]))) s.deleteWeight(e);
@@ -326,7 +326,7 @@ class _Settings extends StatelessWidget {
             final name = s.dog?.name ?? '';
             if (await confirmDelete(context, tr('{0} – profil, treningi i wszystkie wpisy', [name]))) {
               if (!context.mounted) return;
-              await saveGuarded(context, DogProfiles.instance.deleteActive);
+              await saveGuarded(context, DogProfiles.instance.deleteActive, done: tr('Usunięto'));
             }
           },
         ),

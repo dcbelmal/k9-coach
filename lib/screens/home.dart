@@ -105,7 +105,17 @@ class _Hero extends StatelessWidget {
             DogSwitchButton(dog: dog),
             IconButton(
               onPressed: () => showReminders(context),
-              icon: const Icon(Icons.notifications_none_rounded, size: 26),
+              icon: Builder(builder: (_) {
+                // Licznik terminów na najbliższe 7 dni.
+                final n = AppStore.instance.upcoming(days: 7, limit: 99).length;
+                return Badge(
+                  isLabelVisible: n > 0,
+                  backgroundColor: K9.orange,
+                  textColor: Colors.black,
+                  label: Text('$n'),
+                  child: const Icon(Icons.notifications_none_rounded, size: 26),
+                );
+              }),
               tooltip: tr('Przypomnienia'),
             ),
           ]),

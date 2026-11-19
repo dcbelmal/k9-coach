@@ -470,7 +470,7 @@ class _MatingFormState extends State<_MatingForm> {
             : () async {
                 if (await confirmDelete(context, tr('krycie z {0}{1}', [fmtDate(e.first), e.litter != null ? tr(' (razem z miotem)') : '']))) {
                   if (!context.mounted) return;
-                  if (!await saveGuarded(context, () => BreedingStore.instance.delete(e))) return;
+                  if (!await saveGuarded(context, () => BreedingStore.instance.delete(e), done: tr('Usunięto'))) return;
                   if (context.mounted) Navigator.pop(context);
                 }
               },

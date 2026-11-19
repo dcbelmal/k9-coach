@@ -60,6 +60,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                     child: Text(tr('Kalendarz'), style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
                   ),
                   IconButton(
+                    tooltip: tr('Dodaj'),
                     onPressed: () => openEventForm(context, date: selected),
                     icon: const Icon(Icons.add_circle_outline_rounded, color: K9.orange, size: 28),
                   ),
@@ -73,6 +74,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                     Row(
                       children: [
                         IconButton(
+                          tooltip: tr('Poprzedni'),
                           onPressed: () => setState(() => month = DateTime(month.year, month.month - 1)),
                           icon: const Icon(Icons.chevron_left_rounded),
                         ),
@@ -88,6 +90,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                           ),
                         ),
                         IconButton(
+                          tooltip: tr('Następny'),
                           onPressed: () => setState(() => month = DateTime(month.year, month.month + 1)),
                           icon: const Icon(Icons.chevron_right_rounded),
                         ),

@@ -190,7 +190,7 @@ class _GearFormState extends State<_GearForm> {
               : () async {
                   if (await confirmDelete(context, tr('sprzęt'))) {
                     if (!context.mounted) return;
-                    if (!await saveGuarded(context, () => _s.deleteGear(widget.existing!))) return;
+                    if (!await saveGuarded(context, () => _s.deleteGear(widget.existing!), done: tr('Usunięto'))) return;
                     if (context.mounted) Navigator.pop(context);
                   }
                 }),

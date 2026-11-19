@@ -268,7 +268,7 @@ class _HeatFormState extends State<_HeatForm> {
             : () async {
                 if (await confirmDelete(context, tr('wpis cieczki'))) {
                   if (!context.mounted) return;
-                  if (!await saveGuarded(context, () => HeatStore.instance.delete(e))) {
+                  if (!await saveGuarded(context, () => HeatStore.instance.delete(e), done: tr('Usunięto'))) {
                     return;
                   }
                   if (context.mounted) Navigator.pop(context);

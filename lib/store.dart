@@ -439,6 +439,15 @@ class AppStore extends ChangeNotifier {
 
   Iterable<TrainingSession> get doneTrainings => trainings.where((t) => t.done);
 
+  /// Dyscyplina ostatniego wykonanego treningu (domyślna w nowych formularzach).
+  Discipline? get lastDiscipline {
+    TrainingSession? last;
+    for (final t in doneTrainings) {
+      if (last == null || t.date.isAfter(last.date)) last = t;
+    }
+    return last?.discipline;
+  }
+
   PeriodStats statsBetween(DateTime from, DateTime to) {
     var c = 0, m = 0;
     var km = 0.0;

@@ -490,7 +490,7 @@ class _ProductFormState extends State<_ProductForm> {
             : () async {
                 if (await confirmDelete(context, widget.existing!.title)) {
                   if (!context.mounted) return;
-                  if (!await saveGuarded(context, () => _n.deleteProduct(widget.existing!))) return;
+                  if (!await saveGuarded(context, () => _n.deleteProduct(widget.existing!), done: tr('Usunięto'))) return;
                   if (context.mounted) Navigator.pop(context);
                 }
               },
@@ -541,7 +541,7 @@ class _ProductFormState extends State<_ProductForm> {
         keyboardType: TextInputType.number,
         decoration: InputDecoration(
           labelText: tr('Kod kreskowy (EAN)'),
-          suffixIcon: IconButton(icon: const Icon(Icons.qr_code_scanner_rounded, color: K9.orange), onPressed: _scan),
+          suffixIcon: IconButton(tooltip: tr('Skanuj kod kreskowy'), icon: const Icon(Icons.qr_code_scanner_rounded, color: K9.orange), onPressed: _scan),
         ),
       ),
       gap16,

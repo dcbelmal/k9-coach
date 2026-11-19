@@ -94,18 +94,29 @@ class _DiaryScreenState extends State<DiaryScreen> {
     }
 
     return [
-      Row(children: [
-        IconButton(
+      Row(
+        children: [
+          IconButton(
+            tooltip: tr('Poprzedni'),
             onPressed: () => setState(() => day = day.subtract(const Duration(days: 1))),
-            icon: const Icon(Icons.chevron_left_rounded)),
-        Expanded(
-          child: Text(sameDay(day, DateTime.now()) ? tr('Dziś, {0}', [fmtDate(day)]) : '${fmtWeekday(day)}, ${fmtDate(day)}',
-              textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-        ),
-        IconButton(
-            onPressed: sameDay(day, DateTime.now()) ? null : () => setState(() => day = day.add(const Duration(days: 1))),
-            icon: const Icon(Icons.chevron_right_rounded)),
-      ]),
+            icon: const Icon(Icons.chevron_left_rounded),
+          ),
+          Expanded(
+            child: Text(
+              sameDay(day, DateTime.now()) ? tr('Dziś, {0}', [fmtDate(day)]) : '${fmtWeekday(day)}, ${fmtDate(day)}',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+            ),
+          ),
+          IconButton(
+            tooltip: tr('Następny'),
+            onPressed: sameDay(day, DateTime.now())
+                ? null
+                : () => setState(() => day = day.add(const Duration(days: 1))),
+            icon: const Icon(Icons.chevron_right_rounded),
+          ),
+        ],
+      ),
       if (plan != null)
         K9Card(
           child: Row(children: [
