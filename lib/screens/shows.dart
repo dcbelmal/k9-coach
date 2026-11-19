@@ -286,7 +286,8 @@ class _ChampRow extends StatelessWidget {
               color: done ? K9.green : K9.faint, size: 20),
           const SizedBox(width: 10),
           Expanded(child: Text(st.champ.label, style: const TextStyle(fontWeight: FontWeight.w600))),
-          Text(st.summary, style: const TextStyle(color: K9.muted, fontSize: 12.5)),
+          Text(st.cannotVerify ? tr('Nie można zweryfikować') : st.summary,
+              style: TextStyle(color: st.cannotVerify ? K9.yellow : K9.muted, fontSize: 12.5)),
           const Icon(Icons.chevron_right_rounded, color: K9.faint, size: 18),
         ]),
         const SizedBox(height: 8),
@@ -324,8 +325,8 @@ void _showRules(BuildContext context, ChampStatus st) {
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 6),
             child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Icon(r.ok ? Icons.check_circle_rounded : Icons.cancel_outlined,
-                  color: r.ok ? K9.green : K9.faint, size: 20),
+              Icon(r.ok ? Icons.check_circle_rounded : (r.unknown ? Icons.help_outline_rounded : Icons.cancel_outlined),
+                  color: r.ok ? K9.green : (r.unknown ? K9.yellow : K9.faint), size: 20),
               const SizedBox(width: 10),
               Expanded(child: Text(r.text, style: const TextStyle(fontSize: 14.5))),
             ]),
@@ -337,12 +338,14 @@ void _showRules(BuildContext context, ChampStatus st) {
             Text(tr('Zasada'), style: TextStyle(fontWeight: FontWeight.w700)),
             const SizedBox(height: 6),
             Text(st.rule, style: const TextStyle(color: Color(0xFFCFCFD4), fontSize: 13.5, height: 1.4)),
+            const SizedBox(height: 8),
+            Text(tr(champRulesSource), style: const TextStyle(color: K9.faint, fontSize: 11.5)),
           ]),
         ),
         if (st.champ == Championship.inter) ...[
           gap12,
           Text(
-              tr('Rasy z grup I–III domyślnie traktuję jako podlegające próbom pracy. Możesz to zmienić w profilu psa. Zdaną próbę zaznacz w Celach (np. IGP 1 – zaliczone).'),
+              tr('To, czy rasa podlega próbom pracy, wynika z nomenklatury FCI dla danej rasy (nie z numeru grupy). Ustaw to w profilu psa. Zdaną próbę zaznacz w Celach (np. IGP 1 – zaliczone).'),
               style: TextStyle(color: K9.faint, fontSize: 12)),
         ],
       ]),

@@ -50,6 +50,7 @@ class _TrainingFormState extends State<_TrainingForm> {
   late DateTime date;
   late bool done;
   late double rpe;
+  late final Set<String> concerns = {...?widget.existing?.concerns};
   final duration = TextEditingController();
   final distance = TextEditingController();
   final notes = TextEditingController();
@@ -197,6 +198,19 @@ class _TrainingFormState extends State<_TrainingForm> {
           inactiveColor: K9.cardHi,
           onChanged: (v) => setState(() => rpe = v),
         ),
+        if (done) ...[
+          Text(tr('Samopoczucie psa (zaznacz, jeśli gorzej niż zwykle)'), style: const TextStyle(color: K9.muted, fontSize: 12.5)),
+          const SizedBox(height: 6),
+          Wrap(spacing: 8, runSpacing: 4, children: [
+            for (final c in recoverySigns)
+              FilterChip(
+                label: Text(tr(c), style: const TextStyle(fontSize: 12.5)),
+                selected: concerns.contains(c),
+                onSelected: (v) => setState(() => v ? concerns.add(c) : concerns.remove(c)),
+              ),
+          ]),
+          gap12,
+        ],
         TextField(
           controller: notes,
           maxLines: 3,
@@ -236,6 +250,7 @@ class _TrainingFormState extends State<_TrainingForm> {
                     movingSec: widget.existing?.movingSec,
                     maxSpeedKmh: widget.existing?.maxSpeedKmh,
                     bestKmSec: widget.existing?.bestKmSec,
+                    concerns: done ? [for (final c in recoverySigns) if (concerns.contains(c)) c] : [],
                   );
                   setState(() => _saving = true);
                   final ok = await saveGuarded(context, () => _store.upsertTraining(t));

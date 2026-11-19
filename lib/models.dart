@@ -268,6 +268,16 @@ enum Discipline {
       };
 }
 
+/// Prosta, subiektywna ocena samopoczucia psa po treningu – zaznacza się tylko
+/// to, co było gorsze niż zwykle (polskie klucze tłumaczeń).
+const recoverySigns = <String>[
+  'Mniej energii niż zwykle',
+  'Słabszy apetyt',
+  'Mniejsza chęć do pracy',
+  'Sztywność, kulawizna lub dyskomfort',
+  'Gorsze ogólne samopoczucie',
+];
+
 class TrainingSession {
   final String id;
   Discipline discipline;
@@ -281,6 +291,9 @@ class TrainingSession {
   int? movingSec; // czas ruchu bez pauz
   double? maxSpeedKmh;
   int? bestKmSec; // najszybszy kilometr
+
+  /// Zaobserwowane sygnały gorszej regeneracji (klucze z [recoverySigns]).
+  List<String> concerns;
 
   bool get hasTrack => trackRef != null;
 
@@ -297,7 +310,8 @@ class TrainingSession {
     this.movingSec,
     this.maxSpeedKmh,
     this.bestKmSec,
-  });
+    List<String>? concerns,
+  }) : concerns = concerns ?? [];
 
   /// Obciążenie treningowe (sesyjne RPE).
   double get load => discipline == Discipline.recovery ? durationMin * 1.0 : durationMin * rpe * 1.0;
@@ -315,6 +329,7 @@ class TrainingSession {
         'movingSec': movingSec,
         'maxSpeed': maxSpeedKmh,
         'bestKm': bestKmSec,
+        if (concerns.isNotEmpty) 'concerns': concerns,
       };
 
   factory TrainingSession.fromJson(Map<String, dynamic> j) => TrainingSession(
@@ -330,6 +345,7 @@ class TrainingSession {
         movingSec: jsonInt(j['movingSec']),
         maxSpeedKmh: (j['maxSpeed'] as num?)?.toDouble(),
         bestKmSec: jsonInt(j['bestKm']),
+        concerns: [for (final c in (j['concerns'] as List? ?? const [])) if (c is String) c],
       );
 }
 
