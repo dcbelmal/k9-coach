@@ -1,8 +1,9 @@
 import '../l10n/l10n.dart';
+import 'breed_profile.dart';
 
-/// Lokalna baza ras (etap 1: nazwa i grupa FCI do wyszukiwarki).
-/// W kolejnym etapie dojdą: numer wzorca FCI, docelowa masa i wzrost,
-/// długość życia, aktywność, żywienie, predyspozycje sportowe i badania.
+/// Lokalna baza ras: nazwa polska i grupa FCI (do wyszukiwarki).
+/// Szczegóły: breed_info.dart (wymiary, badania), breed_profile.dart
+/// (nazwa międzynarodowa, użytkowość, budowa), breed_sports.dart (sporty).
 class Breed {
   final String id;
   final String namePl; // nazwa polska (klucz tłumaczenia)
@@ -16,7 +17,10 @@ class Breed {
   bool matches(String q) {
     final n = _fold(q);
     if (n.isEmpty) return true;
-    return _fold(name).contains(n) || _fold(namePl).contains(n) || aliases.any((a) => _fold(a).contains(n));
+    return _fold(name).contains(n) ||
+        _fold(namePl).contains(n) ||
+        _fold(breedProfiles[id]?.intlName ?? '').contains(n) ||
+        aliases.any((a) => _fold(a).contains(n));
   }
 }
 
@@ -34,10 +38,18 @@ String _fold(String s) {
 const mixedBreedLabel = 'Mieszaniec';
 String get mixedBreedName => tr(mixedBreedLabel);
 
+/// Dawne identyfikatory ras (zapisane w starszych profilach) → aktualne.
+/// „Owczarek tatrzański” to ta sama rasa co polski owczarek podhalański
+/// (FCI nr 252, ang. Tatra Shepherd Dog) – był w bazie podwójnie.
+const legacyBreedIds = <String, String>{'tatra': 'podhalanski'};
+
+String? canonicalBreedId(String? id) => id == null ? null : (legacyBreedIds[id] ?? id);
+
 Breed? breedById(String? id) {
-  if (id == null) return null;
+  final cid = canonicalBreedId(id);
+  if (cid == null) return null;
   for (final b in breeds) {
-    if (b.id == id) return b;
+    if (b.id == cid) return b;
   }
   return null;
 }
@@ -75,7 +87,13 @@ const breeds = <Breed>[
   Breed('collie_rough', 'Owczarek szkocki długowłosy', 1, ['collie', 'rough collie']),
   Breed('sheltie', 'Owczarek szetlandzki', 1, ['sheltie', 'shetland']),
   Breed('pon', 'Polski owczarek nizinny', 1, ['pon']),
-  Breed('podhalanski', 'Polski owczarek podhalański', 1, ['podhalan', 'owczarek podhalański']),
+  Breed('podhalanski', 'Polski owczarek podhalański', 1, [
+    'podhalan',
+    'owczarek podhalański',
+    'owczarek tatrzański',
+    'polski owczarek tatrzański',
+    'tatra shepherd dog',
+  ]),
   Breed('white_swiss', 'Biały owczarek szwajcarski', 1, ['bos', 'berger blanc suisse']),
   Breed('corgi_pembroke', 'Welsh corgi pembroke', 1, ['corgi']),
   Breed('kelpie', 'Australijski kelpie', 1, ['kelpie']),
@@ -109,7 +127,6 @@ const breeds = <Breed>[
   Breed('kangal', 'Owczarek anatolijski', 2, ['kangal']),
   Breed('caucasian', 'Owczarek kaukaski', 2),
   Breed('central_asian', 'Owczarek środkowoazjatycki', 2, ['alabaj']),
-  Breed('tatra', 'Owczarek tatrzański', 1, ['polski owczarek tatrzański']),
   Breed('hovawart', 'Hovawart', 2),
   Breed('entlebucher', 'Entlebucher', 2),
   Breed('appenzeller', 'Appenzeller', 2),

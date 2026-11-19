@@ -123,7 +123,7 @@ class _BreedPickerState extends State<_BreedPicker> {
                     title: Text(b.name),
                     subtitle: Text(fciGroupLabel(b.fciGroup),
                         maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: K9.muted, fontSize: 12)),
-                    trailing: widget.dog.breedId == b.id ? const Icon(Icons.check_rounded, color: K9.orange) : null,
+                    trailing: canonicalBreedId(widget.dog.breedId) == b.id ? const Icon(Icons.check_rounded, color: K9.orange) : null,
                     onTap: () {
                       applyBreed(widget.dog, breed: b);
                       Navigator.pop(context, true);
