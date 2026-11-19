@@ -1921,6 +1921,7 @@ const strings = <String, String>{
   'Rasa użytkowa, ale rzadziej szkolona w IGP – przydatność zależy od charakteru i motywacji psa.': 'سلالة عمل، لكنها أقل تدريبًا في IGP – تعتمد الملاءمة على طبع الكلب ودافعيته.',
   'Aktywny pies pasterski, ale krótkie kończyny i długi tułów – tylko rekreacyjnie.': 'كلب رعي نشيط، لكن الأرجل قصيرة والجسم طويل – للترفيه فقط.',
   'Krótkie dystanse w tempie kłusa, bez mocnego ciągnięcia.': 'مسافات قصيرة بالخبب، دون شدّ قوي.',
+  'Rekreacyjny trucht na luźnej smyczy, bez ciągnięcia i na krótkich odcinkach, to nie canicross – można go rozważyć u zdrowego, szczupłego psa po konsultacji z lekarzem.': 'الهرولة الترفيهية بمقود مرتخٍ، دون شدّ ولمسافات قصيرة، ليست كانيكروس – يمكن النظر فيها لكلب سليم ونحيف بعد استشارة الطبيب البيطري.',
   'Utrzymuj szczupłą sylwetkę.': 'حافظ على نحافة الكلب.',
   'Krótkie kończyny i długi kręgosłup – bieg w uprzęży z ciągnięciem obciąża kręgosłup (ryzyko dyskopatii).': 'أرجل قصيرة وعمود فقري طويل – الجري والجرّ بالحزام يجهدان العمود الفقري (خطر الانزلاق الغضروفي).',
   'Zamiast tego: marsze bez ciągnięcia, nosework, tropienie, rally-O.': 'بدلًا من ذلك: نزهات دون شدّ، أعمال الشم، التتبع، الرالي أو.',

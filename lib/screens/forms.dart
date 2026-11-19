@@ -14,6 +14,7 @@ import '../nutrition/screens/treat_training_screen.dart';
 import 'shows.dart';
 import '../l10n/l10n.dart';
 import '../modules/modules_ui.dart';
+import '../date_math.dart';
 
 final _store = AppStore.instance;
 
@@ -343,7 +344,7 @@ class _HealthFormState extends State<_HealthForm> {
 
   DateTime? _suggestNext() {
     final days = _productInterval[title.text.trim()] ?? _defaultInterval[cat] ?? 0;
-    return days == 0 ? null : date.add(Duration(days: days));
+    return days == 0 ? null : date.plusDays(days);
   }
 
   @override
@@ -515,7 +516,7 @@ class _EventFormState extends State<_EventForm> {
     super.initState();
     final e = widget.existing;
     type = e?.type ?? EventType.competition;
-    final d = widget.date ?? DateTime.now().add(const Duration(days: 1));
+    final d = widget.date ?? DateTime.now().plusDays(1);
     date = e?.date ?? DateTime(d.year, d.month, d.day, 10);
     remind = e?.remind ?? true;
     title.text = e?.title ?? '';
@@ -678,7 +679,7 @@ Future<void> openQuickAdd(BuildContext context) {
           Icons.event_available_rounded,
           tr('Plan treningu'),
           () => openTrainingForm(context,
-              planned: true, date: dayOnly(DateTime.now()).add(const Duration(days: 1, hours: 17)))
+              planned: true, date: dayOnly(DateTime.now()).plusDays(1).copyWith(hour: 17))
         ),
       ]
     ),

@@ -91,7 +91,7 @@ class GpsDraft {
   /// Trening z danych szkicu.
   TrainingSession toTraining({String? trackRef}) {
     final t = track;
-    final splits = t.splits().where((s) => s.meters >= 1000).toList();
+    final splits = t.splits().where((s) => s.meters >= 1000 && s.seconds >= 3600 / Track.maxPlausibleKmh).toList();
     final best = splits.isEmpty ? null : splits.map((s) => s.seconds).reduce(min);
     return TrainingSession(
       id: trainingId,

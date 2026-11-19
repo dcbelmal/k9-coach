@@ -9,6 +9,7 @@ import 'breeding_logic.dart';
 import 'breeding_models.dart';
 import 'breeding_store.dart';
 import '../l10n/l10n.dart';
+import '../date_math.dart';
 
 void openLitter(BuildContext context, Mating m) =>
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => LitterScreen(mating: m)));
@@ -279,7 +280,7 @@ class _PuppyFormState extends State<_PuppyForm> {
             padding: const EdgeInsets.symmetric(vertical: 3),
             child: Row(children: [
               Expanded(
-                child: Text(tr('{0} · {1}. dzień', [fmtDate(w.date), l.born.difference(w.date).inDays.abs()]),
+                child: Text(tr('{0} · {1}. dzień', [fmtDate(w.date), l.born.difference(w.date).inCalDays.abs()]),
                     style: const TextStyle(color: K9.muted, fontSize: 13)),
               ),
               Text(_g(w.grams), style: const TextStyle(fontWeight: FontWeight.w600)),

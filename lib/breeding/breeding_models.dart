@@ -1,5 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 import '../l10n/l10n.dart';
+import '../date_math.dart';
 
 DateTime _day(DateTime d) => DateTime(d.year, d.month, d.day);
 
@@ -92,7 +93,7 @@ class Litter {
   int get females => puppies.where((p) => p.female).length;
 
   /// Wiek miotu w dniach (0 = dzień porodu).
-  int ageDays(DateTime now) => _day(now).difference(_day(born)).inDays;
+  int ageDays(DateTime now) => _day(now).difference(_day(born)).inCalDays;
 
   Map<String, dynamic> toJson() => {
         'born': born.toIso8601String(),

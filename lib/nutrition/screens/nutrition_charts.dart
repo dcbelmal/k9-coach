@@ -8,6 +8,7 @@ import '../../theme.dart';
 import '../../widgets/common.dart';
 import '../nutrition_store.dart';
 import '../../l10n/l10n.dart';
+import '../../date_math.dart';
 
 final _n = NutritionStore.instance;
 
@@ -41,7 +42,7 @@ class _NutritionChartsCardState extends State<NutritionChartsCard> {
         final pcs = days.fold(0.0, (a, d) => a + d.treatPieces);
         caption = 'Kalorie z przysmaków · razem ${fmtNum(pcs, 0)} szt. w ${days.length} dni.';
       case 3:
-        final from = DateTime.now().subtract(const Duration(days: 120));
+        final from = DateTime.now().plusDays(-120);
         final w = AppStore.instance.weights.where((e) => e.date.isAfter(from)).toList();
         chart = w.length < 2
             ? Center(child: Text(tr('Za mało ważeń'), style: const TextStyle(color: K9.muted)))
@@ -59,19 +60,19 @@ class _NutritionChartsCardState extends State<NutritionChartsCard> {
           final opened = dayOnly(f.bag.opened);
           final today = dayOnly(DateTime.now());
           final pts = <FlSpot>[];
-          for (var d = opened; !d.isAfter(today); d = d.add(const Duration(days: 1))) {
+          for (var d = opened; !d.isAfter(today); d = d.plusDays(1)) {
             final used = _n.entries
                 .where((e) =>
-                    e.productId == f.bag.productId && !e.date.isBefore(f.bag.opened) && e.date.isBefore(d.add(const Duration(days: 1))))
+                    e.productId == f.bag.productId && !e.date.isBefore(f.bag.opened) && e.date.isBefore(d.plusDays(1)))
                 .fold(0.0, (a, e) => a + e.grams);
-            pts.add(FlSpot(d.difference(opened).inDays.toDouble(), math.max(0, f.bag.initialGrams - used + f.bag.correctionGrams) / 1000));
+            pts.add(FlSpot(d.difference(opened).inCalDays.toDouble(), math.max(0, f.bag.initialGrams - used + f.bag.correctionGrams) / 1000));
           }
-          final tx = today.difference(opened).inDays.toDouble();
-          final ex = f.emptyDate!.difference(opened).inDays.toDouble();
+          final tx = today.difference(opened).inCalDays.toDouble();
+          final ex = f.emptyDate!.difference(opened).inCalDays.toDouble();
           chart = _Line(
             points: pts,
             forecast: [FlSpot(tx, f.remainingGrams / 1000), FlSpot(math.max(ex, tx + 1), 0)],
-            label: (x) => fmtDayMonth(opened.add(Duration(days: x.round()))),
+            label: (x) => fmtDayMonth(opened.plusDays(x.round())),
           );
           caption = tr('Zapas w worku (kg). Przerywana – prognoza: koniec {0}, zakup nowego worka {1}.', [fmtDateShort(f.emptyDate!), fmtDateShort(f.buyDate!)]);
         }

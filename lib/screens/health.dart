@@ -11,9 +11,10 @@ import '../modules/modules_ui.dart';
 import 'forms.dart';
 import '../l10n/l10n.dart';
 import '../dogs/dog_profiles.dart';
+import '../date_math.dart';
 
 Color dueColor(DateTime due) {
-  final days = dayOnly(due).difference(dayOnly(DateTime.now())).inDays;
+  final days = dayOnly(due).difference(dayOnly(DateTime.now())).inCalDays;
   if (days < 0) return K9.red;
   if (days <= 14) return K9.yellow;
   return K9.green;

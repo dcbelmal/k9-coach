@@ -14,6 +14,7 @@ import 'nutrition_forms.dart';
 import 'products_screen.dart';
 import 'treat_training_screen.dart';
 import '../../l10n/l10n.dart';
+import '../../date_math.dart';
 
 final _n = NutritionStore.instance;
 
@@ -525,7 +526,7 @@ class StockScreen extends StatelessWidget {
                   color: K9.faint,
                   title: _n.product(b.productId)?.title ?? tr('Produkt usunięty'),
                   subtitle:
-                      tr('{0} · {1} – {2} ({3} dni)', [fmtGrams(b.initialGrams), fmtDateShort(b.opened), fmtDateShort(b.finished!), b.finished!.difference(b.opened).inDays]),
+                      tr('{0} · {1} – {2} ({3} dni)', [fmtGrams(b.initialGrams), fmtDateShort(b.opened), fmtDateShort(b.finished!), b.finished!.difference(b.opened).inCalDays]),
                   onTap: () => openBagForm(context, existing: b),
                 ),
             ],

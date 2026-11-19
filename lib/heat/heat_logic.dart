@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:material_ui/material_ui.dart';
 import '../l10n/l10n.dart';
+import '../date_math.dart';
 
 DateTime _day(DateTime d) => DateTime(d.year, d.month, d.day);
 DateTime? _date(Object? v) => v is String ? DateTime.tryParse(v) : null;
@@ -92,6 +93,27 @@ class HeatTest {
   }
 }
 
+/// Komentarz do serii wyników progesteronu (nie diagnoza).
+///
+/// Pojedynczy wynik nie potwierdza owulacji: liczy się przebieg serii
+/// (zwykle co 1–3 dni) i ocena lekarza, a normy zależą od metody i laboratorium.
+String? progesteroneSeriesNote(List<HeatTest> tests) {
+  final p = [for (final t in tests) if (t.type == HeatTestType.progesterone && t.ngPerMl != null) t]
+    ..sort((a, b) => a.date.compareTo(b.date));
+  if (p.isEmpty) return null;
+  if (p.length == 1) {
+    return tr('Jeden wynik nie potwierdza owulacji. Potrzebna jest seria badań (zwykle co 1–3 dni), którą ocenia lekarz weterynarii.');
+  }
+  final first = p.first.ngPerMl!, last = p.last.ngPerMl!;
+  if (last > first && last >= 4 && first < 4) {
+    return tr('W serii widać wzrost progesteronu. Czy i kiedy nastąpiła owulacja, ustala lekarz weterynarii – aplikacja nie wpisuje jej sama.');
+  }
+  if (last <= first) {
+    return tr('W serii nie widać wzrostu. Kolejne badania i ich ocenę zaplanuj z lekarzem weterynarii.');
+  }
+  return tr('Seria w toku. Wynik ocenia lekarz weterynarii na podstawie całej serii.');
+}
+
 /// Jedna cieczka (początek = pierwszy dzień krwawienia/obrzęku).
 class HeatCycle {
   final String id;
@@ -122,7 +144,7 @@ class HeatCycle {
   })  : symptoms = symptoms ?? [],
         tests = tests ?? [];
 
-  int? get lengthDays => end == null ? null : _day(end!).difference(_day(start)).inDays + 1;
+  int? get lengthDays => end == null ? null : _day(end!).difference(_day(start)).inCalDays + 1;
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -208,7 +230,7 @@ class HeatStatus {
     this.fertileTo,
   });
 
-  int? daysToNext(DateTime now) => nextStart == null ? null : _day(nextStart!).difference(_day(now)).inDays;
+  int? daysToNext(DateTime now) => nextStart == null ? null : _day(nextStart!).difference(_day(now)).inCalDays;
 
   /// Faza wynika tylko z kalendarza (szacunek), a nie z badań/obserwacji.
   bool get estimated => source == StageSource.calendar;
@@ -247,7 +269,7 @@ class HeatLogic {
     final starts = cycles.map((c) => _day(c.start)).toList()..sort();
     final gaps = <int>[];
     for (var i = 1; i < starts.length; i++) {
-      final g = starts[i].difference(starts[i - 1]).inDays;
+      final g = starts[i].difference(starts[i - 1]).inCalDays;
       if (g >= 100 && g <= 420) gaps.add(g);
     }
     return gaps;
@@ -279,7 +301,7 @@ class HeatLogic {
     final last = sorted.last;
     final today = _day(now);
     final start = _day(last.start);
-    final day = today.difference(start).inDays + 1;
+    final day = today.difference(start).inCalDays + 1;
     final avgLen = averageLength(sorted);
     final ov = last.ovulation == null ? null : _day(last.ovulation!);
 
@@ -289,9 +311,9 @@ class HeatLogic {
     if (last.end != null) {
       heatEnd = _day(last.end!);
     } else if (ov != null) {
-      heatEnd = ov.add(const Duration(days: 8));
+      heatEnd = ov.plusDays(8);
     } else {
-      heatEnd = start.add(const Duration(days: maxLength - 1));
+      heatEnd = start.plusDays(maxLength - 1);
     }
 
     HeatStage stage;
@@ -302,7 +324,7 @@ class HeatLogic {
       final cyto = [for (final t in last.tests) if (t.type == HeatTestType.cytology && t.cytology != null && !_day(t.date).isAfter(today)) t];
       if (ov != null) {
         source = StageSource.ovulation;
-        final d = today.difference(ov).inDays;
+        final d = today.difference(ov).inCalDays;
         stage = d < -2 ? HeatStage.proestrus : (d <= 7 ? HeatStage.estrus : HeatStage.diestrus);
       } else if (cyto.isNotEmpty && cyto.last.cytology != CytologyResult.other) {
         source = StageSource.cytology;
@@ -317,7 +339,7 @@ class HeatLogic {
       } else {
         stage = HeatStage.heat;
       }
-    } else if (today.difference(heatEnd).inDays <= diestrusDays) {
+    } else if (today.difference(heatEnd).inCalDays <= diestrusDays) {
       stage = HeatStage.diestrus;
     } else {
       stage = HeatStage.anestrus;
@@ -329,14 +351,14 @@ class HeatLogic {
       source: source,
       current: active ? last : null,
       day: day,
-      nextStart: start.add(Duration(days: gap)),
+      nextStart: start.plusDays(gap),
       nextSpreadDays: spread(sorted),
       intervalDays: gap,
       intervalFromHistory: fromHistory,
       gapsUsed: _gaps(sorted).length,
       typicalLengthDays: avgLen,
       fertileFrom: ov,
-      fertileTo: ov?.add(const Duration(days: 5)),
+      fertileTo: ov?.plusDays(5),
     );
   }
 }

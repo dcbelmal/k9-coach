@@ -9,13 +9,14 @@ import 'breeding_models.dart';
 import 'breeding_store.dart';
 import 'litter_screen.dart';
 import '../l10n/l10n.dart';
+import '../date_math.dart';
 
 void openBreeding(BuildContext context) =>
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => const BreedingScreen()));
 
 String _countdown(int days) {
   if (days == 0) return tr('dziś');
-  if (days == 1) return 'jutro';
+  if (days == 1) return tr('jutro');
   if (days > 0) return tr('za {0} dni', [days]);
   return tr('{0} dni temu', [-days]);
 }
@@ -102,6 +103,7 @@ class _PregnancyCard extends StatelessWidget {
     final now = DateTime.now();
     final day = PregnancyCalc.dayOf(m, now);
     final left = PregnancyCalc.daysToDue(m, now);
+    final startLeft = PregnancyCalc.daysToWindowStart(m, now);
     final (from, to) = PregnancyCalc.window(m);
     final c = m.status.color;
     return K9Card(
@@ -141,21 +143,27 @@ class _PregnancyCard extends StatelessWidget {
         Row(children: [
           Expanded(
             child: StatValue(
-              label: tr('Przewidywany poród (ok.)'),
-              value: fmtDateShort(PregnancyCalc.due(m)),
+              label: PregnancyCalc.fromOvulation(m) ? tr('Przewidywany poród (ok.)') : tr('Możliwy poród'),
+              value: PregnancyCalc.fromOvulation(m) ? fmtDateShort(PregnancyCalc.due(m)) : '${fmtDateShort(from)} – ${fmtDateShort(to)}',
             ),
           ),
           Expanded(
             child: StatValue(
-              label: tr('Do porodu'),
-              value: PregnancyCalc.daysToWindowEnd(m, now) < 0 ? tr('po terminie') : (left >= 0 ? '$left' : tr('w oknie')),
-              unit: left >= 0 ? tr('dni') : null,
+              label: PregnancyCalc.fromOvulation(m) ? tr('Do porodu') : tr('Do początku okna'),
+              value: PregnancyCalc.daysToWindowEnd(m, now) < 0
+                  ? tr('po terminie')
+                  : PregnancyCalc.fromOvulation(m)
+                      ? (left >= 0 ? '$left' : tr('w oknie'))
+                      : (startLeft > 0 ? '$startLeft' : tr('w oknie')),
+              unit: PregnancyCalc.daysToWindowEnd(m, now) >= 0 && (PregnancyCalc.fromOvulation(m) ? left >= 0 : startLeft > 0) ? tr('dni') : null,
             ),
           ),
         ]),
         const SizedBox(height: 10),
         Text(
-          tr('Okno porodu: {0} – {1}{2}', [fmtDateShort(from), fmtDateShort(to), m.ovulation != null ? tr(' (liczone od owulacji)') : tr(' (szerokie – liczone od krycia; owulacja z badania zawęża okno)')]),
+          m.ovulation != null
+              ? tr('Okno porodu: {0} – {1}{2}', [fmtDateShort(from), fmtDateShort(to), tr(' (liczone od owulacji)')])
+              : tr('Znana jest tylko data krycia, więc nie da się wskazać jednego dnia porodu. Poród zwykle wypada 57–72 dni od krycia. Owulacja potwierdzona badaniem (progesteron) zawęża termin do ok. 62–64 dni.'),
           style: const TextStyle(color: Color(0xFFCFCFD4), fontSize: 13),
         ),
       ]),
@@ -292,7 +300,7 @@ class _Timeline extends StatelessWidget {
               if (isNext)
                 Padding(
                   padding: const EdgeInsets.only(top: 4),
-                  child: Text(_countdown(date.difference(today).inDays),
+                  child: Text(_countdown(date.difference(today).inCalDays),
                       style: const TextStyle(color: K9.orange, fontSize: 12.5, fontWeight: FontWeight.w600)),
                 ),
             ]),
@@ -323,11 +331,13 @@ class _CalculatorState extends State<_Calculator> {
         DateField(label: tr('Data krycia'), value: mating, onChanged: (v) => setState(() => mating = v!)),
         const SizedBox(height: 16),
         Row(children: [
-          Expanded(child: StatValue(label: tr('Przewidywany poród'), value: fmtDateShort(PregnancyCalc.due(m)))),
-          Expanded(child: StatValue(label: tr('Okno porodu'), value: '${fmtDateShort(from)} – ${fmtDateShort(to)}')),
+          Expanded(child: StatValue(label: tr('Możliwy poród'), value: '${fmtDateShort(from)} – ${fmtDateShort(to)}')),
         ]),
+        const SizedBox(height: 6),
+        Text(tr('Od samego krycia termin jest szeroki (57–72 dni). Dokładniejszy (62–64 dni) daje owulacja potwierdzona badaniem progesteronu.'),
+            style: const TextStyle(color: K9.muted, fontSize: 12.5)),
         const SizedBox(height: 10),
-        Text(tr('USG: zwykle od {0} · RTG: od {1} (liczenie szczeniąt najdokładniej po {2})', [fmtDateShort(mating.add(const Duration(days: 28))), fmtDateShort(mating.add(const Duration(days: 45))), fmtDateShort(mating.add(const Duration(days: 55)))]),
+        Text(tr('USG: zwykle od {0} · RTG: od {1} (liczenie szczeniąt najdokładniej po {2})', [fmtDateShort(mating.plusDays(28)), fmtDateShort(mating.plusDays(45)), fmtDateShort(mating.plusDays(55))]),
             style: const TextStyle(color: K9.muted, fontSize: 13)),
         const SizedBox(height: 14),
         FilledButton.icon(
@@ -453,7 +463,9 @@ class PregnancyHomeCard extends StatelessWidget {
                   Text(
                     PregnancyCalc.daysToWindowEnd(m, now) < 0
                         ? tr('Po terminie – skontaktuj się z weterynarzem')
-                        : tr('Poród ok. {0} ({1})', [fmtDateShort(PregnancyCalc.due(m)), _countdown(left)]),
+                        : PregnancyCalc.fromOvulation(m)
+                            ? tr('Poród ok. {0} ({1})', [fmtDateShort(PregnancyCalc.due(m)), _countdown(left)])
+                            : tr('Możliwy poród: {0}', [PregnancyCalc.dueLabel(m, fmtDateShort)]),
                     style: const TextStyle(color: K9.muted, fontSize: 13),
                   ),
                   if (next != null && next.day != PregnancyCalc.typical)

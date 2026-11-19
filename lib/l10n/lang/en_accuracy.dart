@@ -274,4 +274,42 @@ const strings = <String, String>{
       'The helper gradually adds light pressure and movement – with a young dog no lifting or sharp yanking.',
   'Wyłącznie u dorosłego, przygotowanego kondycyjnie psa, po opanowaniu chwytu i „puść”.':
       'Only with an adult, physically conditioned dog that has mastered the grip and “out”.',
+  'Do początku okna':
+      'To start of window',
+  'Jeden wynik nie potwierdza owulacji. Potrzebna jest seria badań (zwykle co 1–3 dni), którą ocenia lekarz weterynarii.':
+      'A single result does not confirm ovulation. A series of tests (usually every 1–3 days), interpreted by a vet, is needed.',
+  'Możliwy poród':
+      'Possible whelping',
+  'Możliwy poród: {0}':
+      'Possible whelping: {0}',
+  'Od samego krycia termin jest szeroki (57–72 dni). Dokładniejszy (62–64 dni) daje owulacja potwierdzona badaniem progesteronu.':
+      'From the mating date alone the range is wide (57–72 days). Ovulation confirmed by progesterone testing gives a narrower one (62–64 days).',
+  'Porady treningowe, nie regulamin zawodów ani egzaminu.':
+      'Training tips, not competition or trial rules.',
+  'Seria w toku. Wynik ocenia lekarz weterynarii na podstawie całej serii.':
+      'Series in progress. The vet interprets the result from the whole series.',
+  'W serii nie widać wzrostu. Kolejne badania i ich ocenę zaplanuj z lekarzem weterynarii.':
+      'No rise is visible in the series. Plan further tests and their interpretation with your vet.',
+  'W serii widać wzrost progesteronu. Czy i kiedy nastąpiła owulacja, ustala lekarz weterynarii – aplikacja nie wpisuje jej sama.':
+      'The series shows a progesterone rise. Whether and when ovulation occurred is for the vet to determine – the app does not enter it by itself.',
+  'Warunki spełnione':
+      'Requirements met',
+  'Wymagania egzaminu (wiek psa, przebieg, punktacja, dopuszczenie) sprawdź w aktualnym regulaminie organizatora (ZKwP, FCI). Regulamin IGP FCI zmienił się od 1.01.2025. Aplikacja nie zastępuje regulaminu.':
+      'Check trial requirements (dog’s age, procedure, scoring, eligibility) in the organiser’s current rules (national kennel club, FCI). The FCI IGP rules changed on 1 Jan 2025. The app does not replace the rules.',
+  'Wymagania są spełnione według Twoich wpisów. To nie jest przyznanie tytułu – tytuł nadaje ZKwP (lub FCI dla C.I.B.) po złożeniu wniosku z kopiami kart ocen.':
+      'Requirements are met according to your entries. This is not the award of the title – the kennel club (or FCI for C.I.B.) confirms it after you apply with copies of the critiques.',
+  'Znana jest tylko data krycia, więc nie da się wskazać jednego dnia porodu. Poród zwykle wypada 57–72 dni od krycia. Owulacja potwierdzona badaniem (progesteron) zawęża termin do ok. 62–64 dni.':
+      'Only the mating date is known, so no single whelping day can be given. Whelping usually falls 57–72 days after mating. Ovulation confirmed by testing (progesterone) narrows it to about 62–64 days.',
+  'jutro':
+      'tomorrow',
+  'ok. {0} ({1} – {2})':
+      'approx. {0} ({1} – {2})',
+  'tytuł Champion Polski – wymagania wg wpisów spełnione, ale brak potwierdzenia przyznania tytułu (zaznacz w Celach, gdy ZKwP go zatwierdzi)':
+      'Polish Champion title – requirements met per your entries, but the award is not confirmed (mark it in Goals once the kennel club approves it)',
+  'zatwierdzony tytuł Champion Polski':
+      'confirmed Polish Champion title',
+  'Środek okna porodu':
+      'Middle of the whelping window',
+  '63. dzień to tylko orientacyjny środek okna. Gdy znane jest tylko krycie, poród może być wyraźnie wcześniej lub później – patrz okno porodu powyżej. Po jego przekroczeniu skontaktuj się z lekarzem.':
+      'Day 63 is only an approximate middle of the window. When only the mating is known, whelping may be noticeably earlier or later – see the whelping window above. Contact your vet once it has passed.',
 };

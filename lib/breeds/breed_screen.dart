@@ -12,6 +12,7 @@ import 'breed_sports.dart';
 import 'breed_temperament.dart';
 import 'breeds.dart';
 import '../l10n/l10n.dart';
+import '../date_math.dart';
 
 void openBreed(BuildContext context, Breed b) =>
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => BreedScreen(breed: b)));
@@ -474,7 +475,7 @@ class _DogVsBreed extends StatelessWidget {
         : w > info.weightMax
         ? (tr('powyżej typowej masy rasy'), K9.yellow)
         : (tr('w typowym zakresie rasy'), K9.green);
-    final young = dog.birthDate != null && DateTime.now().difference(dog.birthDate!).inDays < 365;
+    final young = dog.birthDate != null && DateTime.now().difference(dog.birthDate!).inCalDays < 365;
     return K9Card(
       child: Row(
         children: [

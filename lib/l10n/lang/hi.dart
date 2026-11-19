@@ -1914,6 +1914,7 @@ const strings = <String, String>{
   'Rasa użytkowa, ale rzadziej szkolona w IGP – przydatność zależy od charakteru i motywacji psa.': 'कामकाजी नस्ल, पर IGP में कम प्रशिक्षित – उपयुक्तता कुत्ते के स्वभाव और प्रेरणा पर निर्भर।',
   'Aktywny pies pasterski, ale krótkie kończyny i długi tułów – tylko rekreacyjnie.': 'सक्रिय चरवाहा कुत्ता, पर छोटे पैर और लंबा शरीर – केवल मनोरंजन के लिए।',
   'Krótkie dystanse w tempie kłusa, bez mocnego ciągnięcia.': 'दुलकी चाल में छोटी दूरियाँ, ज़ोर से खींचे बिना।',
+  'Rekreacyjny trucht na luźnej smyczy, bez ciągnięcia i na krótkich odcinkach, to nie canicross – można go rozważyć u zdrowego, szczupłego psa po konsultacji z lekarzem.': 'ढीले पट्टे पर, बिना खींचे और छोटी दूरी की हल्की दौड़ कैनीक्रॉस नहीं है – स्वस्थ, दुबले कुत्ते के लिए पशु-चिकित्सक की सलाह के बाद विचार किया जा सकता है।',
   'Utrzymuj szczupłą sylwetkę.': 'कुत्ते को दुबला रखें।',
   'Krótkie kończyny i długi kręgosłup – bieg w uprzęży z ciągnięciem obciąża kręgosłup (ryzyko dyskopatii).': 'छोटे पैर और लंबी रीढ़ – हार्नेस में दौड़ना और खींचना रीढ़ पर भार डालता है (डिस्क रोग का खतरा)।',
   'Zamiast tego: marsze bez ciągnięcia, nosework, tropienie, rally-O.': 'इसके बजाय: बिना खींचे सैर, नोज़वर्क, ट्रैकिंग, रैली-ओ।',

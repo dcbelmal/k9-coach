@@ -743,10 +743,12 @@ final _rules = <String, _F? Function(_C)>{
 
 /// Corgi (pembroke i cardigan): ta sama budowa – krótkie kończyny, długi tułów.
 const _corgi = <String, _F>{
-  'canicross': _F(Fit.b, 'Aktywny pies pasterski, ale krótkie kończyny i długi tułów – tylko rekreacyjnie.', [
-    'Krótkie dystanse w tempie kłusa, bez mocnego ciągnięcia.',
-    _lHarness,
-    'Utrzymuj szczupłą sylwetkę.',
+  // Canicross to bieg w uprzęży z ciągnięciem – jak u innych ras krótkonożnych
+  // (jamnik, basset) to C. Corgi są rasą chondrodystroficzną (wariant CDDY,
+  // ryzyko dyskopatii) i z predyspozycją do mielopatii zwyrodnieniowej (DM).
+  'canicross': _F(Fit.c, _rLongBackPull, [
+    'Rekreacyjny trucht na luźnej smyczy, bez ciągnięcia i na krótkich odcinkach, to nie canicross – można go rozważyć u zdrowego, szczupłego psa po konsultacji z lekarzem.',
+    _lLongBackAlt,
   ]),
   'agility': _F(Fit.b, 'Zwinny i chętny do pracy – agility możliwe w niższych klasach wysokości.', [
     'Niższe skoki; ostrożnie ze slalomem i palisadą (obciążenie kręgosłupa).',

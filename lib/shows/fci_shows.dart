@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../zkwp.dart';
 import '../l10n/l10n.dart';
+import '../date_math.dart';
 
 /// Opis wystawy z kalendarza FCI – FCI publikuje tylko wystawy międzynarodowe (CACIB).
 const fciShowDescription = 'międzynarodowa - CACIB';
@@ -33,7 +34,7 @@ const fciShowDescription = 'międzynarodowa - CACIB';
       if (dt.month != mo) return null; // np. 31 kwietnia
       out.add(dt);
     }
-    final span = out.last.difference(out.first).inDays;
+    final span = out.last.difference(out.first).inCalDays;
     if (span < 0 || span > 7) return null;
     return out;
   }

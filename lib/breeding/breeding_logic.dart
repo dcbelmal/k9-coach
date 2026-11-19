@@ -1,5 +1,6 @@
 import 'breeding_models.dart';
 import '../l10n/l10n.dart';
+import '../date_math.dart';
 
 DateTime _day(DateTime d) => DateTime(d.year, d.month, d.day);
 
@@ -40,7 +41,7 @@ class PregnancyCalc {
     PregnancyMilestone(50, 'Spokojniejszy ruch', 'Pod koniec ciąży krótsze, spokojne spacery. Bez skoków, ciągnięcia i biegu przy rowerze.'),
     PregnancyMilestone(55, 'Kojec porodowy', 'Przygotuj kojec w cichym, ciepłym miejscu. Niech suka się do niego przyzwyczai. Ustal z lekarzem, jak się kontaktować w razie porodu.'),
     PregnancyMilestone(57, 'Mierz temperaturę', 'Mierz temperaturę 2 razy dziennie o stałych porach. Spadek (często poniżej ok. 37,5 °C) zwykle poprzedza poród o 12–24 h, ale nie u każdej suki – to nie jest pewny znak porodu.'),
-    PregnancyMilestone(63, 'Przewidywany poród', 'Termin orientacyjny. Sprawdź okno porodu powyżej – jeśli zostanie przekroczone, skontaktuj się z lekarzem.'),
+    PregnancyMilestone(63, 'Środek okna porodu', '63. dzień to tylko orientacyjny środek okna. Gdy znane jest tylko krycie, poród może być wyraźnie wcześniej lub później – patrz okno porodu powyżej. Po jego przekroczeniu skontaktuj się z lekarzem.'),
   ];
 
   /// Objawy wymagające pilnego kontaktu z lekarzem weterynarii (BSAVA).
@@ -61,39 +62,50 @@ class PregnancyCalc {
   static DateTime base(Mating m) => _day(m.ovulation ?? m.first);
 
   /// Przewidywany (orientacyjny) dzień porodu.
-  static DateTime due(Mating m) => base(m).add(const Duration(days: typical));
+  static DateTime due(Mating m) => base(m).plusDays(typical);
 
   /// Okno porodu (od – do): wąskie od owulacji, szerokie od samego krycia.
   static (DateTime, DateTime) window(Mating m) {
     if (m.ovulation != null) {
       final b = base(m);
-      return (b.add(const Duration(days: minFromOvulation)), b.add(const Duration(days: maxFromOvulation)));
+      return (b.plusDays(minFromOvulation), b.plusDays(maxFromOvulation));
     }
-    final last = m.last.difference(m.first).inDays > 7 ? m.first.add(const Duration(days: 7)) : m.last;
+    final last = m.last.difference(m.first).inCalDays > 7 ? m.first.plusDays(7) : m.last;
     return (
-      _day(m.first).add(const Duration(days: minFromMating)),
-      _day(last).add(const Duration(days: maxFromMating)),
+      _day(m.first).plusDays(minFromMating),
+      _day(last).plusDays(maxFromMating),
     );
   }
 
   /// Dzień ciąży liczony od tego samego punktu co etapy (0 = owulacja albo krycie).
-  static int dayOf(Mating m, DateTime now) => _day(now).difference(base(m)).inDays;
+  static int dayOf(Mating m, DateTime now) => _day(now).difference(base(m)).inCalDays;
 
   /// Dni do przewidywanego porodu (ujemne = po terminie orientacyjnym).
-  static int daysToDue(Mating m, DateTime now) => due(m).difference(_day(now)).inDays;
+  static int daysToDue(Mating m, DateTime now) => due(m).difference(_day(now)).inCalDays;
+
+  /// Dni do początku okna porodu (ujemne = okno już trwa).
+  static int daysToWindowStart(Mating m, DateTime now) => window(m).$1.difference(_day(now)).inCalDays;
+
+  /// Tekst terminu porodu do pokazania użytkownikowi. Jeden dzień tylko przy
+  /// owulacji potwierdzonej badaniem; przy samym kryciu – wyłącznie przedział.
+  static String dueLabel(Mating m, String Function(DateTime) fmt) {
+    final (from, to) = window(m);
+    if (fromOvulation(m)) return tr('ok. {0} ({1} – {2})', [fmt(due(m)), fmt(from), fmt(to)]);
+    return '${fmt(from)} – ${fmt(to)}';
+  }
 
   /// Dni do końca okna porodu (ujemne = okno przekroczone, potrzebny lekarz).
-  static int daysToWindowEnd(Mating m, DateTime now) => window(m).$2.difference(_day(now)).inDays;
+  static int daysToWindowEnd(Mating m, DateTime now) => window(m).$2.difference(_day(now)).inCalDays;
 
   /// Czy ciążę (albo oczekiwanie) należy jeszcze śledzić.
   static bool isActive(Mating m, DateTime now) =>
       (m.status == PregnancyStatus.waiting || m.status == PregnancyStatus.confirmed) &&
-      _day(now).isBefore(window(m).$2.add(const Duration(days: 5)));
+      _day(now).isBefore(window(m).$2.plusDays(5));
 
   /// Data etapu – od tego samego punktu odniesienia co [dayOf].
   static DateTime milestoneDate(Mating m, PregnancyMilestone ms) {
     if (ms.day == 0) return _day(m.first);
-    return base(m).add(Duration(days: ms.day));
+    return base(m).plusDays(ms.day);
   }
 
   /// Następny etap (pierwszy w przyszłości lub dzisiaj).
@@ -121,12 +133,12 @@ class PuppyGrowth {
     final b = p.birthGrams;
     if (b == null) return true;
     for (final w in p.weights) {
-      final d = _day(w.date).difference(_day(born)).inDays;
+      final d = _day(w.date).difference(_day(born)).inCalDays;
       if (w.grams >= 2 * b) return d <= 10;
     }
     final last = p.weights.isEmpty ? null : p.weights.last;
     if (last == null) return true;
-    return _day(last.date).difference(_day(born)).inDays <= 10;
+    return _day(last.date).difference(_day(born)).inCalDays <= 10;
   }
 
   /// Ocena ostatniego ważenia: 0 = w normie, 1 = obserwuj, 2 = skontaktuj się z lekarzem.
@@ -134,7 +146,7 @@ class PuppyGrowth {
     if (p.weights.length < 2) return 0;
     final last = p.weights.last, prev = p.weights[p.weights.length - 2];
     final birth = p.birthGrams ?? prev.grams;
-    final age = _day(last.date).difference(_day(born)).inDays;
+    final age = _day(last.date).difference(_day(born)).inCalDays;
     final change = last.grams - prev.grams;
     if (change < 0) {
       // Fizjologiczny spadek w pierwszych 2 dobach – do ok. 10% masy urodzeniowej.

@@ -18,6 +18,7 @@ import 'models_ext.dart';
 import 'nutrition/nutrition_store.dart';
 import 'store.dart';
 import 'l10n/l10n.dart';
+import 'date_math.dart';
 
 /// Lokalne przypomnienia (szczepienia, odrobaczanie, wydarzenia, treningi).
 class Notifications {
@@ -195,7 +196,7 @@ class Notifications {
         tr('{0}: dziś termin', [h.category.label]),
         '$name – ${h.title}'
       ));
-      final before = due.subtract(const Duration(days: 7));
+      final before = due.plusDays(-7);
       plan.add((
         DateTime(before.year, before.month, before.day, 9),
         tr('{0} za 7 dni', [h.category.label]),
@@ -204,7 +205,7 @@ class Notifications {
     }
     for (final e in s.events) {
       if (!e.remind) continue;
-      final dayBefore = e.date.subtract(const Duration(days: 1));
+      final dayBefore = e.date.plusDays(-1);
       plan.add((
         DateTime(dayBefore.year, dayBefore.month, dayBefore.day, 18),
         tr('Jutro: {0}', [e.type.label]),
@@ -221,17 +222,17 @@ class Notifications {
     }
     for (final sh in s.shows) {
       if (sh.status == ShowStatus.cancelled || sh.status == ShowStatus.done) continue;
-      final d = sh.date.subtract(const Duration(days: 1));
+      final d = sh.date.plusDays(-1);
       plan.add((DateTime(d.year, d.month, d.day, 18), tr('Jutro wystawa'), '$name – ${sh.name}'));
       if (sh.entryDeadline != null && sh.status == ShowStatus.planned) {
-        final dl = sh.entryDeadline!.subtract(const Duration(days: 3));
+        final dl = sh.entryDeadline!.plusDays(-3);
         plan.add((DateTime(dl.year, dl.month, dl.day, 10), tr('Za 3 dni mija termin zgłoszeń'), '$name – ${sh.name}'));
       }
     }
     for (final doc in s.documents) {
       if (!doc.remind || doc.expires == null) continue;
       final e = doc.expires!;
-      final before = e.subtract(const Duration(days: 30));
+      final before = e.plusDays(-30);
       plan.add((DateTime(before.year, before.month, before.day, 9), tr('Za 30 dni wygasa dokument'), '$name – ${doc.title}'));
       plan.add((DateTime(e.year, e.month, e.day, 9), tr('Dziś wygasa dokument'), '$name – ${doc.title}'));
     }
@@ -310,7 +311,7 @@ class Notifications {
       }
       for (final (i, d) in all.daily.indexed) {
         var at = DateTime(now.year, now.month, now.day, d.$1, d.$2);
-        if (!at.isAfter(now)) at = at.add(const Duration(days: 1));
+        if (!at.isAfter(now)) at = at.plusDays(1);
         await _plugin.zonedSchedule(
           id: dailyBaseId + i,
           title: d.$3,

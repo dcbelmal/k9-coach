@@ -16,6 +16,7 @@ import '../store.dart';
 import 'energy.dart';
 import 'nutrition_models.dart';
 import '../l10n/l10n.dart';
+import '../date_math.dart';
 
 /// Prognoza zużycia worka karmy.
 class StockForecast {
@@ -224,11 +225,11 @@ class NutritionStore extends ChangeNotifier {
   /// Średnie dzienne zużycie produktu z ostatnich 14 dni (lub plan dawki).
   double dailyUse(String productId) {
     final now = DateTime.now();
-    final from = dayOnly(now).subtract(const Duration(days: 14));
+    final from = dayOnly(now).plusDays(-14);
     final list = entries.where((e) => e.productId == productId && !e.date.isBefore(from)).toList();
     if (list.isNotEmpty) {
       final first = list.map((e) => e.date).reduce((a, b) => a.isBefore(b) ? a : b);
-      final days = math.max(1, dayOnly(now).difference(dayOnly(first)).inDays + 1);
+      final days = math.max(1, dayOnly(now).difference(dayOnly(first)).inCalDays + 1);
       final total = list.fold(0.0, (a, e) => a + e.grams);
       if (days >= 3 || list.length >= 4) return total / days;
     }
@@ -241,8 +242,8 @@ class NutritionStore extends ChangeNotifier {
     final use = dailyUse(b.productId);
     DateTime? empty, buy;
     if (use > 0) {
-      empty = dayOnly(DateTime.now()).add(Duration(days: (rem / use).floor()));
-      buy = empty.subtract(Duration(days: settings.buyLeadDays));
+      empty = dayOnly(DateTime.now()).plusDays((rem / use).floor());
+      buy = empty.plusDays(-settings.buyLeadDays);
     }
     return StockForecast(b, product(b.productId), rem, use, empty, buy);
   }
@@ -421,7 +422,7 @@ class NutritionStore extends ChangeNotifier {
     final today = dayOnly(DateTime.now());
     final res = <DayStats>[];
     for (var i = n - 1; i >= 0; i--) {
-      final d = today.subtract(Duration(days: i));
+      final d = today.plusDays(-i);
       final list = entriesOn(d);
       double kcal = 0, grams = 0, tk = 0, tp = 0;
       for (final e in list) {
@@ -493,7 +494,7 @@ class NutritionStore extends ChangeNotifier {
       final buy = f.buyDate!;
       out.add((DateTime(buy.year, buy.month, buy.day, 10), tr('Czas kupić nowy worek'),
           tr('{0}: {1} skończy się ok. {2}.{3}', [name, f.product!.title, f.emptyDate!.day, f.emptyDate!.month.toString().padLeft(2, '0')])));
-      final e = f.emptyDate!.subtract(const Duration(days: 1));
+      final e = f.emptyDate!.plusDays(-1);
       out.add((DateTime(e.year, e.month, e.day, 19), tr('Kończy się karma'),
           tr('{0}: w worku zostało na ok. 1 dzień ({1})', [name, f.product!.title])));
     }
@@ -565,12 +566,12 @@ class NutritionStore extends ChangeNotifier {
     ];
     settings = NutritionSettings(mainProductId: 'np1', goal: NutritionGoal.gain, activity: ActivityLevel.high);
     bags = [
-      FoodBag(id: 'nb1', productId: 'np1', opened: today.subtract(const Duration(days: 18)), initialGrams: 12000, price: 239),
+      FoodBag(id: 'nb1', productId: 'np1', opened: today.plusDays(-18), initialGrams: 12000, price: 239),
     ];
     entries = [];
     final rnd = math.Random(3);
     for (var d = 18; d >= 1; d--) {
-      final day = today.subtract(Duration(days: d));
+      final day = today.plusDays(-d);
       final m = 150 + rnd.nextInt(20).toDouble(), e = 160 + rnd.nextInt(30).toDouble();
       entries.add(FeedingEntry(
           id: 'nm$d', date: day.add(const Duration(hours: 7)), kind: FeedKind.morning, productId: 'np1', label: tr('Brit Premium Sport 30/20'), grams: m, kcal: m * 3.95));

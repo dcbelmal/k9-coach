@@ -15,6 +15,7 @@ import '../store.dart';
 import 'breeding_logic.dart';
 import 'breeding_models.dart';
 import '../l10n/l10n.dart';
+import '../date_math.dart';
 
 /// Moduł hodowlany (Premium) – dane zapisane osobno (klucz valkor_breeding_v1).
 class BreedingStore extends ChangeNotifier {
@@ -134,8 +135,8 @@ class BreedingStore extends ChangeNotifier {
   /// Dane przykładowe: trwająca ciąża i poprzedni miot ze szczeniętami.
   Future<void> loadDemo() async {
     final today = dayOnly(DateTime.now());
-    final m1 = today.subtract(const Duration(days: 34));
-    final born = today.subtract(const Duration(days: 400));
+    final m1 = today.plusDays(-34);
+    final born = today.plusDays(-400);
     final litter = Litter(born: born, notes: tr('Poród naturalny, 6 h'), puppies: [
       for (final (i, p) in [
         (tr('Atos'), false, tr('płowy'), 410),
@@ -145,20 +146,20 @@ class BreedingStore extends ChangeNotifier {
         (tr('Echo'), true, tr('płowa'), 395),
       ].indexed)
         Puppy(id: 'p$i', name: p.$1, female: p.$2, color: p.$3, weights: [
-          for (var d = 0; d <= 14; d += 2) PuppyWeight(born.add(Duration(days: d)), (p.$4 * (1 + d * (0.105 - i * 0.004))).round()),
+          for (var d = 0; d <= 14; d += 2) PuppyWeight(born.plusDays(d), (p.$4 * (1 + d * (0.105 - i * 0.004))).round()),
         ]),
     ]);
     matings = [
       Mating(
         id: 'm1',
-        dates: [m1, m1.add(const Duration(days: 2))],
+        dates: [m1, m1.plusDays(2)],
         partner: tr('Ares z Valkor Canis'),
         status: PregnancyStatus.confirmed,
         notes: tr('Progesteron 18 ng/ml w dniu krycia'),
       ),
       Mating(
         id: 'm0',
-        dates: [born.subtract(const Duration(days: 63)), born.subtract(const Duration(days: 61))],
+        dates: [born.plusDays(-63), born.plusDays(-61)],
         partner: tr('Bruno Malinowy Las'),
         status: PregnancyStatus.whelped,
         litter: litter,

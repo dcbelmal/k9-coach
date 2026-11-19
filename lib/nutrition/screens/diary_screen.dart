@@ -10,6 +10,7 @@ import '../nutrition_store.dart';
 import 'nutrition_charts.dart';
 import 'nutrition_forms.dart';
 import '../../l10n/l10n.dart';
+import '../../date_math.dart';
 
 final _n = NutritionStore.instance;
 
@@ -98,7 +99,7 @@ class _DiaryScreenState extends State<DiaryScreen> {
         children: [
           IconButton(
             tooltip: tr('Poprzedni'),
-            onPressed: () => setState(() => day = day.subtract(const Duration(days: 1))),
+            onPressed: () => setState(() => day = day.plusDays(-1)),
             icon: const Icon(Icons.chevron_left_rounded),
           ),
           Expanded(
@@ -112,7 +113,7 @@ class _DiaryScreenState extends State<DiaryScreen> {
             tooltip: tr('Następny'),
             onPressed: sameDay(day, DateTime.now())
                 ? null
-                : () => setState(() => day = day.add(const Duration(days: 1))),
+                : () => setState(() => day = day.plusDays(1)),
             icon: const Icon(Icons.chevron_right_rounded),
           ),
         ],

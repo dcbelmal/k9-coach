@@ -8,11 +8,12 @@ import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/photo.dart';
 import '../l10n/l10n.dart';
+import '../date_math.dart';
 
 final _s = AppStore.instance;
 
 Color _expiryColor(DateTime e) {
-  final d = dayOnly(e).difference(dayOnly(DateTime.now())).inDays;
+  final d = dayOnly(e).difference(dayOnly(DateTime.now())).inCalDays;
   if (d < 0) return K9.red;
   if (d <= 30) return K9.yellow;
   return K9.green;

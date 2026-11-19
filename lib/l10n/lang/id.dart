@@ -1887,6 +1887,7 @@ const strings = <String, String>{
   'Rasa użytkowa, ale rzadziej szkolona w IGP – przydatność zależy od charakteru i motywacji psa.': 'Ras pekerja, tetapi lebih jarang dilatih IGP – kecocokan bergantung pada watak dan motivasi anjing.',
   'Aktywny pies pasterski, ale krótkie kończyny i długi tułów – tylko rekreacyjnie.': 'Anjing gembala aktif, tetapi kaki pendek dan badan panjang – hanya untuk rekreasi.',
   'Krótkie dystanse w tempie kłusa, bez mocnego ciągnięcia.': 'Jarak pendek dengan langkah trot, tanpa menarik kuat.',
+  'Rekreacyjny trucht na luźnej smyczy, bez ciągnięcia i na krótkich odcinkach, to nie canicross – można go rozważyć u zdrowego, szczupłego psa po konsultacji z lekarzem.': 'Joging santai dengan tali longgar, tanpa menarik dan dalam jarak pendek, bukan canicross – dapat dipertimbangkan untuk anjing sehat dan ramping setelah berkonsultasi dengan dokter hewan.',
   'Utrzymuj szczupłą sylwetkę.': 'Jaga anjing tetap ramping.',
   'Krótkie kończyny i długi kręgosłup – bieg w uprzęży z ciągnięciem obciąża kręgosłup (ryzyko dyskopatii).': 'Kaki pendek dan tulang belakang panjang – berlari dan menarik dengan harness membebani tulang belakang (risiko penyakit diskus).',
   'Zamiast tego: marsze bez ciągnięcia, nosework, tropienie, rally-O.': 'Sebagai gantinya: jalan-jalan tanpa menarik, nosework, pelacakan, rally-O.',

@@ -1919,6 +1919,7 @@ const strings = <String, String>{
   'Rasa użytkowa, ale rzadziej szkolona w IGP – przydatność zależy od charakteru i motywacji psa.': 'Çalışma ırkı, ancak IGP\'de daha az eğitilir – uygunluk köpeğin karakterine ve motivasyonuna bağlı.',
   'Aktywny pies pasterski, ale krótkie kończyny i długi tułów – tylko rekreacyjnie.': 'Aktif çoban köpeği, ancak kısa bacaklar ve uzun gövde – yalnızca hobi olarak.',
   'Krótkie dystanse w tempie kłusa, bez mocnego ciągnięcia.': 'Tırısta kısa mesafeler, güçlü çekmeden.',
+  'Rekreacyjny trucht na luźnej smyczy, bez ciągnięcia i na krótkich odcinkach, to nie canicross – można go rozważyć u zdrowego, szczupłego psa po konsultacji z lekarzem.': 'Gevşek tasmayla, çekmeden ve kısa mesafelerde yapılan rahat koşu canicross değildir; sağlıklı, zayıf bir köpekte veteriner onayıyla düşünülebilir.',
   'Utrzymuj szczupłą sylwetkę.': 'Köpeği zayıf tutun.',
   'Krótkie kończyny i długi kręgosłup – bieg w uprzęży z ciągnięciem obciąża kręgosłup (ryzyko dyskopatii).': 'Kısa bacaklar ve uzun omurga – koşum takımıyla koşmak ve çekmek omurgayı zorlar (disk hastalığı riski).',
   'Zamiast tego: marsze bez ciągnięcia, nosework, tropienie, rally-O.': 'Bunun yerine: çekmeden yürüyüşler, nosework, iz sürme, rally-O.',

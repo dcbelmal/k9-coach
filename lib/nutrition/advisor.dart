@@ -5,6 +5,7 @@ import '../theme.dart';
 import 'nutrition_models.dart';
 import 'nutrition_store.dart';
 import '../l10n/l10n.dart';
+import '../date_math.dart';
 
 /// Rekomendacja z panelu AI. [adjustPct] – proponowana zmiana dawki do zatwierdzenia.
 class Advice {
@@ -67,10 +68,10 @@ class NutritionAdvisor {
 
     // --- Trend wagi (ostatnie 4 tygodnie) ---
     final now = DateTime.now();
-    final recent = app.weights.where((w) => w.date.isAfter(now.subtract(const Duration(days: 42)))).toList()
+    final recent = app.weights.where((w) => w.date.isAfter(now.plusDays(-42))).toList()
       ..sort((a, b) => a.date.compareTo(b.date));
     final lastWeigh = app.weights.isEmpty ? null : app.weights.last.date;
-    if (lastWeigh == null || now.difference(lastWeigh).inDays > 14) {
+    if (lastWeigh == null || now.difference(lastWeigh).inCalDays > 14) {
       out.add(Advice(Icons.scale_rounded, K9.blue, tr('Czas na ważenie'),
           tr('Ostatnie ważenie było ponad 2 tygodnie temu. Regularna waga pozwala mi dokładnie korygować dawkę.')));
     }

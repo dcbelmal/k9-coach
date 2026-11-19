@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:material_ui/material_ui.dart';
 import 'l10n/l10n.dart';
+import 'date_math.dart';
 
 /// Paleta Valkor Coach: ciemne tło, karty grafitowe, akcent pomarańczowy.
 class K9 {
@@ -144,7 +145,7 @@ String relDays(DateTime d) {
   final now = DateTime.now();
   final a = DateTime(now.year, now.month, now.day);
   final b = DateTime(d.year, d.month, d.day);
-  final diff = b.difference(a).inDays;
+  final diff = b.difference(a).inCalDays;
   if (diff == 0) return tr('dziś');
   if (diff == 1) return 'jutro';
   if (diff == -1) return 'wczoraj';
