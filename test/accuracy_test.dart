@@ -97,10 +97,13 @@ void main() {
     });
 
     test('szczenię: równanie wzrostu NRC, gdy znana masa dorosła', () {
-      // Malinois (20–30 kg) w wieku 5 mies., 15 kg: p = 0,6.
+      // Suka malinois (wzorzec: 20–25 kg) w wieku 5 mies., 15 kg: p = 15 / 22,5.
       final d = dog(kg: 15, ageMonths: 5, breedId: 'malinois');
+      expect(Energy.expectedAdultKg(d), 22.5);
+      expect(Energy.expectedAdultKg(d..female = false), 27.5);
+      d.female = true;
       final p = plan(d);
-      final me = 130 * math.pow(15, 0.75) * 3.2 * (math.exp(-0.87 * 0.6) - 0.1);
+      final me = 130 * math.pow(15, 0.75) * 3.2 * (math.exp(-0.87 * 15 / 22.5) - 0.1);
       expect(p.targetKcal, closeTo(me, 1));
       // Bez rasy: uproszczenie 2,0 × RER.
       expect(plan(dog(kg: 15, ageMonths: 5)).factor, 2.0);

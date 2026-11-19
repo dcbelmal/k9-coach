@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 
 import '../breeds/breed_info.dart';
+import '../breeds/breed_sex.dart';
+import '../breeds/breeds.dart' show canonicalBreedId;
 import '../models.dart';
 import 'nutrition_models.dart';
 import '../l10n/l10n.dart';
@@ -86,10 +88,14 @@ class Energy {
     return tr('dorosły');
   }
 
-  /// Spodziewana masa dorosła z atlasu ras (średnia z zakresu).
+  /// Spodziewana masa dorosła z atlasu ras: środek zakresu dla płci psa,
+  /// jeśli wzorzec go podaje, w przeciwnym razie środek zakresu ogólnego.
   static double? expectedAdultKg(Dog dog) {
     final i = breedInfoFor(dog.breedId);
     if (i == null || dog.mixed || i.weightMax <= 0) return null;
+    final sex = breedSexDims[canonicalBreedId(dog.breedId)];
+    final w = dog.female ? sex?.femaleWeight : sex?.maleWeight;
+    if (w != null && w.max != null && w.max! > 0) return (w.min + w.max!) / 2;
     return (i.weightMin + i.weightMax) / 2;
   }
 

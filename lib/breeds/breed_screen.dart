@@ -7,7 +7,9 @@ import '../theme.dart';
 import '../widgets/common.dart';
 import 'breed_info.dart';
 import 'breed_profile.dart';
+import 'breed_sex.dart';
 import 'breed_sports.dart';
+import 'breed_temperament.dart';
 import 'breeds.dart';
 import '../l10n/l10n.dart';
 
@@ -344,6 +346,10 @@ class BreedScreen extends StatelessWidget {
                       ),
                     ],
                   ),
+                  if (breedSexDims[breed.id] != null) ...[
+                    const SizedBox(height: 14),
+                    _SexDimsView(breedSexDims[breed.id]!),
+                  ],
                 ],
               ),
             ),
@@ -376,6 +382,7 @@ class BreedScreen extends StatelessWidget {
                 ],
               ),
             ),
+            if (temperamentOf(breed.id) != null) ...[gap12, _Temperament(text: temperamentOf(breed.id)!)],
             if (p != null && p.bodyNotes.isNotEmpty) ...[gap12, _BodyNotes(notes: p.bodyNotes)],
             gap12,
             _SportSection(breedId: breed.id),
@@ -520,6 +527,29 @@ class FitBadge extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _Temperament extends StatelessWidget {
+  final String text;
+  const _Temperament({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return K9Card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SectionTitle(tr('Charakter i temperament'), icon: Icons.psychology_alt_outlined),
+          Text(text, style: const TextStyle(color: Color(0xFFCFCFD4), fontSize: 14, height: 1.35)),
+          const SizedBox(height: 8),
+          Text(
+            tr('Typowe cechy rasy – charakter konkretnego psa zależy też od linii, socjalizacji i wychowania.'),
+            style: const TextStyle(color: K9.muted, fontSize: 12, height: 1.3),
+          ),
+        ],
       ),
     );
   }
@@ -763,4 +793,41 @@ class _TrainingStart extends StatelessWidget {
       ],
     ),
   );
+}
+
+/// Wzrost i masa według płci (z wzorca FCI).
+class _SexDimsView extends StatelessWidget {
+  final SexDims d;
+  const _SexDimsView(this.d);
+
+  String _line(Span? h, Span? w) => [if (h != null) h.label('cm'), if (w != null) w.label('kg')].join(' · ');
+
+  @override
+  Widget build(BuildContext context) {
+    const muted = TextStyle(color: K9.muted, fontSize: 12.5);
+    const val = TextStyle(color: Color(0xFFCFCFD4), fontSize: 13);
+    Widget row(String who, String v) => Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(width: 92, child: Text(who, style: muted)),
+          Expanded(child: Text(v, style: val)),
+        ],
+      ),
+    );
+    final m = _line(d.maleHeight, d.maleWeight), f = _line(d.femaleHeight, d.femaleWeight);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(tr('Według wzorca FCI'), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+        if (d.sameForBoth)
+          row(tr('Psy i suki'), m)
+        else ...[
+          if (m.isNotEmpty) row(tr('Psy'), m),
+          if (f.isNotEmpty) row(tr('Suki'), f),
+        ],
+      ],
+    );
+  }
 }
