@@ -79,7 +79,7 @@ class LitterScreen extends StatelessWidget {
             ),
             gap12,
             Text(
-              tr('Szczenię powinno codziennie przybierać i podwoić masę urodzeniową w ok. 7–10 dni. Spadek wagi w pierwszych dniach – skontaktuj się z weterynarzem.'),
+              tr('Szczenię powinno przybierać codziennie i podwoić masę urodzeniową w ok. 7–10 dni. W pierwszych 1–2 dobach niewielki spadek (do ok. 10%) bywa normalny – obserwuj, czy ssie. Większy lub dłuższy spadek, brak przyrostu albo słabe ssanie – skontaktuj się z lekarzem weterynarii.'),
               style: TextStyle(color: K9.faint, fontSize: 12),
             ),
           ]),
@@ -91,9 +91,9 @@ class LitterScreen extends StatelessWidget {
   static String _careTip(int age) => switch (age) {
         < 3 => tr('Pierwsze dni: waż szczenięta 2× dziennie, pilnuj ciepła w kojcu (ok. 30 °C) i czy każde ssie.'),
         < 14 => tr('Waż codziennie o tej samej porze. Oczy otworzą się ok. 10.–14. dnia.'),
-        < 21 => tr('Ok. 2.–3. tygodnia pierwsze odrobaczanie. Szczenięta zaczynają chodzić.'),
+        < 21 => tr('Odrobaczanie zwykle od 2. tygodnia, potem co 2 tygodnie – preparat i schemat ustala lekarz weterynarii. Szczenięta zaczynają chodzić.'),
         < 35 => tr('Od 3.–4. tygodnia pierwsze papki i socjalizacja: nowe dźwięki, podłoża, ludzie.'),
-        < 56 => tr('Odrobaczanie co 2 tygodnie, pierwsze szczepienie ok. 6.–8. tygodnia. Przegląd miotu w związku.'),
+        < 56 => tr('Pierwsze szczepienie zwykle w 6.–8. tygodniu, kolejne co 2–4 tygodnie do ok. 16. tygodnia (WSAVA) – schemat ustala lekarz. Przegląd miotu w związku.'),
         _ => tr('Szczenięta mogą iść do nowych domów od ok. 8. tygodnia (po przeglądzie miotu i czipowaniu).'),
       };
 }
@@ -108,7 +108,8 @@ class _PuppyRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final ch = p.lastChange;
     final late = !PuppyGrowth.doubledOnTime(p, born);
-    final color = p.losing || late ? K9.red : (p.female ? const Color(0xFFFF6FAE) : K9.blue);
+    final alert = PuppyGrowth.alert(p, born);
+    final color = alert == 2 ? K9.red : (alert == 1 ? K9.yellow : (p.female ? const Color(0xFFFF6FAE) : K9.blue));
     return ListRow(
       icon: p.female ? Icons.female_rounded : Icons.male_rounded,
       color: color,
@@ -116,7 +117,14 @@ class _PuppyRow extends StatelessWidget {
       subtitle: [
         if (p.color.isNotEmpty) p.color,
         if (p.birthGrams != null) 'ur. ${_g(p.birthGrams!)}',
-        if (p.losing) 'spadek wagi!' else if (late) 'wolny przyrost',
+        if (alert == 2 && p.losing)
+          tr('spadek wagi – skontaktuj się z lekarzem')
+        else if (alert == 1 && p.losing)
+          tr('niewielki spadek – obserwuj')
+        else if (alert == 1)
+          tr('brak przyrostu – obserwuj')
+        else if (late)
+          tr('wolny przyrost'),
       ].join(' · '),
       trailing: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.end, children: [
         Text(p.lastGrams == null ? '—' : _g(p.lastGrams!), style: const TextStyle(fontWeight: FontWeight.w700)),

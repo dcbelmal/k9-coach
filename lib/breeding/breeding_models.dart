@@ -52,7 +52,7 @@ class Puppy {
   /// Zmiana od poprzedniego ważenia (g) – null, gdy mniej niż 2 ważenia.
   int? get lastChange => weights.length < 2 ? null : weights.last.grams - weights[weights.length - 2].grams;
 
-  /// Szczenię straciło na wadze od poprzedniego ważenia – sygnał ostrzegawczy.
+  /// Szczenię straciło na wadze od poprzedniego ważenia (ocenę daje PuppyGrowth.alert).
   bool get losing => (lastChange ?? 0) < 0;
 
   void setWeight(DateTime date, int grams) {

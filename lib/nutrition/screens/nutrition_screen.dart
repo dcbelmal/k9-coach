@@ -309,8 +309,8 @@ class _BalanceTile extends StatelessWidget {
         Text(b > 0 ? tr('ponad cel dnia') : tr('zostało do celu'), style: const TextStyle(color: K9.muted, fontSize: 12)),
         Text(
             plan.trainingKcal > 0
-                ? tr('cel {0} (trening +{1})', [plan.targetKcal.round(), plan.trainingKcal.round()])
-                : tr('cel {0} kcal', [plan.targetKcal.round()]),
+                ? tr('cel ok. {0} (bieg +{1})', [plan.targetKcal.round(), plan.trainingKcal.round()])
+                : tr('cel ok. {0} kcal', [plan.targetKcal.round()]),
             style: const TextStyle(color: K9.faint, fontSize: 12)),
       ]),
     );
@@ -448,12 +448,13 @@ class _HowCard extends StatelessWidget {
           children: [
             _row(tr('Masa do obliczeń'), tr('{0} kg', [fmtNum(plan.basisKg)])),
             _row(tr('Zapotrzebowanie spoczynkowe (RER)'), tr('{0} kcal', [plan.rer.round()])),
-            _row(tr('Mnożnik ({0}, {1})', [Energy.lifeStageLabel(months), _n.settings.activity.label.toLowerCase()]),
+            _row(tr('Mnożnik ({0}, {1})', [Energy.lifeStageLabel(months, adultKg: Energy.expectedAdultKg(dog)), _n.settings.activity.label.toLowerCase()]),
                 '× ${fmtNum(plan.factor, 2)}'),
-            _row(tr('Podstawa'), tr('{0} kcal', [plan.baseKcal.round()])),
-            _row(tr('Treningi dziś'), tr('+{0} kcal', [plan.trainingKcal.round()])),
+            _row(tr('Zapotrzebowanie bazowe'), tr('{0} kcal', [plan.baseKcal.round()])),
+            _row(tr('Dodatkowy wysiłek (bieg z dystansem)'), tr('+{0} kcal', [plan.trainingKcal.round()])),
             if (plan.adjustPct != 0) _row(tr('Korekta'), '${plan.adjustPct > 0 ? '+' : ''}${plan.adjustPct.round()}%'),
-            _row(tr('Cel na dziś'), tr('{0} kcal', [plan.targetKcal.round()])),
+            _row(tr('Cel na dziś (orientacyjnie)'), tr('{0} kcal', [plan.targetKcal.round()])),
+            _row(tr('Typowy zakres dla psa o tych danych'), tr('{0}–{1} kcal', [plan.lowKcal.round(), plan.highKcal.round()])),
             _row(tr('Przysmaki i suplementy'), tr('−{0} kcal', [(plan.treatsKcal + plan.supplementsKcal).round()])),
             _row(tr('Kaloryczność karmy'), tr('{0} kcal/100 g', [(plan.kcalPerGram * 100).round()])),
             const SizedBox(height: 8),
@@ -464,7 +465,7 @@ class _HowCard extends StatelessWidget {
               ),
             const SizedBox(height: 8),
             Text(
-                tr('Wzory: RER = 70 × masa^0,75 (NRC/WSAVA). Dawka jest orientacyjna – obserwuj kondycję psa i skonsultuj dietę z weterynarzem.'),
+                tr('Wzory: RER = 70 × masa^0,75, mnożniki wg NRC 2006 i WSAVA/AAHA. Psy o tej samej masie potrzebują nawet o 20% mniej lub więcej – to punkt startowy, nie dawka ustalona dla Twojego psa. Koryguj co 2–3 tygodnie wg masy i BCS, a przy chorobie, ciąży, laktacji lub silnej redukcji ustal dietę z lekarzem weterynarii.'),
                 style: TextStyle(color: K9.faint, fontSize: 11.5)),
           ],
         ),

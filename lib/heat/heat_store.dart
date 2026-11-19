@@ -105,10 +105,12 @@ class HeatStore extends ChangeNotifier {
     final cur = st.current;
     if (cur != null) {
       final s = dayOnly(cur.start);
-      out.add((at(s.add(const Duration(days: HeatLogic.proestrusDays)), 8), tr('Zaczynają się dni płodne'),
-          tr('{0}: ok. {1}. dzień cieczki. Pilnuj na spacerach.', [name, HeatLogic.proestrusDays + 1])));
+      if (cur.ovulation == null) {
+        out.add((at(s.add(const Duration(days: HeatLogic.testFromDay - 1)), 8), tr('Cieczka: planujesz krycie?'),
+            tr('{0}: jeśli planujesz krycie, ustal z lekarzem weterynarii termin badania progesteronu. Suka może być płodna przez całą cieczkę – pilnuj jej na spacerach.', [name])));
+      }
       if (cur.end == null) {
-        out.add((at(s.add(const Duration(days: HeatLogic.typicalLength + 1)), 18), tr('Czy cieczka się skończyła?'),
+        out.add((at(s.add(Duration(days: st.typicalLengthDays + 1)), 18), tr('Czy cieczka się skończyła?'),
             tr('{0}: zapisz koniec cieczki, żeby prognoza była dokładniejsza.', [name])));
       }
     }

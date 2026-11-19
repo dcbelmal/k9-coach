@@ -1,13 +1,25 @@
 import 'dart:math' as math;
 
+import '../breeds/breed_info.dart';
 import '../models.dart';
 import 'nutrition_models.dart';
 import '../l10n/l10n.dart';
 
 /// Obliczenia zapotrzebowania energetycznego psa.
 ///
-/// Źródła wzorów: NRC 2006 „Nutrient Requirements of Dogs and Cats”,
-/// WSAVA Global Nutrition Guidelines (RER = 70 × masa^0,75).
+/// Źródła:
+/// * NRC 2006 „Nutrient Requirements of Dogs and Cats” – RER = 70 × masa^0,75,
+///   równanie wzrostu szczeniąt ME = 130 × BW^0,75 × 3,2 × (e^(−0,87·p) − 0,1),
+///   gdzie p = masa obecna / spodziewana masa dorosła.
+/// * WSAVA Global Nutrition Guidelines / AAHA 2021 Nutrition and Weight Management
+///   Guidelines – orientacyjne mnożniki MER: dorosły niekastrowany 1,8,
+///   kastrowany 1,6, mało aktywny 1,2–1,4, redukcja 1,0 × RER masy docelowej,
+///   praca/sport 2,0–5,0. Indywidualne zapotrzebowanie psów o tej samej masie
+///   różni się nawet o ±20–50%, dlatego wynik jest punktem startowym, który
+///   koryguje się na podstawie masy ciała i BCS.
+/// * Taylor i wsp. 1982 (J Exp Biol 97:1) – koszt netto biegu ssaków
+///   10,7 × M^−0,316 J/(kg·m); dla psa 25 kg ≈ 0,92 kcal/kg/km.
+/// * Laflamme 1997 – każdy punkt BCS powyżej 5/9 ≈ 10% nadmiaru masy.
 class Energy {
   /// Spoczynkowe zapotrzebowanie energetyczne (kcal/dzień).
   static double rer(double kg) => kg <= 0 ? 0 : 70 * math.pow(kg, 0.75).toDouble();
@@ -21,41 +33,95 @@ class Energy {
     return m < 0 ? 0 : m;
   }
 
-  /// Mnożnik podstawowy wg wieku i kastracji (bez treningów – te liczymy osobno).
+  /// Masa (kg), od której pies uznawany jest za rasę dużą – rośnie dłużej.
+  static const largeBreedKg = 25.0;
+
+  /// Czy pies jeszcze rośnie. Małe i średnie rasy kończą wzrost ok. 12. miesiąca,
+  /// duże i olbrzymie zwykle 15–24 mies. (AAHA 2021) – przyjmujemy 18.
+  static bool isGrowing(int? months, {double? adultKg}) {
+    if (months == null) return false;
+    final limit = (adultKg ?? 0) >= largeBreedKg ? 18 : 12;
+    return months < limit;
+  }
+
+  /// Wiek seniora zależy od wielkości psa (ostatnie ok. 25% życia, AAHA 2023):
+  /// psy duże ok. 8 lat, pozostałe ok. 10 lat.
+  static bool isSenior(int? months, {double? adultKg}) {
+    if (months == null) return false;
+    return months >= ((adultKg ?? 0) >= largeBreedKg ? 96 : 120);
+  }
+
+  /// Mnożnik MER psa dorosłego (bez zapisanych treningów, które liczymy osobno),
+  /// wg tabel WSAVA/AAHA. Szczenięta – patrz [growthFactor].
+  static double adultFactor(bool neutered, ActivityLevel activity) => switch (activity) {
+        ActivityLevel.low => neutered ? 1.2 : 1.4,
+        ActivityLevel.normal => neutered ? 1.6 : 1.8,
+        ActivityLevel.high => 2.0,
+      };
+
+  /// Mnożnik dla rosnącego psa. Gdy znamy spodziewaną masę dorosłą – równanie
+  /// NRC 2006 (wynik przeliczony na wielokrotność RER), w przeciwnym razie
+  /// uproszczenie NRC/WSAVA: do 4 mies. 3,0 × RER, później 2,0 × RER.
+  static double growthFactor(int months, double kg, double? adultKg) {
+    if (adultKg != null && adultKg > 0 && kg > 0) {
+      final p = (kg / adultKg).clamp(0.05, 1.0);
+      final me = 130 * math.pow(kg, 0.75) * 3.2 * (math.exp(-0.87 * p) - 0.1);
+      return (me / rer(kg)).clamp(1.6, 3.5).toDouble();
+    }
+    return months < 4 ? 3.0 : 2.0;
+  }
+
+  /// Uproszczony mnożnik (zgodność z wcześniejszymi wersjami i testami).
   static double lifeStageFactor(int? months, bool neutered) {
     if (months != null && months < 4) return 3.0;
     if (months != null && months < 12) return 2.0;
-    if (months != null && months >= 96) return 1.4; // senior 8+ lat
-    return neutered ? 1.6 : 1.8;
+    return adultFactor(neutered, ActivityLevel.normal);
   }
 
-  static String lifeStageLabel(int? months) {
+  static String lifeStageLabel(int? months, {double? adultKg}) {
     if (months == null) return tr('dorosły');
     if (months < 4) return tr('szczenię do 4 mies.');
-    if (months < 12) return tr('młody pies');
-    if (months >= 96) return 'senior';
+    if (isGrowing(months, adultKg: adultKg)) return tr('młody pies');
+    if (isSenior(months, adultKg: adultKg)) return 'senior';
     return tr('dorosły');
   }
 
-  /// Dodatkowe kalorie spalone na treningu.
+  /// Spodziewana masa dorosła z atlasu ras (średnia z zakresu).
+  static double? expectedAdultKg(Dog dog) {
+    final i = breedInfoFor(dog.breedId);
+    if (i == null || dog.mixed || i.weightMax <= 0) return null;
+    return (i.weightMin + i.weightMax) / 2;
+  }
+
+  /// Szacowana masa idealna z BCS (skala 1–9): ok. 10% nadmiaru na każdy punkt
+  /// powyżej 5. Dla BCS ≤ 5 zwraca null (nie zgadujemy niedowagi).
+  static double? idealFromBcs(double kg, int? bcs) {
+    if (bcs == null || bcs <= 5 || kg <= 0) return null;
+    return kg / (1 + 0.1 * (bcs.clamp(6, 9) - 5));
+  }
+
+  /// Koszt netto biegu (kcal na kg na km) wg Taylora i wsp. – mniejszy u dużych psów.
+  static double netRunKcalPerKgKm(double kg) {
+    if (kg <= 0) return 0;
+    final jPerKgM = 10.7 * math.pow(kg, -0.316);
+    return jPerKgM / 4.184; // kJ/(kg·km) → kcal/(kg·km)
+  }
+
+  /// Dyscypliny, w których zapisany dystans to bieg/ciągnięcie, a nie zwykły ruch.
+  static bool _countsAsExtra(Discipline d) =>
+      d == Discipline.canicross || d == Discipline.bikejoring || d == Discipline.condition;
+
+  /// Dodatkowy wydatek energii z nietypowego wysiłku (kcal).
   ///
-  /// Biegi z dystansem: koszt ruchu psa ok. 1,1 kcal na kg na km (spacer 0,8).
-  /// Bez dystansu: wielokrotność spoczynkowego zużycia zależnie od intensywności (RPE).
+  /// Mnożnik MER obejmuje już zwykłą dzienną aktywność: spacery, krótkie
+  /// sesje posłuszeństwa, nosework, IGP bez biegu. Doliczamy tylko koszt netto
+  /// biegu z dystansem (canicross, bikejoring, kondycja), żeby nie liczyć
+  /// tego samego ruchu dwa razy. Treningi bez dystansu nie zwiększają dawki.
   static double trainingKcal(TrainingSession t, double kg) {
-    if (kg <= 0 || !t.done) return 0;
+    if (kg <= 0 || !t.done || !_countsAsExtra(t.discipline)) return 0;
     final km = t.distanceKm ?? 0;
-    if (t.discipline.hasDistance && km > 0) {
-      final perKm = switch (t.discipline) {
-        Discipline.walk => 0.8,
-        Discipline.recovery => 0.7,
-        _ => 1.1,
-      };
-      return kg * km * perKm;
-    }
-    final perMin = rer(kg) / 1440;
-    final met = 1 + 0.5 * t.rpe.clamp(1, 10);
-    final extra = t.discipline == Discipline.recovery ? 0.5 : (met - 1);
-    return perMin * t.durationMin * extra;
+    if (km <= 0) return 0;
+    return kg * km.clamp(0, 200) * netRunKcalPerKgKm(kg);
   }
 }
 
@@ -65,8 +131,8 @@ class DailyPlan {
   final double basisKg; // masa, od której liczymy (docelowa przy redukcji)
   final double rer;
   final double factor;
-  final double baseKcal; // bez treningów
-  final double trainingKcal;
+  final double baseKcal; // bazowe zapotrzebowanie (bez dodatkowego wysiłku)
+  final double trainingKcal; // dodatkowy wydatek z nietypowego wysiłku
   final double adjustPct;
   final double targetKcal; // łącznie na dziś
   final double eatenKcal;
@@ -80,6 +146,16 @@ class DailyPlan {
   final double morningGrams;
   final double eveningGrams;
   final List<String> notes;
+
+  /// Orientacyjny zakres zapotrzebowania (indywidualna zmienność ±20%).
+  final double lowKcal;
+  final double highKcal;
+
+  /// Zapotrzebowanie na utrzymanie obecnej masy – do kontroli zbyt dużego ograniczenia.
+  final double maintenanceKcal;
+
+  /// Ograniczenie kalorii tak duże, że zwykła karma może nie pokryć składników niezbędnych.
+  final bool restrictionWarning;
 
   const DailyPlan({
     required this.weightKg,
@@ -101,6 +177,10 @@ class DailyPlan {
     required this.morningGrams,
     required this.eveningGrams,
     required this.notes,
+    this.lowKcal = 0,
+    this.highKcal = 0,
+    this.maintenanceKcal = 0,
+    this.restrictionWarning = false,
   });
 
   double get remainingKcal => targetKcal - eatenKcal;
@@ -119,24 +199,55 @@ DailyPlan computeDailyPlan({
 }) {
   final notes = <String>[];
   final weight = dog.weightKg ?? 0;
-  final target = dog.targetWeightKg;
   final months = Energy.ageMonths(dog.birthDate, now);
-  final growing = months != null && months < 12;
+  final adultKg = Energy.expectedAdultKg(dog);
+  final growing = Energy.isGrowing(months, adultKg: adultKg);
+  final senior = Energy.isSenior(months, adultKg: adultKg);
+
+  // Zapotrzebowanie na utrzymanie obecnej masy.
+  final maintFactor = growing
+      ? Energy.growthFactor(months!, weight, adultKg)
+      : Energy.adultFactor(settings.neutered, settings.activity);
+  final maintenance = Energy.rer(weight) * maintFactor;
 
   var basis = weight;
-  var factor = Energy.lifeStageFactor(months, settings.neutered) * settings.activity.factor;
-  switch (settings.goal) {
-    case NutritionGoal.lose:
-      if (target != null && target > 0 && target < weight) basis = target;
-      if (!growing) factor = 1.1 * settings.activity.factor; // ~1,1 × RER masy docelowej
-      notes.add('Redukcja: liczę od masy docelowej${target != null ? ' (${target.toStringAsFixed(1)} kg)' : ''}.');
-    case NutritionGoal.gain:
-      factor *= 1.1;
-      notes.add('Budowa masy: +10% do zapotrzebowania.');
-    case NutritionGoal.maintain:
-      break;
+  var factor = maintFactor;
+  if (growing) {
+    notes.add(tr('Młody pies ({0} mies.): zapotrzebowanie wzrostowe.', [months]));
+    if (settings.goal != NutritionGoal.maintain) {
+      notes.add(tr('U rosnącego psa nie liczę redukcji ani budowy masy – zmianę dawki ustal z lekarzem weterynarii.'));
+    }
+  } else {
+    switch (settings.goal) {
+      case NutritionGoal.lose:
+        final target = dog.targetWeightKg;
+        final fromBcs = Energy.idealFromBcs(weight, dog.bcs);
+        final ideal = (target != null && target > 0 && target < weight) ? target : fromBcs;
+        if (ideal != null) {
+          // Nie schodzimy poniżej 70% obecnej masy w jednym kroku – zbyt ambitny cel.
+          basis = math.max(ideal, weight * 0.7);
+          factor = 1.0; // WSAVA/AAHA: 1,0 × RER masy docelowej
+          notes.add(tr('Redukcja: 1,0 × RER masy docelowej ({0} kg).', [basis.toStringAsFixed(1)]) +
+              (ideal == fromBcs && ideal != target ? tr(' Masę docelową oszacowałem z BCS – wpisz ją w profilu.') : ''));
+        } else {
+          notes.add(tr('Redukcja: wpisz masę docelową w profilu (albo BCS), a policzę dawkę od masy idealnej.'));
+        }
+      case NutritionGoal.gain:
+        final target = dog.targetWeightKg;
+        if (target != null && target > weight) {
+          basis = math.min(target, weight * 1.1);
+          notes.add(tr('Budowa masy: liczę utrzymanie masy docelowej ({0} kg), stopniowo.', [basis.toStringAsFixed(1)]));
+        } else {
+          factor *= 1.1;
+          notes.add(tr('Budowa masy: +10% do zapotrzebowania (wpisz masę docelową, by liczyć dokładniej).'));
+        }
+      case NutritionGoal.maintain:
+        break;
+    }
+    if (senior) {
+      notes.add(tr('Senior: zapotrzebowanie bywa niższe albo wyższe niż u dorosłego – kieruj się masą i BCS.'));
+    }
   }
-  if (growing) notes.add(tr('Młody pies ({0} mies.): zapotrzebowanie wzrostowe.', [months]));
 
   final rer = Energy.rer(basis);
   final base = rer * factor;
@@ -174,9 +285,17 @@ DailyPlan computeDailyPlan({
     evening = entriesToday.where((e) => e.kind == FeedKind.evening).fold(0.0, (a, e) => a + e.grams);
   }
 
-  if (training > 0) notes.add(tr('Treningi dziś: +{0} kcal.', [training.round()]));
+  if (training > 0) notes.add(tr('Bieg z dystansem dziś: +{0} kcal ponad zwykłą aktywność.', [training.round()]));
   if (treats > 0) notes.add(tr('Przysmaki: {0} kcal odjęte od porcji karmy.', [treats.round()]));
-  if (adj != 0) notes.add(tr('Korekta z panelu AI: {0}{1}%.', [adj > 0 ? '+' : '', adj.round()]));
+  if (adj != 0) notes.add(tr('Korekta zatwierdzona przez Ciebie: {0}{1}%.', [adj > 0 ? '+' : '', adj.round()]));
+
+  // Karma główna pokrywa mniej niż ~80% energii utrzymania (np. silna redukcja albo
+  // dużo przysmaków) – zwykła karma może nie dostarczyć wszystkich składników niezbędnych.
+  final foodKcal = targetKcal - treats - supp;
+  final restriction = maintenance > 0 && foodKcal < 0.8 * maintenance;
+  if (restriction) {
+    notes.add(tr('Karma główna da mniej niż 80% energii na utrzymanie. Przy takim ograniczeniu zwykła karma może nie pokryć białka, witamin i minerałów – rozważ karmę dietetyczną i skonsultuj plan z lekarzem weterynarii.'));
+  }
 
   return DailyPlan(
     weightKg: weight,
@@ -198,5 +317,9 @@ DailyPlan computeDailyPlan({
     morningGrams: morning,
     eveningGrams: evening,
     notes: notes,
+    lowKcal: targetKcal * 0.8,
+    highKcal: targetKcal * 1.2,
+    maintenanceKcal: maintenance,
+    restrictionWarning: restriction,
   );
 }

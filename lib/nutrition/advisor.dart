@@ -1,5 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 
+import '../models.dart';
 import '../theme.dart';
 import 'nutrition_models.dart';
 import 'nutrition_store.dart';
@@ -18,6 +19,27 @@ class Advice {
 /// Analiza danych (waga, kalorie, przysmaki, treningi, magazyn) i propozycje zmian.
 /// Działa offline na telefonie. Interfejs jest gotowy na podpięcie modelu
 /// językowego w chmurze (kolejny etap) – wynik ma tę samą postać.
+/// Trend masy w % na tydzień z regresji liniowej. Null, gdy danych jest za mało
+/// (mniej niż 3 ważenia albo krócej niż 21 dni) – wtedy nie proponujemy zmian dawki.
+double? weightTrend(List<WeightEntry> pts) {
+  if (pts.length < 3) return null;
+  final sorted = [...pts]..sort((a, b) => a.date.compareTo(b.date));
+  final t0 = sorted.first.date;
+  final span = sorted.last.date.difference(t0).inHours / 24;
+  if (span < 21) return null;
+  final xs = [for (final p in sorted) p.date.difference(t0).inHours / 24];
+  final ys = [for (final p in sorted) p.kg];
+  final n = xs.length;
+  final mx = xs.reduce((a, b) => a + b) / n, my = ys.reduce((a, b) => a + b) / n;
+  var num = 0.0, den = 0.0;
+  for (var i = 0; i < n; i++) {
+    num += (xs[i] - mx) * (ys[i] - my);
+    den += (xs[i] - mx) * (xs[i] - mx);
+  }
+  if (den == 0 || my <= 0) return null;
+  return num / den * 7 / my * 100;
+}
+
 class NutritionAdvisor {
   static List<Advice> analyze(NutritionStore n) {
     final app = n.app;
@@ -45,63 +67,65 @@ class NutritionAdvisor {
 
     // --- Trend wagi (ostatnie 4 tygodnie) ---
     final now = DateTime.now();
-    final recent = app.weights.where((w) => w.date.isAfter(now.subtract(const Duration(days: 35)))).toList()
+    final recent = app.weights.where((w) => w.date.isAfter(now.subtract(const Duration(days: 42)))).toList()
       ..sort((a, b) => a.date.compareTo(b.date));
     final lastWeigh = app.weights.isEmpty ? null : app.weights.last.date;
     if (lastWeigh == null || now.difference(lastWeigh).inDays > 14) {
       out.add(Advice(Icons.scale_rounded, K9.blue, tr('Czas na ważenie'),
           tr('Ostatnie ważenie było ponad 2 tygodnie temu. Regularna waga pozwala mi dokładnie korygować dawkę.')));
     }
-    if (recent.length >= 2) {
-      final days = recent.last.date.difference(recent.first.date).inDays;
-      if (days >= 10) {
-        final change = recent.last.kg - recent.first.kg;
-        final weeklyPct = change / recent.first.kg / days * 7 * 100;
-        final target = dog.targetWeightKg;
-        switch (s.goal) {
-          case NutritionGoal.lose:
-            if (target != null && recent.last.kg <= target) {
-              out.add(const Advice(Icons.emoji_events_rounded, K9.green, 'Cel osiągnięty',
-                  'Pies osiągnął wagę docelową. Zmień cel na „Utrzymanie wagi”.'));
-            } else if (weeklyPct > -0.5) {
-              out.add(Advice(Icons.trending_flat_rounded, K9.yellow, 'Redukcja stoi w miejscu',
-                  'Waga zmienia się o ${fmtNum(weeklyPct, 1)}% tygodniowo (cel: ok. −1%). Proponuję zmniejszyć dawkę o 10%.',
-                  adjustPct: -10));
-            } else if (weeklyPct < -2) {
-              out.add(Advice(Icons.warning_amber_rounded, K9.red, 'Za szybkie chudnięcie',
-                  'Spadek ${fmtNum(weeklyPct.abs(), 1)}% tygodniowo to za dużo (bezpiecznie 1–2%). Proponuję zwiększyć dawkę o 5%.',
-                  adjustPct: 5));
-            } else {
-              out.add(Advice(Icons.check_circle_rounded, K9.green, 'Redukcja idzie dobrze',
-                  'Spadek ${fmtNum(weeklyPct.abs(), 1)}% tygodniowo – bezpieczne tempo. Bez zmian.'));
-            }
-          case NutritionGoal.gain:
-            if (target != null && recent.last.kg >= target) {
-              out.add(const Advice(Icons.emoji_events_rounded, K9.green, 'Masa docelowa osiągnięta',
-                  'Zmień cel na „Utrzymanie wagi”, żeby pies nie przybierał dalej.'));
-            } else if (weeklyPct < 0.25) {
-              out.add(Advice(Icons.trending_flat_rounded, K9.yellow, 'Masa nie rośnie',
-                  'Przyrost ${fmtNum(weeklyPct, 1)}% tygodniowo. Proponuję zwiększyć dawkę o 10%.',
-                  adjustPct: 10));
-            } else if (weeklyPct > 1.5) {
-              out.add(Advice(Icons.warning_amber_rounded, K9.yellow, 'Szybki przyrost',
-                  'Waga rośnie o ${fmtNum(weeklyPct, 1)}% tygodniowo. Sprawdź kondycję (BCS) – może wystarczy −5%.',
-                  adjustPct: -5));
-            } else {
-              out.add(const Advice(Icons.check_circle_rounded, K9.green, 'Budowa masy w normie',
-                  'Tempo przyrostu jest właściwe. Bez zmian.'));
-            }
-          case NutritionGoal.maintain:
-            final pct = change / recent.first.kg * 100;
-            if (pct > 3) {
-              out.add(Advice(Icons.trending_up_rounded, K9.yellow, 'Waga rośnie',
-                  'Przez ostatnie tygodnie +${fmtNum(pct, 1)}%. Proponuję zmniejszyć dawkę o 5%.',
-                  adjustPct: -5));
-            } else if (pct < -3) {
-              out.add(Advice(Icons.trending_down_rounded, K9.yellow, 'Waga spada',
-                  'Przez ostatnie tygodnie ${fmtNum(pct, 1)}%. Proponuję zwiększyć dawkę o 5%.', adjustPct: 5));
-            }
-        }
+    final trend = weightTrend(recent);
+    if (trend == null && recent.length >= 2) {
+      out.add(Advice(Icons.timeline_rounded, K9.blue, tr('Za mało ważeń na ocenę trendu'),
+          tr('Do oceny zmiany dawki potrzebuję co najmniej 3 ważeń z okresu min. 3 tygodni. Krótkie wahania (woda, jelita, pora dnia) nie są podstawą do zmiany porcji.')));
+    }
+    if (trend != null) {
+      final weeklyPct = trend;
+      final target = dog.targetWeightKg;
+      final lastKg = recent.last.kg;
+      switch (s.goal) {
+        case NutritionGoal.lose:
+          if (target != null && lastKg <= target) {
+            out.add(Advice(Icons.emoji_events_rounded, K9.green, tr('Cel osiągnięty'),
+                tr('Pies osiągnął wagę docelową. Zmień cel na „Utrzymanie wagi”.')));
+          } else if (weeklyPct > -0.5) {
+            out.add(Advice(Icons.trending_flat_rounded, K9.yellow, tr('Redukcja stoi w miejscu'),
+                tr('Przez ostatnie tygodnie waga zmienia się o {0}% tygodniowo (zalecane ok. 1–2%). Najpierw sprawdź, czy wszystkie przysmaki są zapisane. Możesz zmniejszyć dawkę o 5% i ocenić efekt po 2–3 tygodniach.', [fmtNum(weeklyPct, 1)]),
+                adjustPct: -5));
+          } else if (weeklyPct < -2) {
+            out.add(Advice(Icons.warning_amber_rounded, K9.red, tr('Za szybkie chudnięcie'),
+                tr('Spadek {0}% tygodniowo to więcej niż zalecane 1–2%. Proponuję zwiększyć dawkę o 5%. Jeśli pies chudnie mimo jedzenia – skontaktuj się z lekarzem weterynarii.', [fmtNum(weeklyPct.abs(), 1)]),
+                adjustPct: 5));
+          } else {
+            out.add(Advice(Icons.check_circle_rounded, K9.green, tr('Redukcja idzie dobrze'),
+                tr('Spadek {0}% tygodniowo – bezpieczne tempo. Bez zmian.', [fmtNum(weeklyPct.abs(), 1)])));
+          }
+        case NutritionGoal.gain:
+          if (target != null && lastKg >= target) {
+            out.add(Advice(Icons.emoji_events_rounded, K9.green, tr('Masa docelowa osiągnięta'),
+                tr('Zmień cel na „Utrzymanie wagi”, żeby pies nie przybierał dalej.')));
+          } else if (weeklyPct < 0.25) {
+            out.add(Advice(Icons.trending_flat_rounded, K9.yellow, tr('Masa nie rośnie'),
+                tr('Przyrost {0}% tygodniowo. Możesz zwiększyć dawkę o 5% i ocenić efekt po 2–3 tygodniach. Niezamierzona utrata masy wymaga wizyty u lekarza weterynarii.', [fmtNum(weeklyPct, 1)]),
+                adjustPct: 5));
+          } else if (weeklyPct > 1.5) {
+            out.add(Advice(Icons.warning_amber_rounded, K9.yellow, tr('Szybki przyrost'),
+                tr('Waga rośnie o {0}% tygodniowo. Sprawdź kondycję (BCS) – może wystarczy −5%.', [fmtNum(weeklyPct, 1)]),
+                adjustPct: -5));
+          } else {
+            out.add(Advice(Icons.check_circle_rounded, K9.green, tr('Budowa masy w normie'),
+                tr('Tempo przyrostu jest właściwe. Bez zmian.')));
+          }
+        case NutritionGoal.maintain:
+          if (weeklyPct > 0.75) {
+            out.add(Advice(Icons.trending_up_rounded, K9.yellow, tr('Waga rośnie'),
+                tr('Trend z ostatnich tygodni: +{0}% tygodniowo. Jeśli BCS też rośnie, możesz zmniejszyć dawkę o 5%.', [fmtNum(weeklyPct, 1)]),
+                adjustPct: -5));
+          } else if (weeklyPct < -0.75) {
+            out.add(Advice(Icons.trending_down_rounded, K9.yellow, tr('Waga spada'),
+                tr('Trend z ostatnich tygodni: {0}% tygodniowo. Możesz zwiększyć dawkę o 5%. Niewyjaśniony spadek masy skonsultuj z lekarzem weterynarii.', [fmtNum(weeklyPct, 1)]),
+                adjustPct: 5));
+          }
       }
     }
 
@@ -134,7 +158,7 @@ class NutritionAdvisor {
     final r = app.readiness;
     if (r.level == 3 || r.level == 2) {
       out.add(Advice(Icons.bolt_rounded, K9.orange, tr('Wyższe obciążenie treningowe'),
-          tr('Ten tydzień jest cięższy niż zwykle. Dodatkowe kalorie z treningów są już doliczone do dawki{0}. Pilnuj wody i regeneracji.', [plan != null && plan.trainingKcal > 0 ? tr(' (dziś +{0} kcal)', [plan.trainingKcal.round()]) : ''])));
+          tr('Ten tydzień jest cięższy niż zwykle. Do dawki doliczam tylko bieg z dystansem{0} – zwykła aktywność jest już w zapotrzebowaniu bazowym. Pilnuj wody i regeneracji.', [plan != null && plan.trainingKcal > 0 ? tr(' (dziś +{0} kcal)', [plan.trainingKcal.round()]) : ''])));
     }
 
     // --- Magazyn ---
