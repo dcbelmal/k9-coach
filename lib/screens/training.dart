@@ -202,7 +202,7 @@ class _WeekPlanState extends State<WeekPlan> {
       listenable: s,
       builder: (context, _) => ListView(padding: const EdgeInsets.fromLTRB(16, 0, 16, 120), children: [
         Row(children: [
-          IconButton(
+          IconButton(tooltip: tr('Poprzedni'), 
               onPressed: () => setState(() => week = week.subtract(const Duration(days: 7))),
               icon: const Icon(Icons.chevron_left_rounded, color: K9.orange)),
           Expanded(
@@ -213,7 +213,7 @@ class _WeekPlanState extends State<WeekPlan> {
                   style: const TextStyle(color: K9.muted, fontSize: 12.5)),
             ]),
           ),
-          IconButton(
+          IconButton(tooltip: tr('Następny'), 
               onPressed: () => setState(() => week = week.add(const Duration(days: 7))),
               icon: const Icon(Icons.chevron_right_rounded, color: K9.orange)),
         ]),
@@ -315,15 +315,60 @@ class _DayRow extends StatelessWidget {
   }
 }
 
-class _History extends StatelessWidget {
+class _History extends StatefulWidget {
   const _History({super.key});
+
+  @override
+  State<_History> createState() => _HistoryState();
+}
+
+/// Historia z filtrem dyscypliny (pokazujemy tylko dyscypliny, które są w historii).
+class _HistoryState extends State<_History> {
+  Discipline? filter;
 
   @override
   Widget build(BuildContext context) {
     final s = AppStore.instance;
     return ListenableBuilder(
       listenable: s,
-      builder: (context, _) => TrainingHistoryList(items: s.doneTrainings.toList()),
+      builder: (context, _) {
+        final all = s.doneTrainings.toList();
+        final present = [for (final d in Discipline.values) if (all.any((t) => t.discipline == d)) d];
+        final f = present.contains(filter) ? filter : null;
+        Widget chip(String label, Discipline? d) {
+          final sel = f == d;
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: ChoiceChip(
+              label: Text(label),
+              avatar: d == null ? null : Icon(d.icon, size: 18, color: sel ? Colors.black : d.color),
+              selected: sel,
+              showCheckmark: false,
+              selectedColor: K9.orange,
+              backgroundColor: K9.cardHi,
+              side: BorderSide.none,
+              labelStyle: TextStyle(color: sel ? Colors.black : K9.text, fontWeight: FontWeight.w600),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              onSelected: (_) => setState(() => filter = d),
+            ),
+          );
+        }
+
+        final header = present.length < 2
+            ? null
+            : SizedBox(
+                height: 48,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.only(top: 4, bottom: 4),
+                  children: [chip(tr('Wszystkie'), null), for (final d in present) chip(d.label, d)],
+                ),
+              );
+        return TrainingHistoryList(
+          items: f == null ? all : all.where((t) => t.discipline == f).toList(),
+          header: header,
+        );
+      },
     );
   }
 }

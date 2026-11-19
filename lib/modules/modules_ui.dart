@@ -4,7 +4,6 @@ import '../models.dart';
 import '../store.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
-import '../screens/shell.dart';
 import 'module_routes.dart';
 import 'module_store.dart';
 import 'modules.dart';
@@ -32,21 +31,27 @@ class ModulesGrid extends StatelessWidget {
           final title = sec == ModuleSection.training && dog.purpose != null
               ? tr('Trening · {0}', [dog.purpose!.label])
               : sec.label;
-          children.add(Padding(
-            padding: const EdgeInsets.only(left: 4, bottom: 8),
-            child: Text(title.toUpperCase(),
-                style: const TextStyle(color: K9.muted, fontSize: 11.5, fontWeight: FontWeight.w700, letterSpacing: 1)),
-          ));
-          children.add(GridView.count(
-            crossAxisCount: 4,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: 10,
-            crossAxisSpacing: 10,
-            childAspectRatio: 0.92,
-            padding: EdgeInsets.zero,
-            children: [for (final m in list) ModuleTile(module: m)],
-          ));
+          children.add(
+            Padding(
+              padding: const EdgeInsets.only(left: 4, bottom: 8),
+              child: Text(
+                title.toUpperCase(),
+                style: const TextStyle(color: K9.muted, fontSize: 11.5, fontWeight: FontWeight.w700, letterSpacing: 1),
+              ),
+            ),
+          );
+          children.add(
+            GridView.count(
+              crossAxisCount: 4,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              mainAxisSpacing: 10,
+              crossAxisSpacing: 10,
+              childAspectRatio: 0.7,
+              padding: EdgeInsets.zero,
+              children: [for (final m in list) ModuleTile(module: m)],
+            ),
+          );
         }
         return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children);
       },
@@ -70,7 +75,7 @@ const _shortcutOrder = [
   AppModule.foodStock,
 ];
 
-/// Ekran Start: 4 najważniejsze skróty i przycisk „Wszystkie” (prowadzi do zakładki Pies).
+/// Ekran Start: 4 najważniejsze skróty i przycisk „Wszystkie” (lista wszystkich funkcji).
 class ShortcutsRow extends StatelessWidget {
   const ShortcutsRow({super.key});
 
@@ -81,41 +86,49 @@ class ShortcutsRow extends StatelessWidget {
       builder: (context, _) {
         final ms = ModuleStore.instance;
         final list = _shortcutOrder.where((m) => ms.isEnabled(m)).take(4).toList();
-        return Row(children: [
-          for (final m in list) ...[
-            Expanded(child: AspectRatio(aspectRatio: 0.9, child: ModuleTile(module: m))),
-            const SizedBox(width: 10),
-          ],
-          Expanded(
-            child: AspectRatio(
-              aspectRatio: 0.9,
-              child: K9Card(
-                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
-                onTap: () => goToTab(3),
-                child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  Icon(Icons.apps_rounded, color: K9.orange, size: 28),
-                  SizedBox(height: 8),
-                  FittedBox(fit: BoxFit.scaleDown, child: Text(tr('Wszystkie'), maxLines: 1, style: _tileText)),
-                ]),
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (final m in list) ...[Expanded(child: ModuleTile(module: m)), const SizedBox(width: 10)],
+            Expanded(
+              child: LabeledTile(
+                icon: Icons.apps_rounded,
+                label: tr('Wszystkie'),
+                onTap: () => openAllModules(context),
               ),
             ),
-          ),
-        ]);
+          ],
+        );
       },
     );
   }
 }
 
+/// Osobny ekran z listą wszystkich włączonych funkcji (skrót „Wszystkie” na Start).
+void openAllModules(BuildContext context) => Navigator.of(context).push(
+  MaterialPageRoute(
+    builder: (_) => Scaffold(
+      appBar: AppBar(title: Text(tr('Wszystkie funkcje'))),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
+        children: const [AllModulesCard(expanded: true)],
+      ),
+    ),
+  ),
+);
+
 /// Zakładka Pies: wszystkie włączone funkcje, zwinięte w sekcje.
 class AllModulesCard extends StatefulWidget {
-  const AllModulesCard({super.key});
+  /// true = wszystkie sekcje rozwinięte (osobny ekran „Wszystkie funkcje”).
+  final bool expanded;
+  const AllModulesCard({super.key, this.expanded = false});
 
   @override
   State<AllModulesCard> createState() => _AllModulesCardState();
 }
 
 class _AllModulesCardState extends State<AllModulesCard> {
-  final _open = <ModuleSection>{};
+  late final _open = <ModuleSection>{if (widget.expanded) ...ModuleSection.values};
 
   @override
   Widget build(BuildContext context) {
@@ -181,31 +194,74 @@ class _AllModulesCardState extends State<AllModulesCard> {
   }
 }
 
-const _tileText = TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, height: 1.15);
+/// Kafelek: ikona w kwadratowej karcie, podpis POD kartą (do 2 linii),
+/// więc nazwa nie ucina się na wąskich telefonach.
+class LabeledTile extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  const LabeledTile({super.key, required this.icon, required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: label,
+      excludeSemantics: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AspectRatio(
+              aspectRatio: 1,
+              child: K9Card(
+                padding: EdgeInsets.zero,
+                onTap: onTap,
+                child: Center(child: Icon(icon, color: K9.orange, size: 28)),
+              ),
+            ),
+            const SizedBox(height: 6),
+            // Słowa nie łamią się w środku: gdy najdłuższe słowo się nie mieści, zmniejszamy tekst.
+            LayoutBuilder(builder: (context, c) {
+              var style = DefaultTextStyle.of(context)
+                  .style
+                  .merge(const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, height: 1.2));
+              var widest = 0.0;
+              for (final w in label.split(' ')) {
+                final tp = TextPainter(
+                  text: TextSpan(text: w, style: style),
+                  textDirection: Directionality.of(context),
+                  textScaler: MediaQuery.textScalerOf(context),
+                )..layout();
+                if (tp.width > widest) widest = tp.width;
+              }
+              if (c.maxWidth.isFinite && widest > c.maxWidth) {
+                style = style.copyWith(fontSize: (12 * c.maxWidth / widest).clamp(8.5, 12.0) - 0.1);
+              }
+              return Text(
+                label,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: style,
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class ModuleTile extends StatelessWidget {
   final AppModule module;
   const ModuleTile({super.key, required this.module});
 
   @override
-  Widget build(BuildContext context) {
-    return K9Card(
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
-      onTap: () => openModule(context, module),
-      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-        Icon(module.icon, color: K9.orange, size: 28),
-        const SizedBox(height: 8),
-        if (module.label.contains(' '))
-          Text(module.label,
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: _tileText)
-        else
-          FittedBox(fit: BoxFit.scaleDown, child: Text(module.label, maxLines: 1, style: _tileText)),
-      ]),
-    );
-  }
+  Widget build(BuildContext context) =>
+      LabeledTile(icon: module.icon, label: module.label, onTap: () => openModule(context, module));
 }
 
 /// Zachęta do uzupełnienia profilu (starsze profile bez celu i aktywności).

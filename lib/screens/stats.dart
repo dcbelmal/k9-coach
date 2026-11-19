@@ -427,25 +427,38 @@ class _WeightCard extends StatelessWidget {
     final w = s.weights;
     final target = s.dog?.targetWeightKg;
     return K9Card(
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Expanded(child: Text(tr('Waga'), style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700))),
-          if (w.isNotEmpty)
-            Text(tr('{0} kg', [fmtNum(w.last.kg)]),
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: K9.orange)),
-          IconButton(
-              onPressed: () => openWeightForm(context),
-              icon: const Icon(Icons.add_circle_outline_rounded, color: K9.orange)),
-        ]),
-        if (w.length < 2)
-          Padding(
-            padding: EdgeInsets.symmetric(vertical: 12),
-            child: Text(tr('Dodaj co najmniej dwa pomiary, aby zobaczyć wykres.'),
-                style: TextStyle(color: K9.muted)),
-          )
-        else
-          SizedBox(height: 170, child: WeightChart(weights: w, target: target)),
-      ]),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(tr('Waga'), style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+              ),
+              if (w.isNotEmpty)
+                Text(
+                  tr('{0} kg', [fmtNum(w.last.kg)]),
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: K9.orange),
+                ),
+              IconButton(
+                tooltip: tr('Dodaj'),
+                onPressed: () => openWeightForm(context),
+                icon: const Icon(Icons.add_circle_outline_rounded, color: K9.orange),
+              ),
+            ],
+          ),
+          if (w.length < 2)
+            Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Text(tr('Dodaj co najmniej dwa pomiary, aby zobaczyć wykres.'), style: TextStyle(color: K9.muted)),
+            )
+          else
+            SizedBox(
+              height: 170,
+              child: WeightChart(weights: w, target: target),
+            ),
+        ],
+      ),
     );
   }
 }

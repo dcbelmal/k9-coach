@@ -104,7 +104,7 @@ class _TrackDetailScreenState extends State<TrackDetailScreen> {
                 onPressed: () async {
                   if (await confirmDelete(context, tr('ten trening'))) {
                     if (!context.mounted) return;
-                    if (!await saveGuarded(context, () => s.deleteTraining(t))) return;
+                    if (!await saveGuarded(context, () => s.deleteTraining(t), done: tr('Usunięto'))) return;
                     if (context.mounted) Navigator.pop(context);
                   }
                 },

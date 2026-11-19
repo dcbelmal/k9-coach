@@ -304,6 +304,7 @@ class Segmented extends StatelessWidget {
                       child: AnimatedDefaultTextStyle(
                         duration: const Duration(milliseconds: 200),
                         style: TextStyle(
+                            fontFamily: 'Inter',
                             fontWeight: FontWeight.w700,
                             fontSize: 14,
                             color: i == index ? Colors.black : K9.muted),
@@ -471,7 +472,7 @@ class DateField extends StatelessWidget {
         decoration: InputDecoration(
           labelText: label,
           suffixIcon: clearable && value != null
-              ? IconButton(icon: const Icon(Icons.close_rounded), onPressed: () => onChanged(null))
+              ? IconButton(tooltip: tr('Zamknij'), icon: const Icon(Icons.close_rounded), onPressed: () => onChanged(null))
               : const Icon(Icons.calendar_today_rounded, size: 18, color: K9.muted),
         ),
         child: Text(text, style: TextStyle(color: value == null ? K9.muted : K9.text)),
@@ -531,7 +532,7 @@ class SheetTitle extends StatelessWidget {
           Expanded(
               child: Text(text, style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w800))),
           if (onDelete != null)
-            IconButton(
+            IconButton(tooltip: tr('Usuń'), 
                 onPressed: onDelete,
                 icon: const Icon(Icons.delete_outline_rounded, color: K9.red)),
         ]),
@@ -547,12 +548,17 @@ final appMessenger = GlobalKey<ScaffoldMessengerState>();
 /// Wykonuje zapis i pokazuje zrozumiały komunikat, gdy się nie uda.
 /// Zwraca true dopiero po potwierdzonym zapisie – wtedy można zamknąć formularz
 /// i pokazać „Zapisano”. Przy błędzie formularz zostaje, można ponowić.
-Future<bool> saveGuarded(BuildContext context, Future<void> Function() op) async {
+/// Po udanym zapisie pokazuje krótkie potwierdzenie ([done], domyślnie „Zapisano”).
+Future<bool> saveGuarded(BuildContext context, Future<void> Function() op, {String? done}) async {
   // Drugie naciśnięcie „Zapisz” w trakcie zapisu jest ignorowane.
   if (_saving) return false;
   _saving = true;
   try {
     await op();
+    final m = appMessenger.currentState ?? (context.mounted ? ScaffoldMessenger.maybeOf(context) : null);
+    m
+      ?..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(done ?? tr('Zapisano')), duration: const Duration(seconds: 2)));
     return true;
   } catch (e) {
     logError('Zapis', e);

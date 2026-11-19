@@ -74,7 +74,13 @@ class _DogWizardScreenState extends State<DogWizardScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(tr(titles[step])),
-        leading: step == 0 ? null : IconButton(icon: const Icon(Icons.arrow_back_rounded), onPressed: () => _go(step - 1)),
+        leading: step == 0
+            ? null
+            : IconButton(
+                tooltip: tr('Wstecz'),
+                icon: const Icon(Icons.arrow_back_rounded),
+                onPressed: () => _go(step - 1),
+              ),
       ),
       body: Column(children: [
         Padding(
@@ -91,6 +97,14 @@ class _DogWizardScreenState extends State<DogWizardScreen> {
                 ),
               ),
           ]),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(23, 0, 23, 4),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(tr('Krok {0} z {1}', [step + 1, titles.length]),
+                style: const TextStyle(color: K9.muted, fontSize: 12.5, fontWeight: FontWeight.w600)),
+          ),
         ),
         Expanded(
           child: PageView(

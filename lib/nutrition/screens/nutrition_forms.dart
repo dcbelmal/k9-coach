@@ -138,7 +138,7 @@ class _FeedingFormState extends State<_FeedingForm> {
             ? null
             : () async {
                 if (!context.mounted) return;
-                if (!await saveGuarded(context, () => _n.deleteEntry(widget.existing!))) {
+                if (!await saveGuarded(context, () => _n.deleteEntry(widget.existing!), done: tr('Usunięto'))) {
                   return;
                 }
                 if (context.mounted) Navigator.pop(context);
@@ -290,7 +290,7 @@ class _BagFormState extends State<_BagForm> {
             : () async {
                 if (await confirmDelete(context, tr('ten worek z magazynu'))) {
                   if (!context.mounted) return;
-                  if (!await saveGuarded(context, () => _n.deleteBag(b))) {
+                  if (!await saveGuarded(context, () => _n.deleteBag(b), done: tr('Usunięto'))) {
                     return;
                   }
                   if (context.mounted) Navigator.pop(context);
@@ -509,11 +509,11 @@ class _SettingsFormState extends State<_SettingsForm> {
       ),
       Row(children: [
         Expanded(child: Text(tr('Przypomnij o zakupie przed końcem worka'))),
-        IconButton(
+        IconButton(tooltip: tr('Odejmij'), 
             onPressed: s.buyLeadDays > 1 ? () => setState(() => s.buyLeadDays--) : null,
             icon: const Icon(Icons.remove_circle_outline_rounded)),
         Text(tr('{0} dni', [s.buyLeadDays]), style: const TextStyle(fontWeight: FontWeight.w700)),
-        IconButton(
+        IconButton(tooltip: tr('Dodaj'), 
             onPressed: s.buyLeadDays < 21 ? () => setState(() => s.buyLeadDays++) : null,
             icon: const Icon(Icons.add_circle_outline_rounded)),
       ]),
@@ -571,7 +571,7 @@ class _SupplementFormState extends State<_SupplementForm> {
             ? null
             : () async {
                 if (!context.mounted) return;
-                if (!await saveGuarded(context, () => _n.deleteSupplement(widget.existing!))) {
+                if (!await saveGuarded(context, () => _n.deleteSupplement(widget.existing!), done: tr('Usunięto'))) {
                   return;
                 }
                 if (context.mounted) Navigator.pop(context);

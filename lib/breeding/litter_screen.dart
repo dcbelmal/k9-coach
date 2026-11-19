@@ -35,6 +35,7 @@ class LitterScreen extends StatelessWidget {
             title: Text(tr('Miot {0}', [fmtDateShort(l.born)])),
             actions: [
               IconButton(
+                tooltip: tr('Edytuj'),
                 icon: const Icon(Icons.edit_outlined),
                 onPressed: () => openLitterForm(context, mating),
               ),

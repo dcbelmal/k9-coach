@@ -423,7 +423,7 @@ class _ShowFormState extends State<_ShowForm> {
               : () async {
                   if (await confirmDelete(context, tr('wystawę'))) {
                     if (!context.mounted) return;
-                    if (!await saveGuarded(context, () => _s.deleteShow(widget.existing!))) return;
+                    if (!await saveGuarded(context, () => _s.deleteShow(widget.existing!), done: tr('Usunięto'))) return;
                     if (context.mounted) Navigator.pop(context);
                   }
                 }),

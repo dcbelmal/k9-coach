@@ -282,7 +282,7 @@ class _TreatCounter extends StatelessWidget {
                   style: const TextStyle(color: K9.muted, fontSize: 12.5)),
             ]),
           ),
-          IconButton(
+          IconButton(tooltip: tr('Odejmij'), 
               onPressed: count > 0 ? () => onChanged(count - 1) : null,
               icon: const Icon(Icons.remove_circle_outline_rounded, size: 30)),
           SizedBox(
@@ -292,7 +292,7 @@ class _TreatCounter extends StatelessWidget {
           ),
           GestureDetector(
             onLongPress: () => onChanged(count + 5),
-            child: IconButton(
+            child: IconButton(tooltip: tr('Dodaj'), 
               onPressed: () => onChanged(count + 1),
               icon: const Icon(Icons.add_circle_rounded, size: 40, color: K9.orange),
             ),

@@ -24,7 +24,7 @@ class GoalsScreen extends StatelessWidget {
           Text(tr('Cele')),
         ]),
         actions: [
-          IconButton(
+          IconButton(tooltip: tr('Dodaj'), 
               onPressed: () => openGoalForm(context),
               icon: const Icon(Icons.add_circle_outline_rounded, color: K9.orange, size: 28)),
         ],
@@ -173,7 +173,7 @@ class _GoalFormState extends State<_GoalForm> {
               : () async {
                   if (await confirmDelete(context, 'cel')) {
                     if (!context.mounted) return;
-                    if (!await saveGuarded(context, () => _s.deleteGoal(widget.existing!))) return;
+                    if (!await saveGuarded(context, () => _s.deleteGoal(widget.existing!), done: tr('Usunięto'))) return;
                     if (context.mounted) Navigator.pop(context);
                   }
                 }),

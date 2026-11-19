@@ -100,10 +100,16 @@ class HealthScreen extends StatelessWidget {
               child: Text(tr('WPISY ZDROWOTNE'),
                   style: TextStyle(color: K9.muted, fontSize: 11.5, fontWeight: FontWeight.w700, letterSpacing: 1)),
             ),
-            for (final (i, c) in HealthCategory.values.indexed) ...[
-              FadeSlideIn(index: i + 1, child: _CategoryCard(category: c, s: s)),
-              const SizedBox(height: 10),
-            ],
+            // Jedna lista kategorii. Terminy są tylko w karcie „Najbliższe terminy” wyżej.
+            FadeSlideIn(
+              index: 2,
+              child: K9Card(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                child: Column(
+                  children: [for (final c in HealthCategory.values) _CategoryCard(category: c, s: s)],
+                ),
+              ),
+            ),
           ]);
         },
       ),
@@ -119,25 +125,15 @@ class _CategoryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final latest = s.latestFor(category);
-    final upcoming = s.dueItems.where((h) => h.category == category).toList();
-    String sub;
-    if (upcoming.isNotEmpty) {
-      sub = tr('Następne: {0}', [fmtDate(upcoming.first.nextDue!)]);
-    } else if (latest != null) {
-      sub = tr('Ostatnio: {0}, {1}', [latest.title, fmtDate(latest.date)]);
-    } else {
-      sub = tr('Brak wpisów');
-    }
-    return K9Card(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      onTap: () => Navigator.of(context)
-          .push(MaterialPageRoute(builder: (_) => HealthCategoryScreen(category: category))),
-      child: ListRow(
-        icon: category.icon,
-        color: K9.orange,
-        title: category.label,
-        subtitle: sub,
-      ),
+    final sub = latest != null ? tr('Ostatnio: {0}, {1}', [latest.title, fmtDate(latest.date)]) : tr('Brak wpisów');
+    return ListRow(
+      icon: category.icon,
+      color: K9.orange,
+      title: category.label,
+      subtitle: sub,
+      trailing: const Icon(Icons.chevron_right_rounded, color: K9.faint),
+      onTap: () =>
+          Navigator.of(context).push(MaterialPageRoute(builder: (_) => HealthCategoryScreen(category: category))),
     );
   }
 }

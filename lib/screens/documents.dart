@@ -122,7 +122,7 @@ class DocumentScreen extends StatelessWidget {
         ];
         return Scaffold(
           appBar: AppBar(title: Text(d.title), actions: [
-            IconButton(
+            IconButton(tooltip: tr('Edytuj'), 
                 onPressed: () => openDocumentForm(context, existing: d),
                 icon: const Icon(Icons.edit_outlined, color: K9.orange)),
           ]),
@@ -222,7 +222,7 @@ class _DocFormState extends State<_DocForm> {
               : () async {
                   if (await confirmDelete(context, tr('dokument i jego zdjęcia'))) {
                     if (!context.mounted) return;
-                    if (!await saveGuarded(context, () => _s.deleteDocument(widget.existing!))) return;
+                    if (!await saveGuarded(context, () => _s.deleteDocument(widget.existing!), done: tr('Usunięto'))) return;
                     if (context.mounted) Navigator.pop(context);
                   }
                 }),

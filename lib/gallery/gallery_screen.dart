@@ -96,12 +96,12 @@ class _PhotoScreenState extends State<_PhotoScreen> {
         backgroundColor: Colors.black,
         title: Text(fmtDate(p.date)),
         actions: [
-          IconButton(
+          IconButton(tooltip: tr('Usuń'), 
             icon: const Icon(Icons.delete_outline_rounded, color: K9.red),
             onPressed: () async {
               if (await confirmDelete(context, tr('to zdjęcie'))) {
                 if (!context.mounted) return;
-                if (!await saveGuarded(context, () => GalleryStore.instance.delete(p))) return;
+                if (!await saveGuarded(context, () => GalleryStore.instance.delete(p), done: tr('Usunięto'))) return;
                 if (context.mounted) Navigator.pop(context);
               }
             },

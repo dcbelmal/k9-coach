@@ -32,7 +32,8 @@ Future<void> openGpsWith(NavigatorState nav, {Discipline? discipline, TrainingSe
       _rec.targetMin = plan.durationMin;
       _rec.targetKm = plan.discipline.hasDistance ? plan.distanceKm : null;
     } else {
-      if (discipline != null) _rec.discipline = discipline;
+      final d = discipline ?? AppStore.instance.lastDiscipline;
+      if (d != null) _rec.discipline = d;
       _rec.targetMin = 0;
       _rec.targetKm = null;
     }
@@ -76,6 +77,9 @@ class _GpsScreenState extends State<GpsScreen> {
 
   /// Użytkownik wybrał trening bez GPS (np. po odmowie dostępu do lokalizacji).
   bool noGps = false;
+
+  /// Pełna karta zgód online tylko, dopóki użytkownik nie zdecydował.
+  bool _onlineOpen = !OnlineConsent.instance.asked;
 
   @override
   void initState() {
@@ -374,8 +378,8 @@ class _GpsScreenState extends State<GpsScreen> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       onSelected: (_) => setState(on),
     );
-    return ListView(
-      padding: EdgeInsets.fromLTRB(16, 0, 16, 24 + MediaQuery.viewPaddingOf(context).bottom),
+    final list = ListView(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       children: [
         if (plan != null)
           Padding(
@@ -452,7 +456,7 @@ class _GpsScreenState extends State<GpsScreen> {
             ),
           ),
         if (gps) ...[_onlineCard(), gap12],
-        if (gps) ...[_map(height: 200), gap16],
+        if (gps) ...[_map(height: OnlineConsent.instance.map == true ? 200 : 120), gap16],
         SectionTitle(tr('Dyscyplina')),
         Wrap(
           spacing: 8,
@@ -530,20 +534,33 @@ class _GpsScreenState extends State<GpsScreen> {
           ),
         ),
         if (gps && !rec.isEmpty) ...[gap12, RecordsCard(records: rec)],
-        const SizedBox(height: 20),
-        SizedBox(
-          height: 58,
-          child: FilledButton.icon(
-            onPressed: _start,
-            icon: const Icon(Icons.play_arrow_rounded, size: 30),
-            label: Text(tr('Start'), style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-          ),
-        ),
         const SizedBox(height: 10),
         Text(
           tr('Działa też przy wyłączonym ekranie. Na ekranie blokady zobaczysz powiadomienie z czasem treningu.'),
           textAlign: TextAlign.center,
           style: TextStyle(color: K9.faint, fontSize: 12),
+        ),
+      ],
+    );
+    // Przycisk Start zawsze widoczny na dole ekranu – bez przewijania.
+    return Column(
+      children: [
+        Expanded(child: list),
+        Container(
+          decoration: const BoxDecoration(
+            color: K9.bg,
+            border: Border(top: BorderSide(color: K9.border)),
+          ),
+          padding: EdgeInsets.fromLTRB(16, 12, 16, 12 + MediaQuery.viewPaddingOf(context).bottom),
+          child: SizedBox(
+            height: 58,
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: _start,
+              icon: const Icon(Icons.play_arrow_rounded, size: 30),
+              label: Text(tr('Start'), style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            ),
+          ),
         ),
       ],
     );
@@ -553,6 +570,26 @@ class _GpsScreenState extends State<GpsScreen> {
   /// trafiają współrzędne ani obszar mapy.
   Widget _onlineCard() {
     final c = OnlineConsent.instance;
+    if (!_onlineOpen) {
+      // Decyzja już podjęta: jedna linia z możliwością zmiany.
+      String state(bool? on) => on == true ? tr('wł.') : tr('wył.');
+      return K9Card(
+        padding: const EdgeInsets.fromLTRB(16, 6, 6, 6),
+        child: Row(
+          children: [
+            const Icon(Icons.privacy_tip_outlined, color: K9.blue, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                tr('Pogoda online: {0} · Mapa online: {1}', [state(c.weather), state(c.map)]),
+                style: const TextStyle(color: K9.muted, fontSize: 13),
+              ),
+            ),
+            TextButton(onPressed: () => setState(() => _onlineOpen = true), child: Text(tr('Zmień'))),
+          ],
+        ),
+      );
+    }
     return K9Card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
