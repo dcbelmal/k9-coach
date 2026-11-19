@@ -290,6 +290,24 @@ const _defaultInterval = {
   HealthCategory.supplements: 30,
 };
 
+/// Odstęp dla konkretnego preparatu (dni) – wg ulotek (ChPL), gdy jest jednoznaczny.
+const _productInterval = {
+  'NexGard': 30, // co miesiąc
+  'Simparica': 30, // co miesiąc (działanie do 35 dni)
+  'Bravecto': 84, // 12 tygodni (tabletka)
+  'Obroża Seresto': 240, // do 8 miesięcy
+};
+
+/// Wskazówka do kategorii – co jest obowiązkowe, a co ustala lekarz.
+String? _categoryHint(HealthCategory c) => switch (c) {
+      HealthCategory.vaccination => tr('Wścieklizna jest w Polsce obowiązkowa – termin kolejnej dawki wpisz z książeczki. Pozostałe szczepienia są zalecane; schemat ustala lekarz (wg WSAVA szczepienia podstawowe dorosłego psa zwykle nie częściej niż co 3 lata, leptospiroza co rok).'),
+      HealthCategory.deworming => tr('Częstotliwość zależy od trybu życia psa (ESCCAP): zwykle 4 razy w roku, częściej przy dużym ryzyku, rzadziej przy badaniu kału. Termin to propozycja – ustal własny schemat z lekarzem.'),
+      HealthCategory.ticks => tr('Odstęp zależy od preparatu – sprawdź ulotkę. Dla znanych preparatów proponuję termin z ulotki.'),
+      HealthCategory.tests => tr('Wpisz wynik tak, jak na wyniku lub certyfikacie. Aplikacja nie interpretuje wyników badań i nie stawia diagnoz.'),
+      HealthCategory.supplements => tr('Pies na pełnoporcjowej karmie zwykle nie potrzebuje suplementów – także pies sportowy. Stosuj je po konsultacji z lekarzem i licz kalorie w Żywieniu.'),
+      HealthCategory.vet => null,
+    };
+
 Future<void> openHealthForm(BuildContext context, {HealthRecord? existing, HealthCategory? category}) {
   return showFormSheet(context, _HealthForm(existing: existing, category: category));
 }
@@ -324,7 +342,7 @@ class _HealthFormState extends State<_HealthForm> {
   }
 
   DateTime? _suggestNext() {
-    final days = _defaultInterval[cat] ?? 0;
+    final days = _productInterval[title.text.trim()] ?? _defaultInterval[cat] ?? 0;
     return days == 0 ? null : date.add(Duration(days: days));
   }
 
@@ -385,10 +403,18 @@ class _HealthFormState extends State<_HealthForm> {
                 backgroundColor: K9.cardHi,
                 side: BorderSide.none,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                onPressed: () => setState(() => title.text = tr(s)),
+                onPressed: () => setState(() {
+                  title.text = tr(s);
+                  if (widget.existing == null) nextDue = _suggestNext();
+                }),
               ),
           ],
         ),
+        if (_categoryHint(cat) != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 8, left: 4),
+            child: Text(_categoryHint(cat)!, style: const TextStyle(color: K9.faint, fontSize: 12)),
+          ),
         gap12,
         DateField(
           label: tr('Data wykonania'),
@@ -404,6 +430,11 @@ class _HealthFormState extends State<_HealthForm> {
           value: nextDue,
           clearable: true,
           onChanged: (d) => setState(() => nextDue = d),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(top: 4, left: 4),
+          child: Text(tr('Proponowany termin – zmień go, jeśli lekarz ustalił inny.'),
+              style: const TextStyle(color: K9.faint, fontSize: 12)),
         ),
         const SizedBox(height: 4),
         SwitchListTile(

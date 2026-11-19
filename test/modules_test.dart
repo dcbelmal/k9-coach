@@ -56,8 +56,13 @@ void main() {
         HeatCycle(id: '2', start: DateTime(2025, 7, 1), end: DateTime(2025, 7, 20)),
         HeatCycle(id: '3', start: DateTime(2026, 1, 1)),
       ];
-      expect(HeatLogic.status(cycles, DateTime(2026, 1, 3)).stage, HeatStage.proestrus);
-      expect(HeatLogic.status(cycles, DateTime(2026, 1, 12)).stage, HeatStage.estrus);
+      // Bez badań i obserwacji faza w trakcie cieczki jest niepotwierdzona (brak „10. dnia płodnego”).
+      final early = HeatLogic.status(cycles, DateTime(2026, 1, 3));
+      expect(early.stage, HeatStage.heat);
+      expect(early.estimated, isTrue);
+      expect(early.fertileFrom, isNull);
+      expect(HeatLogic.status(cycles, DateTime(2026, 1, 12)).stage, HeatStage.heat);
+      // Brak zapisanego końca: po 30 dniach uznajemy cieczkę za zakończoną.
       expect(HeatLogic.status(cycles, DateTime(2026, 2, 15)).stage, HeatStage.diestrus);
       final late = HeatLogic.status(cycles, DateTime(2026, 5, 1));
       expect(late.stage, HeatStage.anestrus);
