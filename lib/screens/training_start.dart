@@ -13,11 +13,32 @@ import '../l10n/l10n.dart';
 
 /// Ustawienia do szybkiego startu dla aktywnego psa: zapamiętane przy ostatnim
 /// starcie, a jeśli ich nie ma, dyscyplina ostatniego treningu tego psa.
+///
+/// Gdy po zapamiętanym starcie pies ma nowszy trening innej dyscypliny
+/// (np. wpisany ręcznie), podpowiadamy tę nowszą dyscyplinę.
 QuickStart? currentQuickStart() {
   final saved = UiPrefs.instance.quickFor(DogProfiles.instance.activeId);
-  if (saved != null) return saved;
-  final d = AppStore.instance.lastDiscipline;
-  return d == null ? null : QuickStart(d);
+  final last = AppStore.instance.lastTraining;
+  if (saved != null) {
+    final at = saved.at;
+    final newer = last != null && at != null && last.discipline != saved.discipline && last.date.isAfter(at);
+    if (!newer) return saved;
+  }
+  return last == null ? null : QuickStart(last.discipline);
+}
+
+/// Wszystkie dyscypliny, ostatnio używane przez aktywnego psa na początku
+/// (od najnowszej), pozostałe w stałej kolejności. Nic nie znika z listy.
+List<Discipline> disciplinesByRecent() {
+  final recent = <Discipline>[];
+  final q = currentQuickStart();
+  if (q != null) recent.add(q.discipline);
+  final done = AppStore.instance.doneTrainings.toList()..sort((a, b) => b.date.compareTo(a.date));
+  for (final t in done) {
+    if (!recent.contains(t.discipline)) recent.add(t.discipline);
+    if (recent.length >= 3) break;
+  }
+  return [...recent, for (final d in Discipline.values) if (!recent.contains(d)) d];
 }
 
 /// Krótki opis ustawień, np. „Canicross · 30 min · GPS”.
@@ -37,6 +58,7 @@ Future<void> startQuick(BuildContext context, QuickStart q) =>
 Future<void> openTrainingStart(BuildContext context) {
   final q = currentQuickStart();
   var disc = q?.discipline ?? Discipline.walk;
+  final order = disciplinesByRecent();
   return showModalBottomSheet(
     context: context,
     isScrollControlled: true,
@@ -78,7 +100,7 @@ Future<void> openTrainingStart(BuildContext context) {
                 Text(tr('Dyscyplina'), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
                 const SizedBox(height: 10),
                 Wrap(spacing: 8, runSpacing: 8, children: [
-                  for (final d in Discipline.values)
+                  for (final d in order)
                     ChoiceChip(
                       label: Text(d.label),
                       avatar: Icon(d.icon, size: 18, color: d == disc ? Colors.black : d.color),

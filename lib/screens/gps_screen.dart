@@ -19,6 +19,7 @@ import '../dogs/dog_profiles.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import 'track_detail.dart';
+import 'training_start.dart' show disciplinesByRecent;
 import '../l10n/l10n.dart';
 
 final _rec = TrackRecorder.instance;
@@ -30,8 +31,13 @@ Future<void> openGps(BuildContext context,
 
 /// Otwiera ekran startu (albo trwający trening). Gdy nagrywanie trwa,
 /// ustawienia nie są zmieniane – wracamy do bieżącej sesji.
+///
+/// Szybkie podwójne dotknięcie nie otwiera dwóch ekranów treningu.
+bool _gpsOpen = false;
+
 Future<void> openGpsWith(NavigatorState nav,
-    {Discipline? discipline, TrainingSession? plan, int? targetMin, double? targetKm}) {
+    {Discipline? discipline, TrainingSession? plan, int? targetMin, double? targetKm}) async {
+  if (_gpsOpen) return;
   if (_rec.state == RecState.idle) {
     _rec.plan = plan;
     if (plan != null) {
@@ -45,7 +51,12 @@ Future<void> openGpsWith(NavigatorState nav,
       _rec.targetKm = _rec.discipline.hasDistance ? targetKm : null;
     }
   }
-  return nav.push(MaterialPageRoute(builder: (_) => const GpsScreen()));
+  _gpsOpen = true;
+  try {
+    await nav.push(MaterialPageRoute(builder: (_) => const GpsScreen()));
+  } finally {
+    _gpsOpen = false;
+  }
 }
 
 /// Mapa OpenStreetMap (bez klucza i opłat) – kafle tylko po zgodzie użytkownika.
@@ -165,7 +176,21 @@ class _GpsScreenState extends State<GpsScreen> {
     }
   }
 
+  /// Trwa rozpoczynanie albo zapisywanie – drugie dotknięcie nic nie robi.
+  bool _busy = false;
+  bool _saving = false;
+
   Future<void> _start() async {
+    if (_busy || _rec.state != RecState.idle) return;
+    setState(() => _busy = true);
+    try {
+      await _startInner();
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _startInner() async {
     _rec.useGps = _rec.discipline.hasDistance && !noGps;
     if (_rec.useGps) {
       final err = await TrackRecorder.ensurePermission();
@@ -200,6 +225,17 @@ class _GpsScreenState extends State<GpsScreen> {
   }
 
   Future<void> _stop() async {
+    if (_busy || _rec.state == RecState.idle) return;
+    _busy = true;
+    try {
+      await _stopInner();
+    } finally {
+      _busy = false;
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _stopInner() async {
     final choice = await showModalBottomSheet<int>(
       context: context,
       isScrollControlled: true,
@@ -230,6 +266,8 @@ class _GpsScreenState extends State<GpsScreen> {
       if (mounted) Navigator.pop(context);
     }
     if (choice != 1) return;
+    // Na czas zapisu ekran pokazuje „Zapisuję…” zamiast przycisku Start.
+    if (mounted) setState(() => _saving = true);
     final gps = _rec.useGps;
     final goalMin = _rec.targetMin;
     final track = await _rec.stop();
@@ -291,7 +329,15 @@ class _GpsScreenState extends State<GpsScreen> {
           },
           child: Scaffold(
             appBar: AppBar(title: Text(idle ? tr('Start treningu') : _rec.discipline.label), automaticallyImplyLeading: idle),
-            body: idle ? _setup() : _live(),
+            body: idle && _saving
+                ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    const CircularProgressIndicator(),
+                    gap12,
+                    Text(tr('Zapisuję trening…')),
+                  ]))
+                : idle
+                    ? _setup()
+                    : _live(),
           ),
         );
       },
@@ -375,7 +421,7 @@ class _GpsScreenState extends State<GpsScreen> {
   );
 
   Widget _setup() {
-    final discs = Discipline.values;
+    final discs = disciplinesByRecent();
     final gps = _rec.discipline.hasDistance && !noGps;
     final plan = _rec.plan;
     final goals = {0, 15, 20, 30, 45, 60, if (_rec.targetMin > 0) _rec.targetMin}.toList()..sort();
@@ -569,7 +615,7 @@ class _GpsScreenState extends State<GpsScreen> {
             height: 58,
             width: double.infinity,
             child: FilledButton.icon(
-              onPressed: _start,
+              onPressed: _busy ? null : _start,
               icon: const Icon(Icons.play_arrow_rounded, size: 30),
               label: Text(tr('Start'), style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
             ),
