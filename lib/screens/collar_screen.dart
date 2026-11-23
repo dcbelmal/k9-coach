@@ -5,9 +5,11 @@ import 'package:universal_ble/universal_ble.dart';
 
 import '../collar/collar_link.dart';
 import '../collar/mesh_proto.dart';
+import '../dogs/dog_profiles.dart';
 import '../l10n/l10n.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import 'valkor_track_screen.dart';
 
 void openCollar(BuildContext context) =>
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CollarScreen()));
@@ -148,6 +150,15 @@ class _CollarScreenState extends State<CollarScreen> {
         padding: EdgeInsets.fromLTRB(16, 0, 16, 32 + MediaQuery.viewPaddingOf(context).bottom),
         children: [
           _statusCard(),
+          if (c.paired) ...[
+            gap12,
+            FilledButton.icon(
+              onPressed: () => Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(builder: (_) => const ValkorTrackScreen())),
+              icon: const Icon(Icons.map_rounded),
+              label: Text(tr('Otwórz Valkor Track')),
+            ),
+          ],
           if (problem != null) ...[
             gap12,
             K9Card(
@@ -327,7 +338,15 @@ class _CollarScreenState extends State<CollarScreen> {
           title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
           subtitle: Text(sub, style: const TextStyle(color: K9.muted, fontSize: 12)),
         );
+    final active = CollarLink.activeDog();
+    String? owner(int num) {
+      final id = c.dogFor(num);
+      if (id == null || id == active) return null;
+      return tr('przypisany: {0}', [DogProfiles.instance.peek(id)?.name ?? id]);
+    }
+
     String sub(CollarNode n) => [
+          ?owner(n.num),
           collarAge(n.fix?.fixAt ?? n.lastHeard),
           if (n.battery != null) collarBattery(n.battery),
           if (n.isT1000E) 'T1000-E',
@@ -335,7 +354,12 @@ class _CollarScreenState extends State<CollarScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SectionTitle(tr('Które urządzenie jest na psie?'), icon: Icons.pets_rounded),
+        SectionTitle(
+          DogProfiles.instance.peek(active)?.name.isNotEmpty == true
+              ? tr('Który tracker nosi {0}?', [DogProfiles.instance.peek(active)!.name])
+              : tr('Które urządzenie jest na psie?'),
+          icon: Icons.pets_rounded,
+        ),
         K9Card(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
           child: RadioGroup<int>(
@@ -344,9 +368,16 @@ class _CollarScreenState extends State<CollarScreen> {
             child: Column(children: [
             if (c.myNode != null)
               row(c.myNode!, tr('To połączone z telefonem ({0})', [me?.name ?? meshNodeId(c.myNode!)]),
-                  me == null ? tr('jedna obroża, zasięg Bluetooth') : sub(me)),
+                  me == null ? (owner(c.myNode!) ?? tr('jedna obroża, zasięg Bluetooth')) : sub(me)),
             for (final n in others) row(n.num, n.name, sub(n)),
             ]),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Text(
+            tr('Wybór zapisuje się w profilu tego psa. Przełącz psa w aplikacji, żeby przypisać mu inny tracker. Trening zawsze nagrywa tracker wybrany na starcie.'),
+            style: const TextStyle(color: K9.faint, fontSize: 12),
           ),
         ),
         if (others.isEmpty)
