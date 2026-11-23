@@ -179,7 +179,14 @@ class MeshPosition {
   final DateTime? time;
   final double? speedMs;
   final int? sats;
-  const MeshPosition(this.lat, this.lng, {this.altitude, this.time, this.speedMs, this.sats});
+
+  /// Precyzja pozycji w bitach (32 = pełna). Mniej = kanał celowo zaokrągla
+  /// pozycję (np. ok. 1,5 km na domyślnym publicznym kanale Meshtastic).
+  final int? precisionBits;
+  const MeshPosition(this.lat, this.lng, {this.altitude, this.time, this.speedMs, this.sats, this.precisionBits});
+
+  /// Pozycja zaokrąglona przez ustawienia kanału – nie nadaje się do trasy.
+  bool get coarse => precisionBits != null && precisionBits! > 0 && precisionBits! < 24;
 
   /// Odczyt `Position`. Zwraca null, gdy brak współrzędnych (urządzenie
   /// bez fixu wysyła 0,0 albo pomija pola).
@@ -197,6 +204,7 @@ class MeshPosition {
       time: t == null || t == 0 ? null : DateTime.fromMillisecondsSinceEpoch(t * 1000, isUtc: true).toLocal(),
       speedMs: p.integer(15)?.toDouble(),
       sats: p.integer(19),
+      precisionBits: p.integer(23),
     );
   }
 }

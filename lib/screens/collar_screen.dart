@@ -144,6 +144,7 @@ class _CollarScreenState extends State<CollarScreen> {
               ]),
             ),
           ],
+          if (connected && c.dogCoarse) ...[gap12, const CollarCoarseWarning()],
           if (connected) ...[gap16, _dogChoice()],
           if (!connected) ...[gap16, _scanSection()],
           gap16,
@@ -315,4 +316,24 @@ class _CollarScreenState extends State<CollarScreen> {
       ),
     );
   }
+}
+
+/// Ostrzeżenie: kanał Meshtastic zaokrągla pozycję psa (domyślny kanał publiczny).
+class CollarCoarseWarning extends StatelessWidget {
+  const CollarCoarseWarning({super.key});
+
+  @override
+  Widget build(BuildContext context) => K9Card(
+        color: K9.cardHi,
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Icon(Icons.blur_on_rounded, color: K9.yellow),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              tr('Tracker wysyła zaokrągloną pozycję (nawet o ok. 1,5 km), więc trasa psa będzie błędna. W Meshtastic: Ustawienia → Kanały → kanał główny: zmień nazwę, wygeneruj nowy klucz i włącz dokładną lokalizację.'),
+              style: const TextStyle(fontSize: 13),
+            ),
+          ),
+        ]),
+      );
 }

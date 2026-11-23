@@ -378,6 +378,9 @@ class CollarLink extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Tracker na psie wysyła pozycję zaokrągloną przez ustawienia kanału.
+  bool get dogCoarse => dog?.position?.coarse ?? false;
+
   /// Ostatnia pozycja psa i jej wiek.
   CollarNode? get dogWithFix {
     final d = dog;

@@ -54,4 +54,5 @@ const strings = <String, String>{
   '{0} min temu': '{0} min ago',
   '{0} s temu': '{0} s ago',
   'Łączę z {0}…': 'Connecting to {0}…',
+  'Tracker wysyła zaokrągloną pozycję (nawet o ok. 1,5 km), więc trasa psa będzie błędna. W Meshtastic: Ustawienia → Kanały → kanał główny: zmień nazwę, wygeneruj nowy klucz i włącz dokładną lokalizację.': 'The tracker sends a rounded position (off by up to ~1.5 km), so the dog\'s route will be wrong. In Meshtastic: Settings → Channels → primary channel: rename it, generate a new key and turn on precise location.',
 };

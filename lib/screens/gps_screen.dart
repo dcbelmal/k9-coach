@@ -661,6 +661,7 @@ class _GpsScreenState extends State<GpsScreen> {
         ),
         gap16,
         if (gps && !kIsWeb) ...[_collarCard(), gap12],
+        if (gps && !kIsWeb && CollarLink.instance.dogCoarse) ...[const CollarCoarseWarning(), gap12],
         if (gps && OnlineConsent.instance.weather == true) ...[_weatherCard(), gap12],
         K9Card(
           child: Column(
@@ -989,6 +990,7 @@ class _GpsScreenState extends State<GpsScreen> {
                 ),
               ),
               if (gps && (CollarLink.instance.paired || _rec.dogLast != null)) ...[gap12, _dogLive()],
+              if (gps && CollarLink.instance.dogCoarse) ...[gap12, const CollarCoarseWarning()],
               if (gps) ...[gap12, _map(height: 300)],
             ],
           ),

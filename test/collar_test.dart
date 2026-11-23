@@ -67,6 +67,22 @@ void main() {
       expect(p.rssi, -90);
     });
 
+    test('zaokrąglona pozycja (precyzja kanału) jest rozpoznawana', () {
+      final coarse = PbWriter()
+        ..fixed32(1, (50.1 * 1e7).round())
+        ..fixed32(2, (19.9 * 1e7).round())
+        ..varint(23, 13);
+      final p = (decodeFromRadio(packet(5, MeshPort.position, coarse.toBytes())).single as MeshPositionEvent).position;
+      expect(p.precisionBits, 13);
+      expect(p.coarse, isTrue);
+      final full = (decodeFromRadio(packet(5, MeshPort.position, position(50.1, 19.9))).single as MeshPositionEvent).position;
+      expect(full.coarse, isFalse);
+      final c = CollarLink.instance..resetForTest();
+      c.handleEvents([const MeshMyInfo(5), MeshPositionEvent(5, p)]);
+      expect(c.dogCoarse, isTrue);
+      c.resetForTest();
+    });
+
     test('pozycja 0,0 (brak fixu) jest pomijana', () {
       expect(decodeFromRadio(packet(5, MeshPort.position, position(0, 0))), isEmpty);
     });
