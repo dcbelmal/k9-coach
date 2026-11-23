@@ -43,6 +43,7 @@ class QuickStart {
 /// Karty ekranu Start, które użytkownik może ukryć (dane zostają nietknięte).
 enum HomeCard {
   reminders('Najbliższe przypomnienia'),
+  track('Valkor Track'),
   lastActivity('Ostatnia aktywność'),
   stats('Statystyki tygodnia'),
   care('Żywienie i zdrowie'),

@@ -7,9 +7,11 @@ import 'health.dart';
 import 'home.dart';
 import 'profile.dart';
 import 'training.dart';
+import 'valkor_track_screen.dart';
 import '../l10n/l10n.dart';
 
-/// Zakładki dolnego paska: 0 Start, 1 Trening, 2 Zdrowie, 3 Pies.
+/// Zakładki dolnego paska: 0 Start, 1 Trening, 2 Zdrowie, 3 Pies, 4 Track.
+/// (Track ma numer 4, żeby nie zmieniać numerów starszych zakładek.)
 final tabIndex = ValueNotifier<int>(0);
 void goToTab(int i) => tabIndex.value = i;
 
@@ -64,6 +66,7 @@ class _ShellState extends State<Shell> {
               0 => const HomeScreen(),
               1 => const TrainingScreen(inTab: true),
               2 => const HealthScreen(inTab: true),
+              4 => const ValkorTrackScreen(),
               _ => const ProfileScreen(),
             },
           ),
@@ -93,6 +96,8 @@ class _BottomBar extends StatelessWidget {
               ),
               const SizedBox(height: 3),
               Text(label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
@@ -117,8 +122,8 @@ class _BottomBar extends StatelessWidget {
                 child: GestureDetector(
                   onTap: () => openQuickAdd(context),
                   child: Container(
-                    width: 54,
-                    height: 54,
+                    width: 50,
+                    height: 50,
                     decoration: BoxDecoration(
                       gradient: K9.orangeGradient,
                       shape: BoxShape.circle,
@@ -129,6 +134,7 @@ class _BottomBar extends StatelessWidget {
                 ),
               ),
             ),
+            item(4, Icons.gps_not_fixed_rounded, Icons.gps_fixed_rounded, tr('Track')),
             item(2, Icons.favorite_border_rounded, Icons.favorite_rounded, tr('Zdrowie')),
             item(3, Icons.pets_outlined, Icons.pets_rounded, trc('dog', 'Pies')),
           ]),
