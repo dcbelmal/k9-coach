@@ -7,6 +7,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../collar/collar_link.dart';
+import '../collar/dog_alerts.dart';
 import '../collar/fix_filter.dart' show FixFilter;
 import '../dogs/dog_profiles.dart';
 import '../models.dart';
@@ -248,6 +249,7 @@ class TrackRecorder extends ChangeNotifier {
       currentSpeedKmh = p.speed >= 0 ? p.speed * 3.6 : (dt > 0 ? d / dt * 3.6 : null);
     }
     seg.add(TrackPoint(p.latitude, p.longitude, t, p.speed >= 0 ? p.speed : null));
+    DogAlerts.instance.setHandler(LatLng(p.latitude, p.longitude));
     last = p;
     _checkKm();
     notifyListeners();

@@ -26,6 +26,7 @@ import 'store.dart';
 import 'theme.dart';
 import 'widgets/common.dart';
 import 'l10n/l10n.dart';
+import 'collar/dog_alerts.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -64,6 +65,7 @@ Future<void> main() async {
     logError('Sprzątanie plików', e);
     return 0;
   }));
+  unawaited(DogAlerts.instance.load()); // alarmy Valkor Track (bez sieci)
   Billing.instance.init(); // w tle – nie blokuje startu aplikacji
 }
 
