@@ -1,3 +1,5 @@
+import '../performance/performance_screen.dart';
+import 'track_home_card.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../models.dart';
@@ -50,6 +52,8 @@ class HomeScreen extends StatelessWidget {
         final hasTrainings = last != null;
         final cards = <Widget>[
           if (ui.shows(HomeCard.reminders) && reminders.isNotEmpty) _Reminders(items: reminders),
+          if (ui.shows(HomeCard.track)) const TrackHomeCard(),
+          if (ui.shows(HomeCard.performance) && hasTrainings) const PerformanceEntryCard(),
           if (ui.shows(HomeCard.lastActivity) && last != null) _LastActivity(t: last),
           if (ui.shows(HomeCard.stats) && hasTrainings) _WeekStats(week: s.thisWeek, r: s.readiness),
           if (ui.shows(HomeCard.care)) ...[

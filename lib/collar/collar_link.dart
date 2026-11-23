@@ -94,6 +94,37 @@ enum TrackMode {
   String get rangeLabel => tr(range);
 }
 
+/// Ostatnia znana pozycja psa – zapamiętana w telefonie, żeby była
+/// widoczna także po zamknięciu aplikacji albo utracie łączności.
+class LastSeen {
+  final double lat, lng;
+
+  /// Kiedy GPS trackera zmierzył tę pozycję.
+  final DateTime at;
+  final int? battery;
+  final int? node;
+  const LastSeen(this.lat, this.lng, this.at, {this.battery, this.node});
+
+  LatLng get ll => LatLng(lat, lng);
+
+  Map<String, dynamic> toJson() => {
+        'lat': double.parse(lat.toStringAsFixed(6)),
+        'lng': double.parse(lng.toStringAsFixed(6)),
+        'at': at.toIso8601String(),
+        if (battery != null) 'bat': battery,
+        if (node != null) 'node': node,
+      };
+
+  static LastSeen? fromJson(Object? j) {
+    if (j is! Map) return null;
+    final lat = j['lat'], lng = j['lng'], at = DateTime.tryParse('${j['at']}');
+    if (lat is! num || lng is! num || at == null) return null;
+    if (lat.abs() > 90 || lng.abs() > 180) return null;
+    return LastSeen(lat.toDouble(), lng.toDouble(), at,
+        battery: j['bat'] is int ? j['bat'] as int : null, node: j['node'] is int ? j['node'] as int : null);
+  }
+}
+
 /// Stan łączności z psem – rozróżnia Bluetooth, LoRa i GPS.
 enum DogLink {
   /// Nie dodano trackera.
@@ -249,6 +280,67 @@ class CollarLink extends ChangeNotifier {
 
   CollarNode? get dog => dogNode == null ? null : nodes[dogNode];
 
+  /// Tracker psa [dogId] do podglądu na ekranie Valkor Track. Aktywny pies –
+  /// jak [dogNode] (także wybór automatyczny); inne psy – tylko tracker
+  /// przypisany do ich profilu (nie zgadujemy cudzego).
+  int? viewNode(String dogId) {
+    if (dogId == activeDog()) return dogNode;
+    for (final e in assigned.entries) {
+      if (e.value == dogId) return e.key;
+    }
+    return null;
+  }
+
+  CollarNode? nodeOf(String dogId) {
+    final n = viewNode(dogId);
+    return n == null ? null : nodes[n];
+  }
+
+  /// Ostatnie znane pozycje psów (id psa → pozycja), zapisywane w telefonie.
+  final Map<String, LastSeen> lastSeen = {};
+  final Map<String, DateTime> _lastSeenSaved = {};
+
+  /// Najświeższa znana pozycja psa: bieżący pomiar albo zapamiętana.
+  LastSeen? lastKnown(String dogId) {
+    final n = nodeOf(dogId);
+    final f = n?.fix;
+    final saved = lastSeen[dogId];
+    if (f != null && (saved == null || !f.fixAt.isBefore(saved.at))) {
+      return LastSeen(f.lat, f.lng, f.fixAt, battery: n!.battery, node: n.num);
+    }
+    return saved;
+  }
+
+  /// Zapamiętuje pozycję psa, do którego należy tracker [node] (co najwyżej
+  /// raz na [_lastSeenEverySec] s, żeby nie zapisywać przy każdym pomiarze).
+  static const _lastSeenEverySec = 30;
+  void _rememberLast(int node, CollarFix f, DateTime now) {
+    final ids = <String>{
+      for (final e in assigned.entries)
+        if (e.key == node) e.value,
+      if (node == dogNode) activeDog(),
+    };
+    var changed = false;
+    for (final id in ids) {
+      final old = lastSeen[id];
+      if (old != null && f.fixAt.isBefore(old.at)) continue;
+      lastSeen[id] = LastSeen(f.lat, f.lng, f.fixAt, battery: nodes[node]?.battery, node: node);
+      final saved = _lastSeenSaved[id];
+      if (saved == null || now.difference(saved).inSeconds >= _lastSeenEverySec) {
+        _lastSeenSaved[id] = now;
+        changed = true;
+      }
+    }
+    if (changed) unawaited(_save());
+  }
+
+  /// Usuwa zapamiętaną pozycję psa (np. po usunięciu profilu).
+  Future<void> forgetLastSeen(String dogId) async {
+    if (lastSeen.remove(dogId) == null) return;
+    notifyListeners();
+    await _save();
+  }
+
   /// Inne urządzenia w sieci (do wyboru, które jest na psie).
   List<CollarNode> get otherNodes => nodes.values.where((n) => n.num != myNode).toList()
     ..sort((a, b) => (b.lastHeard ?? DateTime(2000)).compareTo(a.lastHeard ?? DateTime(2000)));
@@ -273,6 +365,13 @@ class CollarLink extends ChangeNotifier {
           if (n != null && e.value is String) assigned[n] = e.value as String;
         }
       }
+      final l = j['last'];
+      if (l is Map) {
+        for (final e in l.entries) {
+          final v = LastSeen.fromJson(e.value);
+          if (v != null) lastSeen['${e.key}'] = v;
+        }
+      }
     } catch (e) {
       logError('Obroża GPS', e);
     }
@@ -287,6 +386,7 @@ class CollarLink extends ChangeNotifier {
         'dog': dogNodeChoice,
         'assign': {for (final e in assigned.entries) '${e.key}': e.value},
         'mode': (mode == TrackMode.search ? (_beforeSearch ?? TrackMode.walk) : mode).name,
+        if (lastSeen.isNotEmpty) 'last': {for (final e in lastSeen.entries) e.key: e.value.toJson()},
       }));
     } catch (e) {
       logError('Obroża GPS', e);
@@ -569,6 +669,7 @@ class CollarLink extends ChangeNotifier {
           n.position = e.position;
           n.positionAt = t;
           diag.accepted++;
+          _rememberLast(e.node, f, t);
           _fixes.add(f);
         case MeshBattery():
           final n = nodes.putIfAbsent(e.node, () => CollarNode(e.node));
@@ -599,9 +700,15 @@ class CollarLink extends ChangeNotifier {
   }
 
   /// Stan łączności z psem: osobno Bluetooth, LoRa i GPS.
-  DogLink status({DateTime? now}) {
+  DogLink status({DateTime? now, String? dogId}) {
     final t = now ?? DateTime.now();
     if (deviceId == null) return DogLink.none;
+    final other = dogId != null && dogId != activeDog();
+    final nodeNum = other ? viewNode(dogId) : dogNode;
+    // Inny pies bez przypisanego trackera – nie ma czego śledzić.
+    if (other && nodeNum == null) return DogLink.none;
+    final d = nodeNum == null ? null : nodes[nodeNum];
+    final direct = nodeNum != null && nodeNum == myNode;
     switch (state) {
       case CollarState.off:
         return DogLink.bluetoothOff;
@@ -611,7 +718,6 @@ class CollarLink extends ChangeNotifier {
       case CollarState.connected:
         break;
     }
-    final d = dog;
     final heardAge = d?.lastHeard == null ? null : t.difference(d!.lastHeard!).inSeconds;
     final loraSilent = !direct && (heardAge == null || heardAge > loraSilentSec);
     final f = d?.fix;
@@ -632,6 +738,8 @@ class CollarLink extends ChangeNotifier {
     _beforeSearch = null;
     nodes.clear();
     diag.clear();
+    lastSeen.clear();
+    _lastSeenSaved.clear();
     _loaded = loaded;
   }
 }

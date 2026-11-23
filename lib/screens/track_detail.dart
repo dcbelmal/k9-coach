@@ -13,6 +13,7 @@ import '../store.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import 'forms.dart';
+import '../performance/performance_screen.dart';
 import 'dog_track_widgets.dart';
 import 'gps_screen.dart';
 import '../l10n/l10n.dart';
@@ -94,6 +95,11 @@ class _TrackDetailScreenState extends State<TrackDetailScreen> {
               ],
             ),
             actions: [
+              IconButton(
+                tooltip: tr('Valkor Performance'),
+                icon: const Icon(Icons.insights_rounded),
+                onPressed: () => openPerformance(context, session: t),
+              ),
               IconButton(
                 tooltip: tr('Edytuj'),
                 icon: const Icon(Icons.edit_rounded),

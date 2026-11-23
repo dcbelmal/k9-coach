@@ -13,7 +13,7 @@ const premiumFeatures = <(IconData, String, String, bool)>[
   (Icons.pets_rounded, 'Kilka psów w aplikacji', 'Osobne treningi, zdrowie, żywienie i moduły dla każdego psa', true),
   (Icons.cloud_sync_rounded, 'Kopia i synchronizacja w chmurze', '', false),
   (Icons.picture_as_pdf_rounded, 'Eksport PDF i Excel', '', false),
-  (Icons.insights_rounded, 'Zaawansowane statystyki', '', false),
+  (Icons.insights_rounded, 'Valkor Performance', 'Dystans i prędkości psa, strefy aktywności, rekordy, obciążenie, szacowane kalorie i bilans z żywieniem', true),
   (Icons.event_note_rounded, 'Zaawansowane planowanie treningów', '', false),
 ];
 

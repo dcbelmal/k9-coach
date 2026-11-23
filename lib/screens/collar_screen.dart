@@ -21,7 +21,8 @@ String collarAge(DateTime? t, {DateTime? now}) {
   final s = (now ?? DateTime.now()).difference(t).inSeconds;
   if (s < 60) return tr('{0} s temu', [s < 0 ? 0 : s]);
   if (s < 3600) return tr('{0} min temu', [s ~/ 60]);
-  return tr('{0} godz. temu', [s ~/ 3600]);
+  if (s < 172800) return tr('{0} godz. temu', [s ~/ 3600]);
+  return tr('{0} dni temu', [s ~/ 86400]);
 }
 
 String collarBattery(int? b) => b == null ? '' : (b > 100 ? tr('zasilanie z kabla') : tr('bateria {0}%', [b]));
@@ -47,9 +48,9 @@ String collarStatusText(CollarLink c) {
 }
 
 /// Opis łączności z psem: Bluetooth / LoRa / GPS / na żywo.
-String dogLinkText(CollarLink c, {DateTime? now}) {
-  final f = c.dog?.fix;
-  switch (c.status(now: now)) {
+String dogLinkText(CollarLink c, {DateTime? now, String? dogId}) {
+  final f = (dogId == null ? c.dog : c.nodeOf(dogId))?.fix;
+  switch (c.status(now: now, dogId: dogId)) {
     case DogLink.none:
       return tr('brak trackera');
     case DogLink.bluetoothOff:

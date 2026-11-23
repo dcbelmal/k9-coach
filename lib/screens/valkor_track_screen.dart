@@ -17,6 +17,7 @@ import '../models.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import 'collar_screen.dart';
+import '../performance/performance_screen.dart';
 import 'dog_radar.dart';
 import 'valkor_track_settings.dart';
 
@@ -62,6 +63,11 @@ class _ValkorTrackScreenState extends State<ValkorTrackScreen> {
   /// Tryb poszukiwania: radar zamiast mapy, najczęstsze pomiary.
   bool radar = false;
 
+  /// Pies oglądany na ekranie (domyślnie aktywny profil). Zmiana tutaj nie
+  /// przełącza profilu w całej aplikacji – trening i statystyki zostają.
+  String _viewId = CollarLink.activeDog();
+  bool get _viewingActive => _viewId == CollarLink.activeDog();
+
   /// Odległości z ostatnich sekund – do „zbliżasz się / oddalasz się”.
   final List<(DateTime, double)> _dists = [];
 
@@ -92,7 +98,7 @@ class _ValkorTrackScreenState extends State<ValkorTrackScreen> {
   void _changed() {
     if (!mounted) return;
     setState(() {});
-    if (!_fitted && mapReady && _dogLl != null) {
+    if (!_fitted && mapReady && _anyDogLl != null) {
       _fitted = true;
       _fitBoth();
     }
@@ -129,7 +135,38 @@ class _ValkorTrackScreenState extends State<ValkorTrackScreen> {
     return p == null ? null : LatLng(p.latitude, p.longitude);
   }
 
-  LatLng? get _dogLl => c.dog?.fix?.ll;
+  CollarNode? get _node => c.nodeOf(_viewId);
+
+  /// Bieżąca pozycja psa (pomiar z tej sesji).
+  LatLng? get _dogLl => _node?.fix?.ll;
+
+  /// Ostatnia znana pozycja – także zapamiętana z poprzednich sesji.
+  LastSeen? get _last => c.lastKnown(_viewId);
+
+  /// Pozycja do mapy i odległości: bieżąca, a bez niej ostatnia znana.
+  LatLng? get _anyDogLl => _dogLl ?? _last?.ll;
+
+  void _selectDog(String id) {
+    if (id == _viewId) return;
+    if (radar) {
+      c.endSearch();
+      radar = false;
+    }
+    setState(() {
+      _viewId = id;
+      _dists.clear();
+      _fitted = false;
+    });
+    _changed();
+  }
+
+  Future<void> _makeActive() async {
+    if (rec.state != RecState.idle) {
+      toast(context, tr('Najpierw zakończ trening.'));
+      return;
+    }
+    await DogProfiles.instance.switchTo(_viewId);
+  }
 
   /// Kierunek marszu przewodnika (z GPS telefonu, tylko w ruchu).
   double? get _myCourse {
@@ -159,13 +196,13 @@ class _ValkorTrackScreenState extends State<ValkorTrackScreen> {
   }
 
   void _centerDog() {
-    final d = _dogLl;
+    final d = _anyDogLl;
     if (d != null && mapReady) map.move(d, math.max(map.camera.zoom, 16));
   }
 
   void _fitBoth() {
     if (!mapReady) return;
-    final pts = [?_dogLl, ?_meLl];
+    final pts = [?_anyDogLl, ?_meLl];
     if (pts.isEmpty) return;
     if (pts.length == 1 || const Distance()(pts.first, pts.last) < 20) {
       map.move(pts.first, 17);
@@ -274,27 +311,32 @@ class _ValkorTrackScreenState extends State<ValkorTrackScreen> {
 
   /// Pozostałe trackery przypisane do innych psów.
   List<(String, CollarNode)> get _otherDogs {
-    final active = CollarLink.activeDog();
+    final shown = _node?.num;
     return [
       for (final e in c.assigned.entries)
-        if (e.value != active && c.nodes[e.key]?.fix != null) (e.value, c.nodes[e.key]!),
+        if (e.value != _viewId && e.key != shown && c.nodes[e.key]?.fix != null) (e.value, c.nodes[e.key]!),
     ];
   }
 
   @override
   Widget build(BuildContext context) {
-    final dogLl = _dogLl;
+    final dogLl = _anyDogLl;
     final me = _meLl;
-    final live = c.status() == DogLink.live;
+    final live = c.status(dogId: _viewId) == DogLink.live;
     final mapOn = OnlineConsent.instance.map == true;
     return Scaffold(
       appBar: AppBar(
         title: Text(tr('Valkor Track')),
         actions: [
           IconButton(
+            tooltip: tr('Valkor Performance'),
+            icon: const Icon(Icons.insights_rounded),
+            onPressed: () => openPerformance(context),
+          ),
+          IconButton(
             tooltip: tr('Ustawienia śledzenia'),
             icon: const Icon(Icons.tune_rounded),
-            onPressed: () => showTrackSettings(context, here: _dogLl ?? _meLl),
+            onPressed: () => showTrackSettings(context, here: _anyDogLl ?? _meLl),
           ),
           IconButton(
             tooltip: tr('Ustawienia obroży'),
@@ -345,7 +387,7 @@ class _ValkorTrackScreenState extends State<ValkorTrackScreen> {
                   PolylineLayer(polylines: [
                     Polyline(points: [me, dogLl], strokeWidth: 2, color: Colors.white70, pattern: StrokePattern.dashed(segments: const [8, 6])),
                   ]),
-                if (rec.dogPoints.length > 1)
+                if (_viewingActive && rec.dogPoints.length > 1)
                   PolylineLayer(polylines: [
                     for (final s in rec.dogSegments)
                       if (s.length > 1) Polyline(points: [for (final q in s) q.ll], strokeWidth: 4, color: K9.blue),
@@ -408,7 +450,7 @@ class _ValkorTrackScreenState extends State<ValkorTrackScreen> {
     final dist = me == null || dogLl == null ? null : const Distance()(me, dogLl);
     final bearing = dist == null || dist < 3 ? null : (const Distance().bearing(me!, dogLl!) + 360) % 360;
     final trend = _trend(dist, now);
-    final node = c.dog;
+    final node = _node;
     final dogCourse = live ? node?.courseDeg : null;
     final dogSpeed = live ? node?.speedMs : null;
     return Container(
@@ -439,7 +481,7 @@ class _ValkorTrackScreenState extends State<ValkorTrackScreen> {
         ),
         Text(
           [
-            if (!live && c.dog?.fix != null) tr('ostatnia znana pozycja {0}', [collarAge(c.dog!.fix!.fixAt, now: now)]),
+            if (!live && _last != null) tr('ostatnia znana pozycja {0}', [collarAge(_last!.at, now: now)]),
             if (dogCourse != null && dogSpeed != null && dogSpeed > 0.5)
               tr('pies biegnie na {0}, {1} km/h', [compassLabel(dogCourse), fmtNum(dogSpeed * 3.6)]),
             tr('Góra = północ. Pomarańczowa kreska = Twój kierunek marszu.'),
@@ -492,14 +534,17 @@ class _ValkorTrackScreenState extends State<ValkorTrackScreen> {
 
   Widget _panel(LatLng? me, LatLng? dogLl) {
     final now = DateTime.now();
-    final link = c.status(now: now);
-    final node = c.dog;
+    final link = c.status(now: now, dogId: _viewId);
+    final node = _node;
     final f = node?.fix;
-    final Dog? dog = DogProfiles.instance.peek(CollarLink.activeDog());
+    final last = _last;
+    final Dog? dog = DogProfiles.instance.peek(_viewId);
+    final dogs = DogProfiles.instance.dogs;
     final dist = me == null || dogLl == null ? null : const Distance()(me, dogLl);
     final bearing = me == null || dogLl == null || dist! < 3 ? null : (const Distance().bearing(me, dogLl) + 360) % 360;
     final speed = link == DogLink.live ? node?.speedMs : null;
 
+    final battery = node?.battery ?? last?.battery;
     final ble = c.connected ? K9.green : (c.state == CollarState.off ? K9.red : K9.yellow);
     final heard = node?.lastHeard == null ? null : now.difference(node!.lastHeard!).inSeconds;
     final lora = heard != null && heard <= CollarLink.loraSilentSec ? K9.green : K9.red;
@@ -516,6 +561,25 @@ class _ValkorTrackScreenState extends State<ValkorTrackScreen> {
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
+            if (dogs.length > 1) ...[
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(children: [
+                  for (final (id, d) in dogs)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: ChoiceChip(
+                        key: ValueKey('vt-dog-$id'),
+                        label: Text(d.name.isEmpty ? tr('Pies') : d.name),
+                        avatar: c.viewNode(id) == null ? null : const Icon(Icons.gps_fixed_rounded, size: 16),
+                        selected: id == _viewId,
+                        onSelected: (_) => _selectDog(id),
+                      ),
+                    ),
+                ]),
+              ),
+              const SizedBox(height: 8),
+            ],
             Row(children: [
               ClipOval(child: SizedBox(width: 44, height: 44, child: DogPhoto(dog: dog))),
               const SizedBox(width: 12),
@@ -525,8 +589,8 @@ class _ValkorTrackScreenState extends State<ValkorTrackScreen> {
                       style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
                   Text(
                     [
-                      dogLinkText(c, now: now),
-                      if (f != null && link != DogLink.live) tr('ostatnia znana pozycja {0}', [collarAge(f.fixAt, now: now)]),
+                      dogLinkText(c, now: now, dogId: _viewId),
+                      if (last != null && link != DogLink.live) tr('ostatnia znana pozycja {0}', [collarAge(last.at, now: now)]),
                     ].join(' · '),
                     style: const TextStyle(color: K9.muted, fontSize: 12.5),
                   ),
@@ -562,8 +626,8 @@ class _ValkorTrackScreenState extends State<ValkorTrackScreen> {
             const SizedBox(height: 10),
             Row(children: [
               _stat(tr('Prędkość psa'), speed == null ? '–' : '${fmtNum(speed * 3.6)} km/h'),
-              _stat(tr('Bateria'), node?.battery == null ? '–' : (node!.battery! > 100 ? tr('kabel') : '${node.battery}%')),
-              _stat(tr('Pomiar'), f == null ? '–' : collarAge(f.fixAt, now: now)),
+              _stat(tr('Bateria'), battery == null ? '–' : (battery > 100 ? tr('kabel') : '$battery%')),
+              _stat(tr('Pomiar'), (f?.fixAt ?? last?.at) == null ? '–' : collarAge(f?.fixAt ?? last!.at, now: now)),
             ]),
             const SizedBox(height: 10),
             Row(children: [
@@ -577,7 +641,7 @@ class _ValkorTrackScreenState extends State<ValkorTrackScreen> {
                   style: TextStyle(color: c.slowerThanMode ? K9.yellow : K9.muted, fontSize: 12),
                 ),
               ),
-              if (c.paired)
+              if (c.paired && c.viewNode(_viewId) != null)
                 FilledButton.tonalIcon(
                   style: FilledButton.styleFrom(minimumSize: const Size(0, 40)),
                   onPressed: _toggleRadar,
@@ -607,6 +671,17 @@ class _ValkorTrackScreenState extends State<ValkorTrackScreen> {
             if (locError != null) ...[
               const SizedBox(height: 8),
               Text(locError!, style: const TextStyle(color: K9.yellow, fontSize: 12)),
+            ],
+            if (c.paired && !_viewingActive && c.viewNode(_viewId) == null) ...[
+              const SizedBox(height: 10),
+              Text(tr('Ten pies nie ma przypisanego trackera. Przełącz się na jego profil i wybierz tracker w ustawieniach obroży.'),
+                  style: const TextStyle(color: K9.muted, fontSize: 12.5)),
+              const SizedBox(height: 6),
+              OutlinedButton.icon(
+                onPressed: _makeActive,
+                icon: const Icon(Icons.swap_horiz_rounded),
+                label: Text(tr('Przełącz na tego psa')),
+              ),
             ],
             if (!c.paired) ...[
               const SizedBox(height: 10),
