@@ -2,9 +2,11 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:universal_ble/universal_ble.dart';
 
+import '../dogs/dog_profiles.dart';
 import '../models.dart' show jsonInt;
 import '../storage/safe_prefs.dart';
 import '../l10n/l10n.dart';
@@ -38,6 +40,32 @@ class CollarNode {
   CollarFix? fix;
   final FixFilter filter;
   CollarNode(this.num) : filter = FixFilter(num);
+
+  /// Dwa ostatnie pomiary z ruchem – do kierunku i prędkości.
+  CollarFix? lastMoved, prevMoved;
+
+  /// Prędkość (m/s): z trackera, a gdy jej nie podaje – z dwóch ostatnich
+  /// pomiarów (najwyżej 2 min odstępu). Postój = 0. null = brak danych.
+  double? get speedMs {
+    final f = fix;
+    if (f == null) return null;
+    if (f.speedMs != null) return f.speedMs;
+    if (!f.moved) return 0;
+    final a = prevMoved, b = lastMoved;
+    if (a == null || b == null) return null;
+    final dt = b.fixAt.difference(a.fixAt).inMilliseconds / 1000;
+    if (dt <= 0 || dt > 120) return null;
+    return const Distance()(a.ll, b.ll) / dt;
+  }
+
+  /// Kierunek ruchu (stopnie od północy) z dwóch ostatnich pomiarów z ruchem.
+  double? get courseDeg {
+    final a = prevMoved, b = lastMoved;
+    if (a == null || b == null) return null;
+    if (b.fixAt.difference(a.fixAt).inSeconds > 120) return null;
+    if (const Distance()(a.ll, b.ll) < 5) return null;
+    return (const Distance().bearing(a.ll, b.ll) + 360) % 360;
+  }
 
   String get name => (longName?.isNotEmpty ?? false) ? longName! : (shortName ?? meshNodeId(num));
   bool get isT1000E => hwModel == hwT1000E;
@@ -91,7 +119,14 @@ class CollarLink extends ChangeNotifier {
   int? myNode;
 
   /// Urządzenie na psie wybrane przez użytkownika (null = wybór automatyczny).
+  /// Starszy, wspólny wybór – nowsze wersje przypisują tracker do profilu psa.
   int? dogNodeChoice;
+
+  /// Przypisanie trackerów do profili psów: numer urządzenia → id psa.
+  final Map<int, String> assigned = {};
+
+  /// Id aktualnie wybranego psa (podmieniane w testach).
+  static String Function() activeDog = () => DogProfiles.instance.activeId;
 
   final Map<int, CollarNode> nodes = {};
   final _fixes = StreamController<CollarFix>.broadcast();
@@ -127,11 +162,35 @@ class CollarLink extends ChangeNotifier {
   ///
   /// Gdy użytkownik nie wybrał: jedyna inna obroża T1000-E w sieci,
   /// a gdy jej nie ma – urządzenie połączone z telefonem (obroża na psie).
-  int? get dogNode {
-    if (dogNodeChoice != null) return dogNodeChoice;
-    final others = nodes.values.where((n) => n.num != myNode && n.isT1000E).toList();
+  int? get dogNode => nodeForDog(activeDog());
+
+  /// Tracker psa [dogId]: przypisany do jego profilu, a gdy go nie ma –
+  /// wcześniejszy wspólny wybór albo wybór automatyczny (z pominięciem
+  /// trackerów przypisanych innym psom).
+  int? nodeForDog(String dogId) {
+    for (final e in assigned.entries) {
+      if (e.value == dogId) return e.key;
+    }
+    bool free(int? n) => n != null && !assigned.containsKey(n);
+    if (free(dogNodeChoice)) return dogNodeChoice;
+    final others = nodes.values.where((n) => n.num != myNode && n.isT1000E && free(n.num)).toList();
     if (others.length == 1) return others.first.num;
-    return myNode;
+    return free(myNode) ? myNode : null;
+  }
+
+  /// Id psa, do którego przypisano tracker [node] (null = nieprzypisany).
+  String? dogFor(int node) => assigned[node];
+
+  /// Przypisuje tracker do psa (jeden tracker na psa). [dogId] null = odpina.
+  Future<void> assign(int node, String? dogId) async {
+    if (dogId == null) {
+      assigned.remove(node);
+    } else {
+      assigned.removeWhere((_, d) => d == dogId);
+      assigned[node] = dogId;
+    }
+    notifyListeners();
+    await _save();
   }
 
   /// true = telefon połączony bezpośrednio z obrożą na psie.
@@ -154,6 +213,13 @@ class CollarLink extends ChangeNotifier {
       deviceId = j['id'] as String?;
       deviceName = j['name'] as String?;
       dogNodeChoice = jsonInt(j['dog']);
+      final a = j['assign'];
+      if (a is Map) {
+        for (final e in a.entries) {
+          final n = int.tryParse('${e.key}');
+          if (n != null && e.value is String) assigned[n] = e.value as String;
+        }
+      }
     } catch (e) {
       logError('Obroża GPS', e);
     }
@@ -162,16 +228,27 @@ class CollarLink extends ChangeNotifier {
   Future<void> _save() async {
     try {
       final p = await SharedPreferences.getInstance();
-      await SafePrefs.setString(p, _key, jsonEncode({'id': deviceId, 'name': deviceName, 'dog': dogNodeChoice}));
+      await SafePrefs.setString(p, _key, jsonEncode({
+        'id': deviceId,
+        'name': deviceName,
+        'dog': dogNodeChoice,
+        'assign': {for (final e in assigned.entries) '${e.key}': e.value},
+      }));
     } catch (e) {
       logError('Obroża GPS', e);
     }
   }
 
+  /// Wybór urządzenia na psie – przypisuje je do aktualnego psa.
   Future<void> chooseDog(int? node) async {
-    dogNodeChoice = node;
-    notifyListeners();
-    await _save();
+    if (node == null) {
+      assigned.removeWhere((_, d) => d == activeDog());
+      dogNodeChoice = null;
+      notifyListeners();
+      await _save();
+      return;
+    }
+    await assign(node, activeDog());
   }
 
   /// Uprawnienia i włączony Bluetooth. Zwraca komunikat błędu albo null.
@@ -426,6 +503,10 @@ class CollarLink extends ChangeNotifier {
           if (e.node == dogNode && n.fix != null) {
             diag.addInterval(f.fixAt.difference(n.fix!.fixAt).inMilliseconds / 1000);
           }
+          if (f.moved) {
+            n.prevMoved = n.lastMoved;
+            n.lastMoved = f;
+          }
           n.fix = f;
           n.position = e.position;
           n.positionAt = t;
@@ -482,14 +563,15 @@ class CollarLink extends ChangeNotifier {
   }
 
   @visibleForTesting
-  void resetForTest() {
+  void resetForTest({bool loaded = true}) {
     state = CollarState.off;
     deviceId = null;
     deviceName = null;
     myNode = null;
     dogNodeChoice = null;
+    assigned.clear();
     nodes.clear();
     diag.clear();
-    _loaded = true;
+    _loaded = loaded;
   }
 }

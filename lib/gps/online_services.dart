@@ -14,6 +14,7 @@ import 'weather.dart';
 /// * Pogoda (Open-Meteo): serwis dostaje przybliżone współrzędne (3 miejsca po
 ///   przecinku, ok. 100 m) i adres IP telefonu.
 /// * Mapa (OpenStreetMap): dostawca kafli poznaje oglądany obszar i adres IP.
+/// * Mapa terenowa (OpenTopoMap) – osobna zgoda, wybierana na ekranie Valkor Track.
 ///
 /// `null` = jeszcze nie zapytano – wtedy nic nie jest wysyłane.
 class OnlineConsent extends ChangeNotifier {
@@ -23,6 +24,9 @@ class OnlineConsent extends ChangeNotifier {
 
   bool? weather;
   bool? map;
+
+  /// Zgoda na kafle mapy terenowej OpenTopoMap (osobny dostawca).
+  bool? topo;
 
   bool get asked => weather != null && map != null;
 
@@ -34,23 +38,26 @@ class OnlineConsent extends ChangeNotifier {
       final j = jsonDecode(raw) as Map<String, dynamic>;
       weather = j['weather'] as bool?;
       map = j['map'] as bool?;
+      topo = j['topo'] as bool?;
     } catch (e) {
       logError('Zgody online', e);
     }
     notifyListeners();
   }
 
-  Future<void> set({bool? weather, bool? map}) async {
-    final old = (this.weather, this.map);
+  Future<void> set({bool? weather, bool? map, bool? topo}) async {
+    final old = (this.weather, this.map, this.topo);
     if (weather != null) this.weather = weather;
     if (map != null) this.map = map;
+    if (topo != null) this.topo = topo;
     notifyListeners();
     try {
       final p = await SharedPreferences.getInstance();
-      await SafePrefs.setString(p, _key, jsonEncode({'weather': this.weather, 'map': this.map}));
+      await SafePrefs.setString(p, _key, jsonEncode({'weather': this.weather, 'map': this.map, if (this.topo != null) 'topo': this.topo}));
     } catch (e) {
       this.weather = old.$1;
       this.map = old.$2;
+      this.topo = old.$3;
       notifyListeners();
       rethrow;
     }
@@ -80,6 +87,15 @@ class GpsServices {
     }
   }
 
+  /// Kafle mapy terenowej (OpenTopoMap, CC-BY-SA; tylko lekki ruch, bez pobierania hurtowego).
+  static Widget Function() topoTiles = _topoTiles;
+
+  static Widget _topoTiles() => TileLayer(
+        urlTemplate: 'https://tile.opentopomap.org/{z}/{x}/{y}.png',
+        userAgentPackageName: 'pl.k9coach.app',
+        maxZoom: 17,
+      );
+
   static Widget _osmTiles() => TileLayer(
         urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
         userAgentPackageName: 'pl.k9coach.app',
@@ -94,6 +110,7 @@ class GpsServices {
     position = _position;
     weather = fetchWeather;
     tiles = _osmTiles;
+    topoTiles = _topoTiles;
   }
 }
 

@@ -20,6 +20,7 @@ import '../dogs/dog_profiles.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import 'collar_screen.dart';
+import 'valkor_track_screen.dart';
 import 'track_detail.dart';
 import 'training_start.dart' show disciplinesByRecent;
 import '../l10n/l10n.dart';
@@ -460,7 +461,7 @@ class _GpsScreenState extends State<GpsScreen> {
     final c = CollarLink.instance;
     final ok = c.connected;
     return K9Card(
-      onTap: () => openCollar(context),
+      onTap: () => c.paired ? openValkorTrack(context) : openCollar(context),
       padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
       child: Row(
         children: [
@@ -470,7 +471,7 @@ class _GpsScreenState extends State<GpsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(tr('Obroża GPS (T1000-E)'), style: const TextStyle(fontWeight: FontWeight.w600)),
+                Text(c.paired ? tr('Valkor Track – obroża GPS') : tr('Obroża GPS (T1000-E)'), style: const TextStyle(fontWeight: FontWeight.w600)),
                 Text(collarStatusText(c), style: const TextStyle(color: K9.muted, fontSize: 12.5)),
               ],
             ),
@@ -490,7 +491,7 @@ class _GpsScreenState extends State<GpsScreen> {
     final link = c.status();
     final stale = link != DogLink.live;
     return K9Card(
-      onTap: () => openCollar(context),
+      onTap: () => openValkorTrack(context),
       gradient: LinearGradient(colors: [K9.card, (stale ? K9.yellow : K9.blue).withValues(alpha: 0.18)]),
       child: Row(
         children: [
