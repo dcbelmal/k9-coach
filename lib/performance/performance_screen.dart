@@ -388,6 +388,15 @@ class _BodyState extends State<_Body> {
                       padding: const EdgeInsets.only(right: 6),
                       child: ChoiceChip(
                         key: ValueKey('perf-${p.name}'),
+                        visualDensity: VisualDensity.compact,
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        showCheckmark: false,
+                        labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+                        labelStyle: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: period == p ? Colors.black : K9.text,
+                        ),
                         label: Text(periodLabel(p)),
                         selected: period == p,
                         onSelected: (_) => _pickPeriod(p),
@@ -629,8 +638,18 @@ class PerfBars extends StatelessWidget {
   final List<double> values;
   final List<String> labels;
   final Color color;
+
+  /// Osobny kolor każdego słupka (np. strefy); null = [color].
+  final List<Color>? colors;
   final String Function(double) fmt;
-  const PerfBars({super.key, required this.values, required this.labels, this.color = K9.orange, required this.fmt});
+  const PerfBars({
+    super.key,
+    required this.values,
+    required this.labels,
+    this.color = K9.orange,
+    this.colors,
+    required this.fmt,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -684,7 +703,7 @@ class PerfBars extends StatelessWidget {
                   BarChartRodData(
                     toY: values[i],
                     width: values.length > 20 ? 5 : 12,
-                    color: color,
+                    color: colors != null && i < colors!.length ? colors![i] : color,
                     borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
                   ),
                 ],
@@ -775,7 +794,9 @@ class _SummaryTab extends StatelessWidget {
           _km(c.dogMeters),
           icon: Icons.pets_rounded,
           change: pctChange(c.dogMeters, p.dogMeters),
-          note: c.dogMeters == null ? tr('wymaga trackera') : vs,
+          note: c.dogMeters == null
+              ? tr('wymaga trackera')
+              : (vs ?? (c.dogSessions < c.count ? tr('z {0} z {1} treningów', [c.dogSessions, c.count]) : null)),
         ),
         StatTile(
           tr('Dystans przewodnika'),
@@ -866,6 +887,7 @@ class _ActivityTab extends StatelessWidget {
           PerfBars(
             values: [for (final v in z) v / 60],
             labels: [tr('Odp.'), tr('Niska'), tr('Umiark.'), tr('Wysoka')],
+            colors: zoneColors,
             fmt: (v) => fmtDuration(v.round()),
           ),
           for (final zz in PerfZone.values)
@@ -1116,7 +1138,7 @@ class _EnergyTab extends StatelessWidget {
           Text(tr('Wpisz masę psa w profilu, a policzę zapotrzebowanie.'), style: const TextStyle(color: K9.muted))
         else ...[
           _row(tr('Spożyte kalorie'), k(oneDay ? day!.eatenKcal : e.avgEaten)),
-          _row(tr('Zapotrzebowanie spoczynkowe (RER)'), k(oneDay ? day!.rerKcal : null)),
+          _row(tr('Zapotrzebowanie spoczynkowe (RER)'), k(oneDay ? day!.rerKcal : e.avgRer)),
           _row(tr('Zapotrzebowanie podstawowe'), k(oneDay ? day!.baseKcal : e.avgBase)),
           _row(tr('Dodatkowy wydatek z aktywności'), '+${k(oneDay ? day!.extraKcal : e.avgExtra ?? 0)}'),
           const Divider(color: K9.border),
@@ -1140,11 +1162,12 @@ class _EnergyTab extends StatelessWidget {
         _Card(tr('Bilans dzień po dniu'), Icons.bar_chart_rounded, [
           PerfBars(
             values: [for (final x in e.days) (x.balance ?? 0).abs()],
+            colors: [for (final x in e.days) (x.balance ?? 0) >= 0 ? K9.orange : K9.blue],
             labels: [for (final x in e.days) e.days.length <= 7 ? fmtWeekday(x.day) : '${x.day.day}'],
             color: K9.blue,
             fmt: (v) => '${v.round()} kcal',
           ),
-          _note(tr('Wysokość słupka = odchylenie od zapotrzebowania (nadwyżka lub niedobór).')),
+          _note(tr('Wysokość słupka = odchylenie od zapotrzebowania: pomarańczowy – nadwyżka, niebieski – niedobór.')),
         ]),
       _Card(tr('Wydatek na ruch w okresie'), Icons.local_fire_department_rounded, [
         _row(tr('Ponad zwykły dzień (doliczany)'), k(e.totalExtra)),

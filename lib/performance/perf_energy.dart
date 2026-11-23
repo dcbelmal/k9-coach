@@ -73,6 +73,7 @@ class EnergyPeriod {
   }
 
   double? get avgEaten => _avg(withFood.map((d) => d.eatenKcal));
+  double? get avgRer => _avg(withFood.map((d) => d.rerKcal));
   double? get avgBase => _avg(withFood.map((d) => d.baseKcal));
   double? get avgExtra => _avg(withFood.map((d) => d.extraKcal));
   double? get avgBalance => _avg(withFood.map((d) => d.balance));

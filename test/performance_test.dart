@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:k9_coach/gps/track.dart';
 import 'package:k9_coach/models.dart';
+import 'package:k9_coach/performance/perf_energy.dart';
 import 'package:k9_coach/performance/perf_model.dart';
 import 'package:k9_coach/performance/perf_period.dart';
 import 'package:k9_coach/performance/perf_repository.dart';
@@ -325,6 +326,34 @@ void main() {
         weights: const [],
       );
       expect(other[0].kg, 10);
+    });
+  });
+
+  group('Bilans energetyczny', () {
+    test('bilans = spożyte − (podstawowe + dodatkowe); spacer nie liczony drugi raz', () {
+      final walk = SessionMetrics.of(sess('w', DateTime(2026, 11, 2, 8), d: Discipline.walk, km: 4), null, kg: 30);
+      final cc = SessionMetrics.of(sess('c', DateTime(2026, 11, 2, 17), km: 5), null, kg: 30);
+      final (extra, routine) = activityKcal([walk, cc]);
+      expect(extra, closeTo(cc.kcal.kcal, 1e-9));
+      expect(routine, closeTo(walk.kcal.kcal, 1e-9));
+      final d = DayEnergy(DateTime(2026, 11, 2), eatenKcal: 1500, rerKcal: 900, baseKcal: 1400, extraKcal: extra);
+      expect(d.balance, closeTo(1500 - 1400 - extra, 1e-9));
+      expect(DayEnergy(DateTime(2026, 11, 2), baseKcal: 1400).balance, isNull, reason: 'bez wpisów karmienia');
+      expect(DayEnergy(DateTime(2026, 11, 2), eatenKcal: 1000).balance, isNull, reason: 'bez masy');
+    });
+
+    test('średnie tylko z dni z wpisami karmienia; bez dni przyszłych', () {
+      final p = EnergyPeriod([
+        DayEnergy(DateTime(2026, 11, 1), eatenKcal: 1200, baseKcal: 1000),
+        DayEnergy(DateTime(2026, 11, 2), baseKcal: 1000),
+        DayEnergy(DateTime(2026, 11, 3), eatenKcal: 800, baseKcal: 1000, extraKcal: 100),
+      ]);
+      expect(p.withFood, hasLength(2));
+      expect(p.avgBalance, closeTo((200 + -300) / 2, 1e-9));
+      expect(p.totalExtra, 100);
+      final days = daysIn(DateRange(DateTime(2026, 11, 1), DateTime(2026, 12, 1)), today: DateTime(2026, 11, 10, 15));
+      expect(days, hasLength(10));
+      expect(const EnergyPeriod([]).avgBalance, isNull);
     });
   });
 }
