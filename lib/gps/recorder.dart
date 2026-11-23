@@ -7,6 +7,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../collar/collar_link.dart';
+import '../collar/fix_filter.dart' show FixFilter;
 import '../dogs/dog_profiles.dart';
 import '../models.dart';
 import '../storage/safe_prefs.dart';
@@ -52,9 +53,20 @@ class TrackRecorder extends ChangeNotifier {
   List<double> laps = [];
 
   /// Trasa psa z obroży GPS (T1000-E) i jej dystans.
-  List<TrackPoint> dogPoints = [];
+  /// Segmenty trasy psa (nowy po pauzie i po utracie sygnału dłuższej niż [dogGapSec]).
+  List<List<TrackPoint>> dogSegments = [];
   double dogMeters = 0;
   CollarFix? dogLast;
+
+  /// Tracker, którego pozycje zapisujemy – ustalany na starcie i niezmienny
+  /// do końca treningu (zmiana wyboru w trakcie nie przełącza źródła).
+  int? dogNode;
+  DateTime? _dogLastFixAt;
+
+  /// Przerwa w pomiarach psa (s), po której zaczynamy nowy segment.
+  static const dogGapSec = 90;
+
+  List<TrackPoint> get dogPoints => [for (final s in dogSegments) ...s];
   StreamSubscription<CollarFix>? _dogSub;
   double meters = 0;
   double? currentSpeedKmh;
@@ -86,7 +98,7 @@ class TrackRecorder extends ChangeNotifier {
         seconds: seconds,
         segments: [for (final s in segments) [...s]],
         laps: [...laps],
-        dog: [...dogPoints],
+        dogSegments: [for (final s in dogSegments) [...s]],
         useGps: useGps,
         planId: plan?.id,
         rpe: plan?.rpe ?? 5,
@@ -164,9 +176,11 @@ class TrackRecorder extends ChangeNotifier {
     segments = [[]];
     laps = [];
     meters = 0;
-    dogPoints = [];
+    dogSegments = [[]];
     dogMeters = 0;
     dogLast = null;
+    dogNode = CollarLink.instance.dogNode;
+    _dogLastFixAt = null;
     last = null;
     error = null;
     _announcedKm = 0;
@@ -243,24 +257,38 @@ class TrackRecorder extends ChangeNotifier {
   /// w trakcie ruchu, żeby czas punktów zgadzał się z trasą człowieka.
   @visibleForTesting
   void onDogFix(CollarFix f) {
+    if (state == RecState.idle) return;
+    // Źródło ustalone na starcie; gdy tracker nie był jeszcze znany – pierwszy pies.
+    dogNode ??= CollarLink.instance.dogNode;
+    if (f.node != dogNode) return;
     dogLast = f;
     if (state != RecState.running) {
       notifyListeners();
       return;
     }
-    final t = seconds;
-    if (dogPoints.isNotEmpty) {
-      final prev = dogPoints.last;
+    if (dogSegments.isEmpty) dogSegments.add([]);
+    // Utrata sygnału: nowy segment, bez dystansu „przez lukę”.
+    final lastAt = _dogLastFixAt;
+    if (lastAt != null && f.fixAt.difference(lastAt).inSeconds > dogGapSec && dogSegments.last.isNotEmpty) {
+      dogSegments.add([]);
+    }
+    _dogLastFixAt = f.fixAt;
+    if (!f.moved && dogSegments.last.isNotEmpty) {
+      notifyListeners(); // postój – świeży pomiar, ale bez nowego punktu
+      return;
+    }
+    // Czas punktu = czas pomiaru GPS przeliczony na czas ruchu treningu.
+    final seg = dogSegments.last;
+    var t = seconds - f.lagSec.clamp(0, 60);
+    if (seg.isNotEmpty) {
+      final prev = seg.last;
+      if (t < prev.t) t = prev.t;
       final d = const Distance()(prev.ll, LatLng(f.lat, f.lng));
       final dt = t - prev.t;
-      if (d < 3) {
-        notifyListeners();
-        return; // ta sama pozycja (np. powtórzony pakiet)
-      }
-      if (dt > 0 && d / dt > 16) return; // skok GPS (>57 km/h)
+      if (dt > 0 && d / dt > FixFilter.maxSpeedMs) return; // drugi bezpiecznik na skoki
       dogMeters += d;
     }
-    dogPoints.add(TrackPoint(f.lat, f.lng, t, f.speedMs));
+    seg.add(TrackPoint(f.lat, f.lng, t < 0 ? 0 : t, f.speedMs));
     notifyListeners();
   }
 
@@ -318,6 +346,7 @@ class TrackRecorder extends ChangeNotifier {
     if (state != RecState.paused) return;
     _watch.start();
     segments.add([]);
+    if (dogSegments.isEmpty || dogSegments.last.isNotEmpty) dogSegments.add([]);
     state = RecState.running;
     _scheduleGoal();
     _updateNotification();
@@ -350,7 +379,8 @@ class TrackRecorder extends ChangeNotifier {
     state = RecState.idle;
     await Notifications.instance.cancel(Notifications.goalId);
     await Notifications.instance.cancel(Notifications.liveId);
-    final t = Track([for (final s in segments) if (s.length > 1) s], laps, [...dogPoints]);
+    final t = Track([for (final s in segments) if (s.length > 1) s], laps, const [],
+        [for (final s in dogSegments) if (s.isNotEmpty) [...s]]);
     notifyListeners();
     return t;
   }
@@ -368,8 +398,9 @@ class TrackRecorder extends ChangeNotifier {
     sessionId = null;
     segments = [];
     meters = 0;
-    dogPoints = [];
+    dogSegments = [];
     dogMeters = 0;
+    dogNode = null;
     notifyListeners();
   }
 

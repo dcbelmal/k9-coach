@@ -67,6 +67,22 @@ void main() {
       expect(p.rssi, -90);
     });
 
+    test('zaokrąglona pozycja (precyzja kanału) jest rozpoznawana', () {
+      final coarse = PbWriter()
+        ..fixed32(1, (50.1 * 1e7).round())
+        ..fixed32(2, (19.9 * 1e7).round())
+        ..varint(23, 13);
+      final p = (decodeFromRadio(packet(5, MeshPort.position, coarse.toBytes())).single as MeshPositionEvent).position;
+      expect(p.precisionBits, 13);
+      expect(p.coarse, isTrue);
+      final full = (decodeFromRadio(packet(5, MeshPort.position, position(50.1, 19.9))).single as MeshPositionEvent).position;
+      expect(full.coarse, isFalse);
+      final c = CollarLink.instance..resetForTest();
+      c.handleEvents([const MeshMyInfo(5), MeshPositionEvent(5, p)]);
+      expect(c.dogCoarse, isTrue);
+      c.resetForTest();
+    });
+
     test('pozycja 0,0 (brak fixu) jest pomijana', () {
       expect(decodeFromRadio(packet(5, MeshPort.position, position(0, 0))), isEmpty);
     });
@@ -143,7 +159,8 @@ void main() {
       c.handleEvents(decodeFromRadio(packet(1, MeshPort.position, position(50, 20))));
       c.handleEvents(decodeFromRadio(packet(2, MeshPort.position, position(50.001, 20.001))));
       await Future<void>.delayed(Duration.zero);
-      expect(got.map((f) => f.node), [2]);
+      // Strumień ma pozycje wszystkich urządzeń; nagrywanie wybiera psa po numerze.
+      expect(got.map((f) => f.node), [1, 2]);
       // Ręczny wybór ma pierwszeństwo.
       c.dogNodeChoice = 1;
       expect(c.dogNode, 1);

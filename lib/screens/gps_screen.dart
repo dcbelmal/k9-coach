@@ -389,13 +389,16 @@ class _GpsScreenState extends State<GpsScreen> {
                 ),
                 if (_rec.dogPoints.length > 1)
                   PolylineLayer(polylines: [
-                    Polyline(
-                      points: [for (final q in _rec.dogPoints) q.ll],
-                      strokeWidth: 4,
-                      color: K9.blue,
-                      borderStrokeWidth: 1.5,
-                      borderColor: Colors.black54,
-                    ),
+                    // Osobne odcinki: bez linii przez przerwy w sygnale.
+                    for (final s in _rec.dogSegments)
+                      if (s.length > 1)
+                        Polyline(
+                          points: [for (final q in s) q.ll],
+                          strokeWidth: 4,
+                          color: K9.blue,
+                          borderStrokeWidth: 1.5,
+                          borderColor: Colors.black54,
+                        ),
                   ]),
                 if (pts.isNotEmpty) MarkerLayer(markers: [_dot(pts.first, K9.green, 14)]),
                 if (pos != null) MarkerLayer(markers: [_dot(pos, K9.orange, 20)]),
@@ -429,23 +432,28 @@ class _GpsScreenState extends State<GpsScreen> {
     final f = _rec.dogLast;
     if (f != null) return LatLng(f.lat, f.lng);
     final d = CollarLink.instance.dogWithFix;
-    return d == null ? null : LatLng(d.position!.lat, d.position!.lng);
+    return d?.fix?.ll;
   }
 
-  Marker _dogMarker(LatLng p) => Marker(
+  /// Niebieski znacznik = pozycja na żywo, szary = ostatnia znana.
+  Marker _dogMarker(LatLng p) {
+    final live = CollarLink.instance.status() == DogLink.live;
+    final col = live ? K9.blue : K9.muted;
+    return Marker(
     point: p,
     width: 30,
     height: 30,
     child: Container(
       decoration: BoxDecoration(
-        color: K9.blue,
+        color: col,
         shape: BoxShape.circle,
         border: Border.all(color: Colors.white, width: 2.5),
-        boxShadow: [BoxShadow(color: K9.blue.withValues(alpha: 0.5), blurRadius: 10)],
+        boxShadow: [BoxShadow(color: col.withValues(alpha: 0.5), blurRadius: 10)],
       ),
       child: const Icon(Icons.pets_rounded, size: 15, color: Colors.white),
     ),
   );
+  }
 
   /// Karta obroży GPS na ekranie startu.
   Widget _collarCard() {
@@ -479,9 +487,8 @@ class _GpsScreenState extends State<GpsScreen> {
     final f = _rec.dogLast;
     final me = _rec.last;
     final dist = f == null || me == null ? null : const Distance()(LatLng(f.lat, f.lng), LatLng(me.latitude, me.longitude));
-    final age = f == null ? null : DateTime.now().difference(f.at).inSeconds;
-    final stale = age == null || age > 90;
-    final lost = c.state == CollarState.lost || c.state == CollarState.connecting;
+    final link = c.status();
+    final stale = link != DogLink.live;
     return K9Card(
       onTap: () => openCollar(context),
       gradient: LinearGradient(colors: [K9.card, (stale ? K9.yellow : K9.blue).withValues(alpha: 0.18)]),
@@ -495,14 +502,16 @@ class _GpsScreenState extends State<GpsScreen> {
               children: [
                 Text(
                   dist == null
-                      ? (f == null ? tr('Czekam na pozycję psa…') : tr('Pies: pozycja {0}', [collarAge(f.at)]))
-                      : tr('Pies {0} m od Ciebie', [dist.round()]),
+                      ? (f == null ? tr('Czekam na pozycję psa…') : tr('Pies: pozycja {0}', [collarAge(f.fixAt)]))
+                      : stale
+                          ? tr('Ostatnio {0} m od Ciebie', [dist.round()])
+                          : tr('Pies {0} m od Ciebie', [dist.round()]),
                   style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
                 Text(
                   [
-                    if (lost) tr('obroża: łączę ponownie…'),
-                    if (f != null && dist != null) collarAge(f.at),
+                    dogLinkText(c),
+                    if (f != null && stale) tr('ostatnia znana pozycja {0}', [collarAge(f.fixAt)]),
                     if (_rec.dogMeters >= 20) tr('pies: {0} km', [fmtKm(_rec.dogMeters / 1000)]),
                     if (c.dog?.battery != null) collarBattery(c.dog!.battery),
                   ].join(' · '),
@@ -661,6 +670,7 @@ class _GpsScreenState extends State<GpsScreen> {
         ),
         gap16,
         if (gps && !kIsWeb) ...[_collarCard(), gap12],
+        if (gps && !kIsWeb && CollarLink.instance.dogCoarse) ...[const CollarCoarseWarning(), gap12],
         if (gps && OnlineConsent.instance.weather == true) ...[_weatherCard(), gap12],
         K9Card(
           child: Column(
@@ -989,6 +999,7 @@ class _GpsScreenState extends State<GpsScreen> {
                 ),
               ),
               if (gps && (CollarLink.instance.paired || _rec.dogLast != null)) ...[gap12, _dogLive()],
+              if (gps && CollarLink.instance.dogCoarse) ...[gap12, const CollarCoarseWarning()],
               if (gps) ...[gap12, _map(height: 300)],
             ],
           ),

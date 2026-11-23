@@ -8,7 +8,10 @@ import 'package:universal_ble/universal_ble.dart';
 import '../models.dart' show jsonInt;
 import '../storage/safe_prefs.dart';
 import '../l10n/l10n.dart';
+import 'fix_filter.dart';
 import 'mesh_proto.dart';
+
+export 'fix_filter.dart' show CollarFix, FixReject, CollarDiagnostics;
 
 /// UUID usługi i charakterystyk Bluetooth urządzeń Meshtastic.
 class MeshBle {
@@ -30,19 +33,38 @@ class CollarNode {
   int? battery;
   DateTime? lastHeard;
   int? rssi;
-  CollarNode(this.num);
+
+  /// Ostatni przyjęty (sprawdzony) pomiar GPS.
+  CollarFix? fix;
+  final FixFilter filter;
+  CollarNode(this.num) : filter = FixFilter(num);
 
   String get name => (longName?.isNotEmpty ?? false) ? longName! : (shortName ?? meshNodeId(num));
   bool get isT1000E => hwModel == hwT1000E;
 }
 
-/// Pozycja psa z obroży.
-class CollarFix {
-  final int node;
-  final double lat, lng;
-  final DateTime at;
-  final double? speedMs;
-  const CollarFix(this.node, this.lat, this.lng, this.at, {this.speedMs});
+/// Stan łączności z psem – rozróżnia Bluetooth, LoRa i GPS.
+enum DogLink {
+  /// Nie dodano trackera.
+  none,
+
+  /// Telefon nie jest połączony z urządzeniem Meshtastic (Bluetooth).
+  bluetoothOff,
+
+  /// Trwa łączenie albo ponowne łączenie przez Bluetooth.
+  connecting,
+
+  /// Bluetooth działa, ale tracker na psie nie odzywa się radiem LoRa.
+  loraSilent,
+
+  /// Tracker odpowiada, ale nie ma jeszcze pozycji GPS.
+  waitingGps,
+
+  /// Jest tylko ostatnia znana pozycja – brak świeżego pomiaru GPS.
+  stale,
+
+  /// Pozycja na żywo.
+  live,
 }
 
 /// Połączenie z obrożą GPS SenseCAP T1000-E (oprogramowanie Meshtastic)
@@ -74,8 +96,15 @@ class CollarLink extends ChangeNotifier {
   final Map<int, CollarNode> nodes = {};
   final _fixes = StreamController<CollarFix>.broadcast();
 
-  /// Nowe pozycje psa.
+  /// Sprawdzone pomiary GPS ze wszystkich urządzeń w sieci. Odbiorca wybiera
+  /// urządzenie po [CollarFix.node] – trening blokuje je na starcie.
   Stream<CollarFix> get fixes => _fixes.stream;
+
+  /// Liczniki do ekranu diagnostyki.
+  final diag = CollarDiagnostics();
+
+  /// Po tylu sekundach bez wiadomości od trackera w sieci LoRa uznajemy go za niesłyszalnego.
+  static const loraSilentSec = 180;
 
   bool _loaded = false;
   bool _wanted = false;
@@ -83,6 +112,8 @@ class CollarLink extends ChangeNotifier {
   StreamSubscription<Uint8List>? _notifySub;
   Timer? _poll;
   Timer? _retry;
+  bool _opening = false;
+  int _retrySec = 5;
   bool _draining = false;
   bool _drainAgain = false;
   int _configId = 0;
@@ -198,7 +229,17 @@ class CollarLink extends ChangeNotifier {
 
   Future<void> _open() async {
     final id = deviceId;
-    if (id == null || !_wanted) return;
+    // Nigdy dwie próby łączenia naraz (np. ręczne „Połącz” w trakcie ponawiania).
+    if (id == null || !_wanted || _opening || state == CollarState.connected) return;
+    _opening = true;
+    try {
+      await _openInner(id);
+    } finally {
+      _opening = false;
+    }
+  }
+
+  Future<void> _openInner(String id) async {
     _retry?.cancel();
     state = CollarState.connecting;
     error = null;
@@ -234,11 +275,14 @@ class CollarLink extends ChangeNotifier {
       await _write(encodeWantConfig(_configId));
       await _drain();
       state = CollarState.connected;
+      _retrySec = 5;
+      diag.connectedAt = DateTime.now();
       notifyListeners();
       _poll?.cancel();
       _poll = Timer.periodic(const Duration(seconds: 5), (_) => _tickPoll());
     } catch (e) {
       error = _message(e);
+      diag.lastError = e.toString();
       try {
         await UniversalBle.disconnect(id);
       } catch (_) {}
@@ -261,15 +305,19 @@ class CollarLink extends ChangeNotifier {
       return;
     }
     state = CollarState.lost;
+    diag.reconnects++;
     notifyListeners();
+    // Ponawianie z rosnącą przerwą (5, 10, 20, 30 s) – oszczędza baterię telefonu.
     _retry?.cancel();
-    _retry = Timer(const Duration(seconds: 8), _open);
+    _retry = Timer(Duration(seconds: _retrySec), _open);
+    _retrySec = (_retrySec * 2).clamp(5, 30);
   }
 
   Future<void> disconnect({bool forget = false}) async {
     _wanted = false;
     _poll?.cancel();
     _retry?.cancel();
+    _retrySec = 5;
     await _notifySub?.cancel();
     await _connSub?.cancel();
     _notifySub = null;
@@ -301,10 +349,13 @@ class CollarLink extends ChangeNotifier {
   void _tickPoll() {
     if (state != CollarState.connected) return;
     _drain();
-    // Obroża połączona bezpośrednio: co 15 s prosimy ją o świeżą pozycję.
+    // Obroża połączona bezpośrednio: prosimy o świeżą pozycję tylko wtedy,
+    // gdy ostatni pomiar jest starszy niż 12 s (oszczędza baterię trackera).
     final me = myNode;
     final now = DateTime.now();
-    if (direct && me != null && (_lastRequest == null || now.difference(_lastRequest!).inSeconds >= 15)) {
+    final f = dog?.fix;
+    final fresh = f != null && f.ageSec(now) < 12;
+    if (direct && me != null && !fresh && (_lastRequest == null || now.difference(_lastRequest!).inSeconds >= 12)) {
       _lastRequest = now;
       _write(encodePositionRequest(me)).catchError((_) {});
     }
@@ -325,6 +376,8 @@ class CollarLink extends ChangeNotifier {
         for (var i = 0; i < 200; i++) {
           final bytes = await UniversalBle.read(id, MeshBle.service, MeshBle.fromRadio);
           if (bytes.isEmpty) break;
+          diag.packets++;
+          diag.lastPacketAt = DateTime.now();
           try {
             handleEvents(decodeFromRadio(bytes));
           } on FormatException catch (e) {
@@ -359,13 +412,25 @@ class CollarLink extends ChangeNotifier {
           if (e.position != null && n.position == null) n.position = e.position;
         case MeshPositionEvent():
           final n = nodes.putIfAbsent(e.node, () => CollarNode(e.node));
-          n.position = e.position;
-          n.positionAt = t;
           n.lastHeard = t;
           n.rssi = e.rssi ?? n.rssi;
-          if (e.node == dogNode) {
-            _fixes.add(CollarFix(e.node, e.position.lat, e.position.lng, t, speedMs: e.position.speedMs));
+          diag.positions++;
+          final v = n.filter.check(e.position, t);
+          if (!v.accepted) {
+            diag.reject(v.reject!);
+            // Zaokrąglona pozycja: pokazujemy ostrzeżenie, ale nie traktujemy jej jako pomiaru.
+            if (v.reject == FixReject.coarse) n.position = e.position;
+            break;
           }
+          final f = v.fix!;
+          if (e.node == dogNode && n.fix != null) {
+            diag.addInterval(f.fixAt.difference(n.fix!.fixAt).inMilliseconds / 1000);
+          }
+          n.fix = f;
+          n.position = e.position;
+          n.positionAt = t;
+          diag.accepted++;
+          _fixes.add(f);
         case MeshBattery():
           final n = nodes.putIfAbsent(e.node, () => CollarNode(e.node));
           n.battery = e.level;
@@ -378,10 +443,42 @@ class CollarLink extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Ostatnia pozycja psa i jej wiek.
+  /// Tracker na psie wysyła pozycję zaokrągloną przez ustawienia kanału.
+  bool get dogCoarse => dog?.position?.coarse ?? false;
+
+  /// Pies z co najmniej jednym przyjętym pomiarem (może być nieaktualny – patrz [status]).
   CollarNode? get dogWithFix {
     final d = dog;
-    return d?.positionAt == null ? null : d;
+    return d?.fix == null ? null : d;
+  }
+
+  /// Po ilu sekundach pomiar przestaje być „na żywo”: 3 × rzeczywisty odstęp
+  /// między pomiarami, co najmniej 45 s.
+  double get liveLimitSec {
+    final m = diag.medianInterval;
+    return m == null ? 45 : (m * 3).clamp(45, 600).toDouble();
+  }
+
+  /// Stan łączności z psem: osobno Bluetooth, LoRa i GPS.
+  DogLink status({DateTime? now}) {
+    final t = now ?? DateTime.now();
+    if (deviceId == null) return DogLink.none;
+    switch (state) {
+      case CollarState.off:
+        return DogLink.bluetoothOff;
+      case CollarState.connecting:
+      case CollarState.lost:
+        return DogLink.connecting;
+      case CollarState.connected:
+        break;
+    }
+    final d = dog;
+    final heardAge = d?.lastHeard == null ? null : t.difference(d!.lastHeard!).inSeconds;
+    final loraSilent = !direct && (heardAge == null || heardAge > loraSilentSec);
+    final f = d?.fix;
+    if (f == null) return loraSilent ? DogLink.loraSilent : DogLink.waitingGps;
+    if (f.ageSec(t) <= liveLimitSec) return DogLink.live;
+    return loraSilent ? DogLink.loraSilent : DogLink.stale;
   }
 
   @visibleForTesting
@@ -392,6 +489,7 @@ class CollarLink extends ChangeNotifier {
     myNode = null;
     dogNodeChoice = null;
     nodes.clear();
+    diag.clear();
     _loaded = true;
   }
 }
