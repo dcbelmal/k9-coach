@@ -9,6 +9,7 @@ import '../theme.dart';
 import '../widgets/common.dart';
 import 'forms.dart';
 import 'home.dart';
+import '../performance/performance_screen.dart';
 import '../l10n/l10n.dart';
 import '../date_math.dart';
 
@@ -92,6 +93,8 @@ class _StatsScreenState extends State<StatsScreen> {
               ]),
               gap16,
             ],
+            const PerformanceEntryCard(),
+            gap12,
             Segmented(
                 items: [tr('Tydzień'), tr('Miesiąc'), tr('Rok')],
                 index: period,

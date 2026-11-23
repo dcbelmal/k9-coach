@@ -44,6 +44,7 @@ class QuickStart {
 enum HomeCard {
   reminders('Najbliższe przypomnienia'),
   track('Valkor Track'),
+  performance('Valkor Performance'),
   lastActivity('Ostatnia aktywność'),
   stats('Statystyki tygodnia'),
   care('Żywienie i zdrowie'),

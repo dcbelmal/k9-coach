@@ -17,6 +17,7 @@ import '../models.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import 'collar_screen.dart';
+import '../performance/performance_screen.dart';
 import 'dog_radar.dart';
 import 'valkor_track_settings.dart';
 
@@ -327,6 +328,11 @@ class _ValkorTrackScreenState extends State<ValkorTrackScreen> {
       appBar: AppBar(
         title: Text(tr('Valkor Track')),
         actions: [
+          IconButton(
+            tooltip: tr('Valkor Performance'),
+            icon: const Icon(Icons.insights_rounded),
+            onPressed: () => openPerformance(context),
+          ),
           IconButton(
             tooltip: tr('Ustawienia śledzenia'),
             icon: const Icon(Icons.tune_rounded),
