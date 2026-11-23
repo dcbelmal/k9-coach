@@ -35,7 +35,7 @@ const strings = <String, String>{
   'Ty': 'You',
   'Urządzenia w pobliżu': 'Nearby devices',
   'Utracono połączenie – ponawiam…': 'Connection lost – retrying…',
-  'W Meshtastic ustaw region EU_868, nazwę (np. „Pies”) i rolę TRACKER.': 'In Meshtastic set region EU_868, a name (e.g. “Dog”) and role TRACKER.',
+  'W Meshtastic ustaw region EU_868, nazwę (np. „Pies”) i zostaw rolę „Klient”.': 'In Meshtastic set region EU_868, a name (e.g. “Dog”) and keep the role “Client”.',
   'Włącz Bluetooth w telefonie.': 'Turn on Bluetooth on the phone.',
   'Włącz obrożę i trzymaj ją blisko telefonu. Jeśli jest połączona z aplikacją Meshtastic, najpierw ją tam rozłącz – obroża obsługuje jeden telefon naraz.': 'Turn the collar on and keep it near the phone. If it is connected to the Meshtastic app, disconnect it there first – the collar serves one phone at a time.',
   'Z drugim urządzeniem w kieszeni połącz telefon z nim, a obrożę na psie wybierz z listy powyżej.': 'With a second device in your pocket, connect the phone to it and pick the collar on the dog from the list above.',

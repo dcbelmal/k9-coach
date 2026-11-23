@@ -308,7 +308,7 @@ class _CollarScreenState extends State<CollarScreen> {
           Text(tr('Jak przygotować obrożę'), style: const TextStyle(fontWeight: FontWeight.w700)),
           const SizedBox(height: 10),
           step('1', tr('Obroża musi mieć oprogramowanie Meshtastic. Sprawdzisz to w aplikacji Meshtastic: jeśli ją widzi, wszystko gra.')),
-          step('2', tr('W Meshtastic ustaw region EU_868, nazwę (np. „Pies”) i rolę TRACKER.')),
+          step('2', tr('W Meshtastic ustaw region EU_868, nazwę (np. „Pies”) i zostaw rolę „Klient”.')),
           step('3', tr('Pozycja: interwał wysyłania 30 s, inteligentna pozycja wyłączona, GPS włączony.')),
           step('4', tr('Rozłącz obrożę w aplikacji Meshtastic, potem połącz ją tutaj. PIN przy parowaniu: 123456.')),
           step('5', tr('Z drugim urządzeniem w kieszeni połącz telefon z nim, a obrożę na psie wybierz z listy powyżej.')),
