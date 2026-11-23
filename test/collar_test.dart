@@ -159,7 +159,8 @@ void main() {
       c.handleEvents(decodeFromRadio(packet(1, MeshPort.position, position(50, 20))));
       c.handleEvents(decodeFromRadio(packet(2, MeshPort.position, position(50.001, 20.001))));
       await Future<void>.delayed(Duration.zero);
-      expect(got.map((f) => f.node), [2]);
+      // Strumień ma pozycje wszystkich urządzeń; nagrywanie wybiera psa po numerze.
+      expect(got.map((f) => f.node), [1, 2]);
       // Ręczny wybór ma pierwszeństwo.
       c.dogNodeChoice = 1;
       expect(c.dogNode, 1);

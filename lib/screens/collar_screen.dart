@@ -33,12 +33,38 @@ String collarStatusText(CollarLink c) {
     case CollarState.lost:
       return tr('Utracono połączenie – ponawiam…');
     case CollarState.connected:
-      final d = c.dogWithFix;
+      final f = c.dog?.fix;
       final parts = <String>[
-        d == null ? tr('czekam na pozycję psa') : tr('pozycja {0}', [collarAge(d.positionAt)]),
+        dogLinkText(c),
+        if (f != null && c.status() != DogLink.live) tr('ostatnia znana pozycja {0}', [collarAge(f.fixAt)]),
         if (c.dog?.battery != null) collarBattery(c.dog!.battery),
       ];
       return '${tr('Połączona')} · ${parts.join(' · ')}';
+  }
+}
+
+/// Opis łączności z psem: Bluetooth / LoRa / GPS / na żywo.
+String dogLinkText(CollarLink c, {DateTime? now}) {
+  final f = c.dog?.fix;
+  switch (c.status(now: now)) {
+    case DogLink.none:
+      return tr('brak trackera');
+    case DogLink.bluetoothOff:
+      return tr('Bluetooth rozłączony');
+    case DogLink.connecting:
+      return tr('łączę przez Bluetooth…');
+    case DogLink.loraSilent:
+      return tr('brak sygnału LoRa od psa');
+    case DogLink.waitingGps:
+      return tr('czekam na GPS psa');
+    case DogLink.stale:
+      return tr('brak świeżego GPS');
+    case DogLink.live:
+      final m = c.diag.medianInterval;
+      return [
+        tr('na żywo {0}', [collarAge(f?.fixAt, now: now)]),
+        if (m != null) tr('pomiar co ~{0} s', [m.round()]),
+      ].join(' · ');
   }
 }
 
@@ -149,7 +175,49 @@ class _CollarScreenState extends State<CollarScreen> {
           if (!connected) ...[gap16, _scanSection()],
           gap16,
           _howTo(),
+          if (c.paired) ...[gap16, _diagnostics()],
         ],
+      ),
+    );
+  }
+
+  /// Diagnostyka: liczniki pakietów, odrzuconych pomiarów i połączeń.
+  Widget _diagnostics() {
+    final d = c.diag;
+    final m = d.medianInterval;
+    String why(FixReject r) => switch (r) {
+      FixReject.coarse => tr('zaokrąglona pozycja'),
+      FixReject.stale => tr('nieaktualne'),
+      FixReject.duplicate => tr('powtórzone'),
+      FixReject.outOfOrder => tr('w złej kolejności'),
+      FixReject.weak => tr('słaby sygnał GPS'),
+      FixReject.jump => tr('niemożliwy skok'),
+    };
+    Widget row(String k, String v) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Row(children: [
+            Expanded(child: Text(k, style: const TextStyle(color: K9.muted, fontSize: 12.5))),
+            Text(v, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
+          ]),
+        );
+    return K9Card(
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          tilePadding: EdgeInsets.zero,
+          title: Text(tr('Diagnostyka'), style: const TextStyle(fontWeight: FontWeight.w600)),
+          children: [
+            row(tr('Stan psa'), dogLinkText(c)),
+            row(tr('Pakiety z urządzenia'), '${d.packets}'),
+            row(tr('Pozycje odebrane'), '${d.positions}'),
+            row(tr('Pozycje przyjęte'), '${d.accepted}'),
+            for (final e in d.rejected.entries) row(tr('Odrzucone: {0}', [why(e.key)]), '${e.value}'),
+            row(tr('Rzeczywisty odstęp pomiarów'), m == null ? '–' : tr('~{0} s', [m.round()])),
+            row(tr('Ponowne połączenia'), '${d.reconnects}'),
+            if (d.lastPacketAt != null) row(tr('Ostatni pakiet'), collarAge(d.lastPacketAt)),
+            if (d.lastError != null) row(tr('Ostatni błąd'), d.lastError!),
+          ],
+        ),
       ),
     );
   }
@@ -179,7 +247,7 @@ class _CollarScreenState extends State<CollarScreen> {
           if (connected && dog != null) ...[
             const SizedBox(height: 10),
             Text(
-              tr('Pies: {0}, {1}', [dog.position!.lat.toStringAsFixed(5), dog.position!.lng.toStringAsFixed(5)]),
+              tr('Pies: {0}, {1}', [dog.fix!.lat.toStringAsFixed(5), dog.fix!.lng.toStringAsFixed(5)]),
               style: const TextStyle(color: K9.faint, fontSize: 12),
             ),
           ],
@@ -260,7 +328,7 @@ class _CollarScreenState extends State<CollarScreen> {
           subtitle: Text(sub, style: const TextStyle(color: K9.muted, fontSize: 12)),
         );
     String sub(CollarNode n) => [
-          collarAge(n.positionAt ?? n.lastHeard),
+          collarAge(n.fix?.fixAt ?? n.lastHeard),
           if (n.battery != null) collarBattery(n.battery),
           if (n.isT1000E) 'T1000-E',
         ].join(' · ');

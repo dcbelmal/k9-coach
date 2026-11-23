@@ -183,7 +183,29 @@ class MeshPosition {
   /// Precyzja pozycji w bitach (32 = pełna). Mniej = kanał celowo zaokrągla
   /// pozycję (np. ok. 1,5 km na domyślnym publicznym kanale Meshtastic).
   final int? precisionBits;
-  const MeshPosition(this.lat, this.lng, {this.altitude, this.time, this.speedMs, this.sats, this.precisionBits});
+
+  /// HDOP (rozmycie poziome, ×1 – już podzielone przez 100), jeśli podane.
+  final double? hdop;
+
+  /// Dokładność odbiornika GPS w metrach (gps_accuracy, mm → m), jeśli podana.
+  final double? gpsAccuracyM;
+
+  /// Rodzaj fixu z NMEA (2 = 2D, 3 = 3D), jeśli podany.
+  final int? fixType;
+
+  /// Numer kolejny pozycji (seq_number), jeśli podany.
+  final int? seq;
+
+  const MeshPosition(this.lat, this.lng,
+      {this.altitude, this.time, this.speedMs, this.sats, this.precisionBits, this.hdop, this.gpsAccuracyM, this.fixType, this.seq});
+
+  /// Szacowana dokładność pozycji w metrach (null = urządzenie jej nie podaje).
+  /// Wzór jak w Meshtastic: HDOP × dokładność odbiornika (domyślnie ok. 5 m).
+  double? get accuracyM {
+    final h = hdop;
+    if (h == null || h <= 0) return null;
+    return h * ((gpsAccuracyM ?? 0) > 0 ? gpsAccuracyM! : 5);
+  }
 
   /// Pozycja zaokrąglona przez ustawienia kanału – nie nadaje się do trasy.
   bool get coarse => precisionBits != null && precisionBits! > 0 && precisionBits! < 24;
@@ -205,6 +227,10 @@ class MeshPosition {
       speedMs: p.integer(15)?.toDouble(),
       sats: p.integer(19),
       precisionBits: p.integer(23),
+      hdop: p.integer(12) == null || p.integer(12) == 0 ? null : p.integer(12)! / 100,
+      gpsAccuracyM: p.integer(14) == null || p.integer(14) == 0 ? null : p.integer(14)! / 1000,
+      fixType: p.integer(18),
+      seq: p.integer(22),
     );
   }
 }

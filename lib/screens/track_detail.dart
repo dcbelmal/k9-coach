@@ -374,14 +374,15 @@ class _RouteMap extends StatelessWidget {
                       borderStrokeWidth: 1.5,
                       borderColor: Colors.black54,
                     ),
-                if (dogPts.length > 1)
-                  Polyline(
-                    points: dogPts,
-                    strokeWidth: 4,
-                    color: K9.blue,
-                    borderStrokeWidth: 1.5,
-                    borderColor: Colors.black54,
-                  ),
+                for (final seg in track.dogSegments)
+                  if (seg.length > 1)
+                    Polyline(
+                      points: [for (final p in seg) p.ll],
+                      strokeWidth: 4,
+                      color: K9.blue,
+                      borderStrokeWidth: 1.5,
+                      borderColor: Colors.black54,
+                    ),
               ],
             ),
             if (pts.isNotEmpty) MarkerLayer(markers: [dot(pts.first, K9.green), dot(pts.last, K9.red)]),
@@ -575,7 +576,7 @@ class _DogCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final km = track.dogMeters / 1000;
     final human = track.meters / 1000;
-    final span = track.dog.last.t - track.dog.first.t;
+    final span = track.dogSeconds;
     return K9Card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
