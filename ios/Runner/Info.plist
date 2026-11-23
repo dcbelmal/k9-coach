@@ -8,6 +8,8 @@
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string> Valkor Coach potrzebuje dostępu do zdjęć, aby ustawić zdjęcie psa.</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Valkor Coach łączy się przez Bluetooth z obrożą GPS psa (SenseCAP T1000-E), aby nagrać jego trasę.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string> Valkor Coach używa GPS, aby nagrać trasę treningu z psem.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>

@@ -34,7 +34,21 @@ class Track {
   /// Segmenty (nowy segment po każdej pauzie, żeby nie łączyć linią).
   final List<List<TrackPoint>> segments;
   final List<double> laps; // czas ruchu w chwili okrążenia
-  Track(this.segments, this.laps);
+
+  /// Trasa psa z obroży GPS (pusta, gdy trening bez obroży).
+  final List<TrackPoint> dog;
+  Track(this.segments, this.laps, [this.dog = const []]);
+
+  bool get hasDog => dog.length > 1;
+
+  /// Dystans psa z obroży (metry).
+  double get dogMeters {
+    var m = 0.0;
+    for (var i = 1; i < dog.length; i++) {
+      m += _dist(dog[i - 1].ll, dog[i].ll);
+    }
+    return m;
+  }
 
   Iterable<TrackPoint> get points => segments.expand((s) => s);
 
@@ -42,13 +56,15 @@ class Track {
         'v': 1,
         's': [for (final s in segments) [for (final p in s) p.toJson()]],
         'laps': laps,
+        if (dog.isNotEmpty) 'dog': [for (final p in dog) p.toJson()],
       });
 
   factory Track.decode(String text) {
     final j = jsonDecode(text) as Map<String, dynamic>;
     return Track([
       for (final s in j['s'] as List) [for (final p in s as List) TrackPoint.fromJson(p as List)]
-    ], [for (final l in (j['laps'] as List? ?? [])) (l as num).toDouble()]);
+    ], [for (final l in (j['laps'] as List? ?? [])) (l as num).toDouble()],
+        [for (final p in (j['dog'] as List? ?? [])) TrackPoint.fromJson(p as List)]);
   }
 
   double get meters {

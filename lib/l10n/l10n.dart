@@ -5,6 +5,7 @@ import 'lang/ar.dart' as ar;
 import 'lang/de.dart' as de;
 import 'lang/en.dart' as en;
 import 'lang/en_accuracy.dart' as en_acc;
+import 'lang/en_collar.dart' as en_col;
 import 'lang/es.dart' as es;
 import 'lang/fr.dart' as fr;
 import 'lang/hi.dart' as hi;
@@ -120,7 +121,7 @@ class L10n extends ChangeNotifier {
 
   String lookup(String pl) {
     if (code == 'pl') return pl;
-    return _strings[pl] ?? en.strings[pl] ?? en_acc.strings[pl] ?? pl;
+    return _strings[pl] ?? en.strings[pl] ?? en_acc.strings[pl] ?? en_col.strings[pl] ?? pl;
   }
 }
 
