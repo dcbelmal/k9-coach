@@ -20,6 +20,9 @@ class GpsDraft {
   double seconds; // czas ruchu
   List<List<TrackPoint>> segments;
   List<double> laps;
+
+  /// Trasa psa z obroży GPS.
+  List<TrackPoint> dog;
   bool useGps;
   String? planId;
   int rpe;
@@ -37,6 +40,7 @@ class GpsDraft {
     this.seconds = 0,
     List<List<TrackPoint>>? segments,
     List<double>? laps,
+    List<TrackPoint>? dog,
     this.useGps = true,
     this.planId,
     this.rpe = 5,
@@ -45,13 +49,17 @@ class GpsDraft {
     this.finalizing = false,
   })  : segments = segments ?? [],
         laps = laps ?? [],
+        dog = dog ?? [],
         savedAt = savedAt ?? DateTime.now();
 
   /// Stałe ID treningu i pliku trasy – ponowienie zapisu nie tworzy duplikatów.
   String get trainingId => planId ?? 'gps_$sessionId';
   String get trackName => 'trk_$sessionId.json';
 
-  Track get track => Track([for (final s in segments) if (s.length > 1) s], laps);
+  Track get track => Track([for (final s in segments) if (s.length > 1) s], laps, dog);
+
+  /// Czy jest co zapisać jako trasę (człowiek albo pies z obroży).
+  bool get hasRoute => track.points.length > 1 || track.hasDog;
 
   Map<String, dynamic> toJson() => {
         'v': 1,
@@ -62,6 +70,7 @@ class GpsDraft {
         'seconds': seconds,
         'segments': [for (final s in segments) [for (final p in s) p.toJson()]],
         'laps': laps,
+        if (dog.isNotEmpty) 'dogTrack': [for (final p in dog) p.toJson()],
         'useGps': useGps,
         'plan': planId,
         'rpe': rpe,
@@ -80,6 +89,7 @@ class GpsDraft {
           for (final s in (j['segments'] as List? ?? [])) [for (final p in s as List) TrackPoint.fromJson(p as List)]
         ],
         laps: [for (final l in (j['laps'] as List? ?? [])) (l as num).toDouble()],
+        dog: [for (final p in (j['dogTrack'] as List? ?? [])) TrackPoint.fromJson(p as List)],
         useGps: j['useGps'] as bool? ?? true,
         planId: j['plan'] as String?,
         rpe: jsonInt(j['rpe']) ?? 5,
@@ -191,7 +201,7 @@ class GpsDrafts {
       await save(d);
     }
     String? ref;
-    if (d.useGps && d.track.points.length > 1) {
+    if (d.useGps && d.hasRoute) {
       ref = await FileStore.saveText(d.track.encode(), name: d.trackName);
     }
     await debugAfterStep?.call('track');

@@ -6,6 +6,7 @@ import 'package:flutter_tts/flutter_tts.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../collar/collar_link.dart';
 import '../dogs/dog_profiles.dart';
 import '../models.dart';
 import '../storage/safe_prefs.dart';
@@ -49,6 +50,12 @@ class TrackRecorder extends ChangeNotifier {
 
   List<List<TrackPoint>> segments = [];
   List<double> laps = [];
+
+  /// Trasa psa z obroży GPS (T1000-E) i jej dystans.
+  List<TrackPoint> dogPoints = [];
+  double dogMeters = 0;
+  CollarFix? dogLast;
+  StreamSubscription<CollarFix>? _dogSub;
   double meters = 0;
   double? currentSpeedKmh;
   Position? last;
@@ -79,6 +86,7 @@ class TrackRecorder extends ChangeNotifier {
         seconds: seconds,
         segments: [for (final s in segments) [...s]],
         laps: [...laps],
+        dog: [...dogPoints],
         useGps: useGps,
         planId: plan?.id,
         rpe: plan?.rpe ?? 5,
@@ -156,6 +164,9 @@ class TrackRecorder extends ChangeNotifier {
     segments = [[]];
     laps = [];
     meters = 0;
+    dogPoints = [];
+    dogMeters = 0;
+    dogLast = null;
     last = null;
     error = null;
     _announcedKm = 0;
@@ -180,7 +191,11 @@ class TrackRecorder extends ChangeNotifier {
       await _tts.setSpeechRate(0.5);
     } catch (_) {}
     await Notifications.instance.requestPermission();
-    if (useGps) _listen();
+    if (useGps) {
+      _listen();
+      _dogSub?.cancel();
+      _dogSub = CollarLink.instance.fixes.listen(onDogFix);
+    }
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
     unawaited(_saveDraft());
     _scheduleGoal();
@@ -221,6 +236,31 @@ class TrackRecorder extends ChangeNotifier {
     seg.add(TrackPoint(p.latitude, p.longitude, t, p.speed >= 0 ? p.speed : null));
     last = p;
     _checkKm();
+    notifyListeners();
+  }
+
+  /// Pozycja psa z obroży. Pauza nie zatrzymuje obroży – dopisujemy tylko
+  /// w trakcie ruchu, żeby czas punktów zgadzał się z trasą człowieka.
+  @visibleForTesting
+  void onDogFix(CollarFix f) {
+    dogLast = f;
+    if (state != RecState.running) {
+      notifyListeners();
+      return;
+    }
+    final t = seconds;
+    if (dogPoints.isNotEmpty) {
+      final prev = dogPoints.last;
+      final d = const Distance()(prev.ll, LatLng(f.lat, f.lng));
+      final dt = t - prev.t;
+      if (d < 3) {
+        notifyListeners();
+        return; // ta sama pozycja (np. powtórzony pakiet)
+      }
+      if (dt > 0 && d / dt > 16) return; // skok GPS (>57 km/h)
+      dogMeters += d;
+    }
+    dogPoints.add(TrackPoint(f.lat, f.lng, t, f.speedMs));
     notifyListeners();
   }
 
@@ -304,11 +344,13 @@ class TrackRecorder extends ChangeNotifier {
     _watch.stop();
     await _sub?.cancel();
     _sub = null;
+    await _dogSub?.cancel();
+    _dogSub = null;
     _ticker?.cancel();
     state = RecState.idle;
     await Notifications.instance.cancel(Notifications.goalId);
     await Notifications.instance.cancel(Notifications.liveId);
-    final t = Track([for (final s in segments) if (s.length > 1) s], laps);
+    final t = Track([for (final s in segments) if (s.length > 1) s], laps, [...dogPoints]);
     notifyListeners();
     return t;
   }
@@ -326,6 +368,8 @@ class TrackRecorder extends ChangeNotifier {
     sessionId = null;
     segments = [];
     meters = 0;
+    dogPoints = [];
+    dogMeters = 0;
     notifyListeners();
   }
 

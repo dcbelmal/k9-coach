@@ -197,7 +197,7 @@ class _TrackDetailScreenState extends State<TrackDetailScreen> {
             height: 240,
             child: Center(child: CircularProgressIndicator(color: K9.orange)),
           )
-        else if (trk != null && trk.points.length > 1)
+        else if (trk != null && (trk.points.length > 1 || trk.hasDog))
           _RouteMap(track: trk)
         else
           K9Card(
@@ -266,6 +266,10 @@ class _TrackDetailScreenState extends State<TrackDetailScreen> {
               ],
             ),
           ),
+        if (trk != null && trk.hasDog) ...[
+          gap12,
+          _DogCard(track: trk),
+        ],
         if (widget.fresh) ...[
           gap12,
           K9Card(
@@ -334,6 +338,8 @@ class _RouteMap extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final pts = track.points.map((p) => p.ll).toList();
+    final dogPts = [for (final p in track.dog) p.ll];
+    final all = [...pts, ...dogPts];
     Marker dot(LatLng p, Color c) => Marker(
       point: p,
       width: 16,
@@ -352,7 +358,7 @@ class _RouteMap extends StatelessWidget {
         height: 260,
         child: FlutterMap(
           options: MapOptions(
-            initialCameraFit: CameraFit.coordinates(coordinates: pts, padding: const EdgeInsets.all(28), maxZoom: 17),
+            initialCameraFit: CameraFit.coordinates(coordinates: all, padding: const EdgeInsets.all(28), maxZoom: 17),
             backgroundColor: K9.cardHi,
           ),
           children: [
@@ -368,9 +374,17 @@ class _RouteMap extends StatelessWidget {
                       borderStrokeWidth: 1.5,
                       borderColor: Colors.black54,
                     ),
+                if (dogPts.length > 1)
+                  Polyline(
+                    points: dogPts,
+                    strokeWidth: 4,
+                    color: K9.blue,
+                    borderStrokeWidth: 1.5,
+                    borderColor: Colors.black54,
+                  ),
               ],
             ),
-            MarkerLayer(markers: [dot(pts.first, K9.green), dot(pts.last, K9.red)]),
+            if (pts.isNotEmpty) MarkerLayer(markers: [dot(pts.first, K9.green), dot(pts.last, K9.red)]),
             const OsmCredit(),
           ],
         ),
@@ -548,6 +562,52 @@ class _Splits extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+/// Trasa psa z obroży GPS: dystans i legenda kolorów na mapie.
+class _DogCard extends StatelessWidget {
+  final Track track;
+  const _DogCard({required this.track});
+
+  @override
+  Widget build(BuildContext context) {
+    final km = track.dogMeters / 1000;
+    final human = track.meters / 1000;
+    final span = track.dog.last.t - track.dog.first.t;
+    return K9Card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.pets_rounded, color: K9.blue, size: 20),
+              const SizedBox(width: 8),
+              Text(tr('Trasa psa z obroży GPS'), style: const TextStyle(fontWeight: FontWeight.w700)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(child: StatValue(label: tr('Pies'), value: fmtKm(km), unit: 'km', color: K9.blue)),
+              Expanded(child: StatValue(label: tr('Ty'), value: fmtKm(human), unit: 'km')),
+              Expanded(
+                child: StatValue(
+                  label: tr('Prędkość psa'),
+                  value: span > 0 ? fmtNum(track.dogMeters / span * 3.6) : '–',
+                  unit: 'km/h',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            tr('Na mapie: pomarańczowa linia – Twoja trasa, niebieska – trasa psa. Obroża wysyła pozycję co kilkanaście sekund, więc trasa psa jest uproszczona.'),
+            style: const TextStyle(color: K9.muted, fontSize: 12),
+          ),
+        ],
+      ),
     );
   }
 }
