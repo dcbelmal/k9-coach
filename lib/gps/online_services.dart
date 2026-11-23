@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:material_ui/material_ui.dart';
@@ -90,14 +91,31 @@ class GpsServices {
   /// Kafle mapy terenowej (OpenTopoMap, CC-BY-SA; tylko lekki ruch, bez pobierania hurtowego).
   static Widget Function() topoTiles = _topoTiles;
 
+  /// Mapy offline zgodnie z zasadami dostawców: zapamiętujemy tylko kafle
+  /// obejrzane online (bez pobierania całych obszarów, którego zabraniają
+  /// zasady OpenStreetMap i OpenTopoMap) i używamy ich do 30 dni – także bez
+  /// zasięgu. Limit 300 MB, najstarsze kafle są usuwane.
+  static const offlineDays = 30;
+  static TileProvider? _provider;
+  static TileProvider _cached() => _provider ??= NetworkTileProvider(
+        cachingProvider: kIsWeb
+            ? null
+            : BuiltInMapCachingProvider.getOrCreateInstance(
+                maxCacheSize: 300 * 1000 * 1000,
+                overrideFreshAge: const Duration(days: offlineDays),
+              ),
+      );
+
   static Widget _topoTiles() => TileLayer(
         urlTemplate: 'https://tile.opentopomap.org/{z}/{x}/{y}.png',
+        tileProvider: _cached(),
         userAgentPackageName: 'pl.k9coach.app',
         maxZoom: 17,
       );
 
   static Widget _osmTiles() => TileLayer(
         urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+        tileProvider: _cached(),
         userAgentPackageName: 'pl.k9coach.app',
         maxZoom: 19,
       );

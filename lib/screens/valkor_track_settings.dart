@@ -184,6 +184,12 @@ class _TrackSettingsSheetState extends State<_TrackSettingsSheet> {
                   child: Text(tr('+ strefa {0} m tutaj', [r])),
                 ),
             ]),
+          gap16,
+          SectionTitle(tr('Mapa bez zasięgu'), icon: Icons.cloud_off_rounded),
+          Text(
+            tr('Aplikacja zapamiętuje fragmenty mapy obejrzane online i używa ich przez 30 dni, także bez internetu. Pobieranie całych obszarów nie jest dozwolone przez zasady OpenStreetMap i OpenTopoMap, więc przed wyjazdem obejrzyj teren na mapie przy dobrym zasięgu. Odległość, kierunek, radar i alarmy działają bez mapy i bez internetu.'),
+            style: const TextStyle(color: K9.muted, fontSize: 12.5),
+          ),
         ],
       ),
     );
