@@ -13,6 +13,7 @@ import '../store.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import 'forms.dart';
+import 'dog_track_widgets.dart';
 import 'gps_screen.dart';
 import '../l10n/l10n.dart';
 
@@ -268,7 +269,16 @@ class _TrackDetailScreenState extends State<TrackDetailScreen> {
           ),
         if (trk != null && trk.hasDog) ...[
           gap12,
-          _DogCard(track: trk),
+          DogStatsCard(track: trk),
+          gap16,
+          DogCharts(track: trk),
+          gap16,
+          SectionTitle(tr('Odtwarzanie: pies i Ty'), icon: Icons.replay_rounded),
+          DogReplayCard(track: trk),
+          if (t.discipline == Discipline.igp) ...[
+            gap16,
+            IgpTrackingCard(training: t, track: trk),
+          ],
         ],
         if (widget.fresh) ...[
           gap12,
@@ -374,15 +384,8 @@ class _RouteMap extends StatelessWidget {
                       borderStrokeWidth: 1.5,
                       borderColor: Colors.black54,
                     ),
-                for (final seg in track.dogSegments)
-                  if (seg.length > 1)
-                    Polyline(
-                      points: [for (final p in seg) p.ll],
-                      strokeWidth: 4,
-                      color: K9.blue,
-                      borderStrokeWidth: 1.5,
-                      borderColor: Colors.black54,
-                    ),
+                // Trasa psa według prędkości (mapa intensywności).
+                ...dogIntensityPolylines(track),
               ],
             ),
             if (pts.isNotEmpty) MarkerLayer(markers: [dot(pts.first, K9.green), dot(pts.last, K9.red)]),
@@ -568,47 +571,3 @@ class _Splits extends StatelessWidget {
 }
 
 /// Trasa psa z obroży GPS: dystans i legenda kolorów na mapie.
-class _DogCard extends StatelessWidget {
-  final Track track;
-  const _DogCard({required this.track});
-
-  @override
-  Widget build(BuildContext context) {
-    final km = track.dogMeters / 1000;
-    final human = track.meters / 1000;
-    final span = track.dogSeconds;
-    return K9Card(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.pets_rounded, color: K9.blue, size: 20),
-              const SizedBox(width: 8),
-              Text(tr('Trasa psa z obroży GPS'), style: const TextStyle(fontWeight: FontWeight.w700)),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(child: StatValue(label: tr('Pies'), value: fmtKm(km), unit: 'km', color: K9.blue)),
-              Expanded(child: StatValue(label: tr('Ty'), value: fmtKm(human), unit: 'km')),
-              Expanded(
-                child: StatValue(
-                  label: tr('Prędkość psa'),
-                  value: span > 0 ? fmtNum(track.dogMeters / span * 3.6) : '–',
-                  unit: 'km/h',
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(
-            tr('Na mapie: pomarańczowa linia – Twoja trasa, niebieska – trasa psa. Obroża wysyła pozycję co kilkanaście sekund, więc trasa psa jest uproszczona.'),
-            style: const TextStyle(color: K9.muted, fontSize: 12),
-          ),
-        ],
-      ),
-    );
-  }
-}

@@ -8,6 +8,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../collar/collar_link.dart';
 import '../collar/dog_alerts.dart';
+import '../collar/tracker_driver.dart';
 import '../collar/fix_filter.dart' show FixFilter;
 import '../dogs/dog_profiles.dart';
 import '../models.dart';
@@ -180,7 +181,7 @@ class TrackRecorder extends ChangeNotifier {
     dogSegments = [[]];
     dogMeters = 0;
     dogLast = null;
-    dogNode = CollarLink.instance.dogNode;
+    dogNode = TrackerDrivers.active.dogNode;
     _dogLastFixAt = null;
     last = null;
     error = null;
@@ -209,7 +210,7 @@ class TrackRecorder extends ChangeNotifier {
     if (useGps) {
       _listen();
       _dogSub?.cancel();
-      _dogSub = CollarLink.instance.fixes.listen(onDogFix);
+      _dogSub = TrackerDrivers.active.fixes.listen(onDogFix);
     }
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
     unawaited(_saveDraft());
@@ -261,7 +262,7 @@ class TrackRecorder extends ChangeNotifier {
   void onDogFix(CollarFix f) {
     if (state == RecState.idle) return;
     // Źródło ustalone na starcie; gdy tracker nie był jeszcze znany – pierwszy pies.
-    dogNode ??= CollarLink.instance.dogNode;
+    dogNode ??= TrackerDrivers.active.dogNode;
     if (f.node != dogNode) return;
     dogLast = f;
     if (state != RecState.running) {

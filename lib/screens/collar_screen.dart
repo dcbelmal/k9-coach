@@ -5,6 +5,7 @@ import 'package:universal_ble/universal_ble.dart';
 
 import '../collar/collar_link.dart';
 import '../collar/mesh_proto.dart';
+import '../collar/tracker_driver.dart';
 import '../dogs/dog_profiles.dart';
 import '../l10n/l10n.dart';
 import '../theme.dart';
@@ -187,10 +188,39 @@ class _CollarScreenState extends State<CollarScreen> {
           gap16,
           _howTo(),
           if (c.paired) ...[gap16, _diagnostics()],
+          gap16,
+          _devices(),
         ],
       ),
     );
   }
+
+  /// Obsługiwane urządzenia i ich prawdziwe możliwości.
+  Widget _devices() => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        SectionTitle(tr('Obsługiwane urządzenia'), icon: Icons.devices_other_rounded),
+        for (final m in TrackerModels.all)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: K9Card(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Icon(m.available ? Icons.check_circle_rounded : Icons.schedule_rounded,
+                    size: 18, color: m.available ? K9.green : K9.muted),
+                const SizedBox(width: 8),
+                Expanded(child: Text(m.name, style: const TextStyle(fontWeight: FontWeight.w600))),
+                if (!m.available) Text(tr('w przygotowaniu'), style: const TextStyle(color: K9.muted, fontSize: 12)),
+              ]),
+              if (m.caps.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Text(m.caps.map((c) => c.label).join(' · '), style: const TextStyle(color: K9.muted, fontSize: 12)),
+              ],
+              if (m.note.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(tr(m.note), style: const TextStyle(color: K9.faint, fontSize: 12)),
+              ],
+            ]),
+          )),
+      ]);
 
   /// Diagnostyka: liczniki pakietów, odrzuconych pomiarów i połączeń.
   Widget _diagnostics() {
