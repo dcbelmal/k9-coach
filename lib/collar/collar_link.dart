@@ -71,6 +71,29 @@ class CollarNode {
   bool get isT1000E => hwModel == hwT1000E;
 }
 
+/// Tryb pracy Valkor Track: jak często aplikacja prosi tracker o pozycję
+/// (tylko przy połączeniu bezpośrednim przez Bluetooth). Tracker i tak nie
+/// poda pozycji częściej, niż pozwala jego ustawienie GPS w Meshtastic –
+/// rzeczywisty odstęp pokazujemy osobno ([CollarDiagnostics.medianInterval]).
+enum TrackMode {
+  sport('Sportowy', '1–5 s', 3, 5),
+  walk('Spacerowy', '10–15 s', 12, 15),
+  saver('Oszczędny', '30–60 s', 45, 60),
+  search('Poszukiwanie', 'najczęściej', 2, 5);
+
+  final String _label;
+  final String range;
+
+  /// Co ile sekund prosimy o pozycję.
+  final int requestSec;
+
+  /// Najdłuższy odstęp zgodny z trybem (do ostrzeżenia, że tracker wysyła rzadziej).
+  final int targetSec;
+  const TrackMode(this._label, this.range, this.requestSec, this.targetSec);
+  String get label => tr(_label);
+  String get rangeLabel => tr(range);
+}
+
 /// Stan łączności z psem – rozróżnia Bluetooth, LoRa i GPS.
 enum DogLink {
   /// Nie dodano trackera.
@@ -121,6 +144,34 @@ class CollarLink extends ChangeNotifier {
   /// Urządzenie na psie wybrane przez użytkownika (null = wybór automatyczny).
   /// Starszy, wspólny wybór – nowsze wersje przypisują tracker do profilu psa.
   int? dogNodeChoice;
+
+  /// Tryb pracy (częstotliwość próśb o pozycję).
+  TrackMode mode = TrackMode.walk;
+
+  /// Tryb sprzed włączenia poszukiwania (przywracany po jego wyłączeniu).
+  TrackMode? _beforeSearch;
+
+  Future<void> setMode(TrackMode m) async {
+    if (m == mode) return;
+    if (m == TrackMode.search && mode != TrackMode.search) _beforeSearch = mode;
+    mode = m;
+    _lastRequest = null;
+    notifyListeners();
+    await _save();
+  }
+
+  /// Wyłącza poszukiwanie i wraca do poprzedniego trybu.
+  Future<void> endSearch() async {
+    if (mode != TrackMode.search) return;
+    await setMode(_beforeSearch ?? TrackMode.walk);
+    _beforeSearch = null;
+  }
+
+  /// Tracker wysyła wyraźnie rzadziej, niż zakłada tryb.
+  bool get slowerThanMode {
+    final m = diag.medianInterval;
+    return m != null && m > mode.targetSec * 1.5;
+  }
 
   /// Przypisanie trackerów do profili psów: numer urządzenia → id psa.
   final Map<int, String> assigned = {};
@@ -213,6 +264,8 @@ class CollarLink extends ChangeNotifier {
       deviceId = j['id'] as String?;
       deviceName = j['name'] as String?;
       dogNodeChoice = jsonInt(j['dog']);
+      mode = TrackMode.values.asNameMap()[j['mode']] ?? TrackMode.walk;
+      if (mode == TrackMode.search) mode = TrackMode.walk; // poszukiwanie nie przetrwa restartu
       final a = j['assign'];
       if (a is Map) {
         for (final e in a.entries) {
@@ -233,6 +286,7 @@ class CollarLink extends ChangeNotifier {
         'name': deviceName,
         'dog': dogNodeChoice,
         'assign': {for (final e in assigned.entries) '${e.key}': e.value},
+        'mode': (mode == TrackMode.search ? (_beforeSearch ?? TrackMode.walk) : mode).name,
       }));
     } catch (e) {
       logError('Obroża GPS', e);
@@ -356,7 +410,7 @@ class CollarLink extends ChangeNotifier {
       diag.connectedAt = DateTime.now();
       notifyListeners();
       _poll?.cancel();
-      _poll = Timer.periodic(const Duration(seconds: 5), (_) => _tickPoll());
+      _poll = Timer.periodic(const Duration(seconds: 1), (_) => _tickPoll());
     } catch (e) {
       error = _message(e);
       diag.lastError = e.toString();
@@ -423,16 +477,20 @@ class CollarLink extends ChangeNotifier {
     await UniversalBle.write(id, MeshBle.service, MeshBle.toRadio, data);
   }
 
+  int _tick = 0;
+
   void _tickPoll() {
     if (state != CollarState.connected) return;
-    _drain();
+    // Odczyt co 5 s (powiadomienia i tak budzą odczyt od razu), w poszukiwaniu co 1 s.
+    if (mode == TrackMode.search || _tick++ % 5 == 0) _drain();
     // Obroża połączona bezpośrednio: prosimy o świeżą pozycję tylko wtedy,
-    // gdy ostatni pomiar jest starszy niż 12 s (oszczędza baterię trackera).
+    // gdy ostatni pomiar jest starszy niż odstęp trybu (oszczędza baterię trackera).
     final me = myNode;
     final now = DateTime.now();
     final f = dog?.fix;
-    final fresh = f != null && f.ageSec(now) < 12;
-    if (direct && me != null && !fresh && (_lastRequest == null || now.difference(_lastRequest!).inSeconds >= 12)) {
+    final every = mode.requestSec;
+    final fresh = f != null && f.ageSec(now) < every;
+    if (direct && me != null && !fresh && (_lastRequest == null || now.difference(_lastRequest!).inSeconds >= every)) {
       _lastRequest = now;
       _write(encodePositionRequest(me)).catchError((_) {});
     }
@@ -570,6 +628,8 @@ class CollarLink extends ChangeNotifier {
     myNode = null;
     dogNodeChoice = null;
     assigned.clear();
+    mode = TrackMode.walk;
+    _beforeSearch = null;
     nodes.clear();
     diag.clear();
     _loaded = loaded;

@@ -8,6 +8,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../collar/collar_link.dart';
+import '../collar/dog_alerts.dart';
 import '../dogs/dog_profiles.dart';
 import '../gps/online_services.dart';
 import '../gps/recorder.dart';
@@ -16,6 +17,8 @@ import '../models.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import 'collar_screen.dart';
+import 'dog_radar.dart';
+import 'valkor_track_settings.dart';
 
 void openValkorTrack(BuildContext context) =>
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ValkorTrackScreen()));
@@ -56,12 +59,19 @@ class _ValkorTrackScreenState extends State<ValkorTrackScreen> {
   Timer? _clock;
   String? locError;
 
+  /// Tryb poszukiwania: radar zamiast mapy, najczęstsze pomiary.
+  bool radar = false;
+
+  /// Odległości z ostatnich sekund – do „zbliżasz się / oddalasz się”.
+  final List<(DateTime, double)> _dists = [];
+
   @override
   void initState() {
     super.initState();
     c.addListener(_changed);
     rec.addListener(_changed);
     OnlineConsent.instance.addListener(_changed);
+    DogAlerts.instance.addListener(_changed);
     c.reconnectSaved();
     _clock = Timer.periodic(const Duration(seconds: 1), (_) => _changed());
     _startOwn(ask: false);
@@ -72,6 +82,8 @@ class _ValkorTrackScreenState extends State<ValkorTrackScreen> {
     c.removeListener(_changed);
     rec.removeListener(_changed);
     OnlineConsent.instance.removeListener(_changed);
+    DogAlerts.instance.removeListener(_changed);
+    if (radar) c.endSearch();
     _posSub?.cancel();
     _clock?.cancel();
     super.dispose();
@@ -105,6 +117,7 @@ class _ValkorTrackScreenState extends State<ValkorTrackScreen> {
       setState(() => locError = null);
       _posSub = ValkorTrackScreen.handlerPositions().listen((p) {
         _own = p;
+        DogAlerts.instance.setHandler(LatLng(p.latitude, p.longitude));
         _changed();
       }, onError: (_) {});
     } catch (_) {}
@@ -117,6 +130,33 @@ class _ValkorTrackScreenState extends State<ValkorTrackScreen> {
   }
 
   LatLng? get _dogLl => c.dog?.fix?.ll;
+
+  /// Kierunek marszu przewodnika (z GPS telefonu, tylko w ruchu).
+  double? get _myCourse {
+    final p = rec.state != RecState.idle && rec.last != null ? rec.last : _own;
+    if (p == null || p.speed < 0.7 || p.heading < 0) return null;
+    return p.heading;
+  }
+
+  Future<void> _toggleRadar() async {
+    if (radar) {
+      await c.endSearch();
+    } else {
+      await c.setMode(TrackMode.search);
+      await _startOwn(ask: true);
+    }
+    if (mounted) setState(() => radar = !radar);
+  }
+
+  /// Zmiana odległości w ostatnich ~20 s: ujemna = zbliżasz się.
+  double? _trend(double? dist, DateTime now) {
+    if (dist == null) return null;
+    _dists.add((now, dist));
+    _dists.removeWhere((e) => now.difference(e.$1).inSeconds > 25);
+    final old = _dists.first;
+    if (now.difference(old.$1).inSeconds < 8) return null;
+    return dist - old.$2;
+  }
 
   void _centerDog() {
     final d = _dogLl;
@@ -252,6 +292,11 @@ class _ValkorTrackScreenState extends State<ValkorTrackScreen> {
         title: Text(tr('Valkor Track')),
         actions: [
           IconButton(
+            tooltip: tr('Ustawienia śledzenia'),
+            icon: const Icon(Icons.tune_rounded),
+            onPressed: () => showTrackSettings(context, here: _dogLl ?? _meLl),
+          ),
+          IconButton(
             tooltip: tr('Ustawienia obroży'),
             icon: const Icon(Icons.settings_bluetooth_rounded),
             onPressed: () => openCollar(context),
@@ -259,7 +304,7 @@ class _ValkorTrackScreenState extends State<ValkorTrackScreen> {
         ],
       ),
       body: Column(children: [
-        Expanded(
+        if (radar) Expanded(child: _radarView(me, dogLl, live)) else Expanded(
           child: Stack(children: [
             FlutterMap(
               mapController: map,
@@ -273,6 +318,29 @@ class _ValkorTrackScreenState extends State<ValkorTrackScreen> {
               ),
               children: [
                 _tiles(),
+                if (DogAlerts.instance.settings.zones.isNotEmpty)
+                  CircleLayer(circles: [
+                    for (final z in DogAlerts.instance.settings.zones)
+                      CircleMarker(
+                        point: z.ll,
+                        radius: z.radiusM,
+                        useRadiusInMeter: true,
+                        color: K9.green.withValues(alpha: 0.10),
+                        borderColor: K9.green,
+                        borderStrokeWidth: 2,
+                      ),
+                  ]),
+                if (me != null && DogAlerts.instance.settings.enabled && DogAlerts.instance.settings.leashM != null)
+                  CircleLayer(circles: [
+                    CircleMarker(
+                      point: me,
+                      radius: DogAlerts.instance.settings.leashM!.toDouble(),
+                      useRadiusInMeter: true,
+                      color: Colors.transparent,
+                      borderColor: K9.orange.withValues(alpha: 0.7),
+                      borderStrokeWidth: 1.5,
+                    ),
+                  ]),
                 if (dogLl != null && me != null)
                   PolylineLayer(polylines: [
                     Polyline(points: [me, dogLl], strokeWidth: 2, color: Colors.white70, pattern: StrokePattern.dashed(segments: const [8, 6])),
@@ -331,6 +399,54 @@ class _ValkorTrackScreenState extends State<ValkorTrackScreen> {
           ]),
         ),
         _panel(me, dogLl),
+      ]),
+    );
+  }
+
+  Widget _radarView(LatLng? me, LatLng? dogLl, bool live) {
+    final now = DateTime.now();
+    final dist = me == null || dogLl == null ? null : const Distance()(me, dogLl);
+    final bearing = dist == null || dist < 3 ? null : (const Distance().bearing(me!, dogLl!) + 360) % 360;
+    final trend = _trend(dist, now);
+    final node = c.dog;
+    final dogCourse = live ? node?.courseDeg : null;
+    final dogSpeed = live ? node?.speedMs : null;
+    return Container(
+      color: K9.bg,
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      child: Column(children: [
+        Text(
+          dist == null
+              ? (dogLl == null ? tr('Czekam na pozycję psa…') : tr('Czekam na Twoją pozycję…'))
+              : (dist >= 1000 ? '${fmtKm(dist / 1000)} km' : '${dist.round()} m'),
+          style: const TextStyle(fontSize: 34, fontWeight: FontWeight.w800),
+        ),
+        if (bearing != null)
+          Text(tr('Pies jest na {0} ({1}°)', [compassLabel(bearing), bearing.round()]),
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+        if (trend != null && trend.abs() >= 5)
+          Text(trend < 0 ? tr('Zbliżasz się') : tr('Oddalasz się'),
+              style: TextStyle(color: trend < 0 ? K9.green : K9.yellow, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 8),
+        Expanded(
+          child: DogRadar(
+            distM: dist,
+            bearingDeg: bearing,
+            myCourseDeg: _myCourse,
+            dogCourseDeg: dogCourse,
+            live: live,
+          ),
+        ),
+        Text(
+          [
+            if (!live && c.dog?.fix != null) tr('ostatnia znana pozycja {0}', [collarAge(c.dog!.fix!.fixAt, now: now)]),
+            if (dogCourse != null && dogSpeed != null && dogSpeed > 0.5)
+              tr('pies biegnie na {0}, {1} km/h', [compassLabel(dogCourse), fmtNum(dogSpeed * 3.6)]),
+            tr('Góra = północ. Pomarańczowa kreska = Twój kierunek marszu.'),
+          ].join(' · '),
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: K9.muted, fontSize: 12),
+        ),
       ]),
     );
   }
@@ -449,6 +565,40 @@ class _ValkorTrackScreenState extends State<ValkorTrackScreen> {
               _stat(tr('Bateria'), node?.battery == null ? '–' : (node!.battery! > 100 ? tr('kabel') : '${node.battery}%')),
               _stat(tr('Pomiar'), f == null ? '–' : collarAge(f.fixAt, now: now)),
             ]),
+            const SizedBox(height: 10),
+            Row(children: [
+              Expanded(
+                child: Text(
+                  [
+                    tr('Tryb: {0}', [c.mode.label]),
+                    if (c.diag.medianInterval != null) tr('pomiar co ~{0} s', [c.diag.medianInterval!.round()]),
+                    if (DogAlerts.instance.settings.enabled) tr('alarmy włączone'),
+                  ].join(' · '),
+                  style: TextStyle(color: c.slowerThanMode ? K9.yellow : K9.muted, fontSize: 12),
+                ),
+              ),
+              if (c.paired)
+                FilledButton.tonalIcon(
+                  style: FilledButton.styleFrom(minimumSize: const Size(0, 40)),
+                  onPressed: _toggleRadar,
+                  icon: Icon(radar ? Icons.map_rounded : Icons.radar_rounded, size: 18),
+                  label: Text(radar ? tr('Mapa') : tr('Szukaj psa')),
+                ),
+            ]),
+            if (DogAlerts.instance.history.isNotEmpty &&
+                now.difference(DogAlerts.instance.history.first.at).inMinutes < 10) ...[
+              const SizedBox(height: 6),
+              Row(children: [
+                const Icon(Icons.notifications_active_rounded, size: 16, color: K9.yellow),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    '${DogAlerts.instance.history.first.text} (${collarAge(DogAlerts.instance.history.first.at, now: now)})',
+                    style: const TextStyle(color: K9.yellow, fontSize: 12.5),
+                  ),
+                ),
+              ]),
+            ],
             if (me == null && locError == null) ...[
               const SizedBox(height: 8),
               Text(tr('Twoja pozycja: dotknij „Moja pozycja” na mapie, żeby liczyć odległość i kierunek.'),
