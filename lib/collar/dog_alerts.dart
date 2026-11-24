@@ -163,20 +163,22 @@ class AlertEngine {
       fire(AlertKind.found, tr('Znów widzę psa.'));
     }
 
-    // Smycz i strefy: tylko nowy pomiar na żywo.
+    // Smycz i strefy: tylko nowy pomiar na żywo (nie zaległy z kolejki).
     final f = i.fix;
-    final newFix = f != null && f.fixAt != _lastFixAt;
+    final newFix = f != null && f.fixAt != _lastFixAt && !f.historical;
     if (live && newFix) {
       _lastFixAt = f.fixAt;
       final acc = (f.accuracyM ?? 10).clamp(5, 50).toDouble();
 
+      // Smycz tylko z odległości, w której pozycja telefonu jest z tej samej
+      // chwili co pomiar psa (i aktualna). Bez niej – żadnego alarmu
+      // oddalenia: stara pozycja telefonu dawała fałszywe „pies 59 m”.
       final leash = settings.leashM;
-      final h = i.handler;
       final dd = i.distance;
-      final matched = dd?.matchedM != null;
-      if (leash != null && leash > 0 && (matched || h != null)) {
-        final d = matched ? dd!.matchedM! : const Distance()(h!, f.ll);
-        final margin = matched ? dd!.matchedUncertaintyM! : acc;
+      final matched = dd?.matchedM != null && dd?.matchedUncertaintyM != null;
+      if (leash != null && leash > 0 && matched) {
+        final d = dd!.matchedM!;
+        final margin = dd.matchedUncertaintyM!;
         if (d > leash + margin) {
           _leashOut++;
           if (_leashOut >= confirmFixes && _armed[AlertKind.leash]!) {
@@ -287,17 +289,27 @@ class DogAlerts extends ChangeNotifier {
 
   /// Pozycja przewodnika; trafia też do historii pozycji telefonu
   /// ([HandlerTrack]), z której liczymy odległość w chwili pomiaru psa.
-  void setHandler(LatLng? p, {double? accuracyM, DateTime? at, double? speedMs}) {
-    final now = DateTime.now();
-    handler = p;
-    handlerAt = p == null ? null : now;
-    if (p != null) {
-      // Czas pomiaru z GPS telefonu, chyba że wyraźnie odbiega od zegara.
-      final t = at != null && now.difference(at).inSeconds.abs() <= 30 ? at.toLocal() : now;
-      HandlerTrack.instance.add(HandlerFix(t, p.latitude, p.longitude,
-          accuracyM: accuracyM != null && accuracyM > 0 ? accuracyM : null,
-          speedMs: speedMs != null && speedMs >= 0 ? speedMs : null));
+  ///
+  /// Czas pomiaru [at] zostaje prawdziwy – także gdy jest stary (np. telefon
+  /// oddał zapamiętaną pozycję po przerwie). Wcześniej stary czas był
+  /// zastępowany chwilą odbioru i stara pozycja udawała świeżą. Przycinamy
+  /// tylko czas „z przyszłości” (różnica zegarów).
+  void setHandler(LatLng? p, {double? accuracyM, DateTime? at, double? speedMs, DateTime? now}) {
+    final t0 = now ?? DateTime.now();
+    if (p == null) {
+      handler = null;
+      handlerAt = null;
+      return;
     }
+    var t = at?.toLocal() ?? t0;
+    if (t.isAfter(t0)) t = t0;
+    // Zegar GPS wyraźnie zły (ponad 10 min różnicy) – nie ma prawdziwego czasu.
+    if (t0.difference(t).inMinutes > 10) t = t0;
+    handler = p;
+    handlerAt = t;
+    HandlerTrack.instance.add(HandlerFix(t, p.latitude, p.longitude,
+        accuracyM: accuracyM != null && accuracyM > 0 ? accuracyM : null,
+        speedMs: speedMs != null && speedMs >= 0 ? speedMs : null));
   }
 
   /// Włączone alarmy sprawdzamy co 2 s.
@@ -314,8 +326,8 @@ class DogAlerts extends ChangeNotifier {
     final c = CollarLink.instance;
     if (!c.paired) return;
     final t = now ?? DateTime.now();
-    // Pozycja przewodnika starsza niż 2 min nie służy do smyczy.
-    final h = handlerAt != null && t.difference(handlerAt!).inSeconds <= 120 ? handler : null;
+    // Pozycja przewodnika nieaktualna nie służy do smyczy.
+    final h = handlerAt != null && t.difference(handlerAt!).inSeconds <= DogDistance.phoneFreshSec ? handler : null;
     final out = engine.evaluate(AlertInput(
       now: t,
       link: c.status(now: t),

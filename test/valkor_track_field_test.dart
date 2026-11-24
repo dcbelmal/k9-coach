@@ -137,14 +137,19 @@ void main() {
       expect(d.withinError, isTrue);
     });
 
-    test('telefon stojący (filtr odległości) – pozycja trzymana do minuty z zapasem', () {
-      final h = HandlerTrack.instance..add(HandlerFix(at(0), 50, 20, accuracyM: 4));
-      expect(h.at(at(10))!.accuracyM, 4);
-      expect(h.at(at(40))!.accuracyM, 9);
-      expect(h.at(at(90)), isNull);
-      h.add(HandlerFix(at(100), north(10), 20, accuracyM: 4));
-      expect(h.at(at(30))!.lat, 50); // w przerwie – ostatnia znana pozycja
-      expect(h.at(at(98))!.lat, north(10));
+    test('przerwa w pomiarach telefonu: pozycja nie jest „trzymana” minutami', () {
+      final h = HandlerTrack.instance..add(HandlerFix(at(0), 50, 20, accuracyM: 4, speedMs: 0));
+      // Telefon stał (prędkość 0): pozycja trzymana krótko, z zapasem.
+      expect(h.at(at(1))!.accuracyM, 4);
+      expect(h.at(at(10))!.accuracyM, 7);
+      expect(h.at(at(10))!.gapSec, 10);
+      expect(h.at(at(25)), isNull);
+      // Telefon szedł: niepewność rośnie z prędkością, po 10 s pozycja nieaktualna.
+      h.add(HandlerFix(at(100), north(10), 20, accuracyM: 4, speedMs: 1.5));
+      expect(h.at(at(30)), isNull); // w długiej przerwie – brak pozycji
+      expect(h.at(at(99))!.lat, north(10));
+      expect(h.at(at(106))!.accuracyM, closeTo(13, 0.01));
+      expect(h.at(at(112)), isNull);
     });
 
     test('formatowanie: zaokrąglenie do błędu, bez fałszywej precyzji', () {
@@ -266,9 +271,11 @@ void main() {
       expect(d.intervalSpread!.min, 15);
       expect(d.accepted, 4);
       expect(d.log, hasLength(4));
-      final csv = d.csv().split('\n');
+      final all = d.csv().split('\n');
+      final csv = all.takeWhile((l) => l.isNotEmpty).toList();
       expect(csv.first, FixLogEntry.csvHeader);
       expect(csv, hasLength(5));
+      expect(all, contains('zdarzenie_bluetooth;czas;szczegoly'));
       expect(csv[1], contains(';9.0;')); // opóźnienie 9 s
       c.resetForTest();
     });

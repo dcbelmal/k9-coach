@@ -34,6 +34,11 @@ class CollarFix {
   /// Identyfikator pakietu Meshtastic (MeshPacket.id), jeśli znany.
   final int? packetId;
 
+  /// Pomiar zaległy (historyczny): odebrany z dużym opóźnieniem – zwykle
+  /// z kolejki trackera po ponownym połączeniu Bluetooth. Uzupełnia trasę,
+  /// ale nie jest pozycją „na żywo” i nie uruchamia alarmów oddalenia.
+  final bool historical;
+
   const CollarFix(this.node, this.lat, this.lng, this.fixAt,
       {DateTime? receivedAt,
       this.speedMs,
@@ -44,7 +49,8 @@ class CollarFix {
       this.courseDeg,
       this.hdop,
       this.seq,
-      this.packetId})
+      this.packetId,
+      this.historical = false})
       : receivedAt = receivedAt ?? fixAt;
 
   LatLng get ll => LatLng(lat, lng);
@@ -98,8 +104,16 @@ const _dist = Distance();
 /// ze słabym sygnałem i niemożliwe skoki. Pozycje w miejscu (dryf GPS)
 /// przyjmuje jako „bez ruchu”, żeby nie naliczać fałszywego dystansu.
 class FixFilter {
-  /// Pomiar starszy niż tyle sekund w chwili odbioru jest nieaktualny.
+  /// Pomiar starszy niż tyle sekund w chwili odbioru jest nieaktualny
+  /// (poza zaległymi pomiarami tuż po połączeniu – patrz [maxHistorySec]).
   static const maxAgeSec = 120.0;
+
+  /// Pomiar odebrany z opóźnieniem większym niż tyle sekund jest zaległy
+  /// (historyczny), gdy przychodzi tuż po połączeniu Bluetooth.
+  static const backlogLagSec = 20.0;
+
+  /// Zaległe pomiary po połączeniu przyjmujemy do trasy do tylu sekund wstecz.
+  static const maxHistorySec = 900.0;
 
   /// Różnica zegara trackera i telefonu, powyżej której nie ufamy czasowi
   /// z pakietu (np. tracker jeszcze bez czasu z GPS).
@@ -139,7 +153,11 @@ class FixFilter {
   /// w miejscu daje nowe pomiary z identycznymi współrzędnymi i każdy z nich
   /// odświeża aktualność pozycji. (Pole seq w Meshtastic nie numeruje
   /// pakietów – firmware zeruje je przy każdym nowym pomiarze GPS.)
-  FixVerdict check(MeshPosition p, DateTime receivedAt, {int? packetId}) {
+  ///
+  /// [afterConnect] = pakiet przyszedł tuż po (ponownym) połączeniu
+  /// Bluetooth – wtedy opóźnione pomiary to zaległa kolejka trackera:
+  /// przyjmujemy je do historii (do [maxHistorySec]) jako [CollarFix.historical].
+  FixVerdict check(MeshPosition p, DateTime receivedAt, {int? packetId, bool afterConnect = false}) {
     if (packetId != null && packetId != 0) {
       if (_packets.contains(packetId)) return const FixVerdict.no(FixReject.duplicate);
       _packets.add(packetId);
@@ -159,9 +177,11 @@ class FixFilter {
         timeIsFix = p.timeIsFix;
       }
     }
-    if (receivedAt.difference(fixAt).inMilliseconds / 1000 > maxAgeSec) {
+    final lag = receivedAt.difference(fixAt).inMilliseconds / 1000;
+    if (lag > (afterConnect && timeIsFix ? maxHistorySec : maxAgeSec)) {
       return const FixVerdict.no(FixReject.stale);
     }
+    final historical = timeIsFix && (lag > maxAgeSec || (afterConnect && lag > backlogLagSec));
 
     final prev = _last;
     if (prev != null) {
@@ -204,7 +224,8 @@ class FixFilter {
         courseDeg: p.courseDeg,
         hdop: p.hdop,
         seq: p.seq,
-        packetId: packetId);
+        packetId: packetId,
+        historical: historical);
     _last = fix;
     if (moved) _lastMoved = fix;
     return FixVerdict.ok(fix);
@@ -257,6 +278,12 @@ class FixLogEntry {
   /// Odpowiedź na zapytanie aplikacji o pozycję.
   final bool reply;
 
+  /// Pomiar zaległy (z kolejki po ponownym połączeniu).
+  final bool historical;
+
+  /// Dlaczego odległość nie została policzona (null = policzona).
+  final String? noDistanceReason;
+
   /// „ok”, „postoj” albo nazwa powodu odrzucenia (duplicate = ten sam
   /// pakiet, repeated = ten sam pomiar GPS w nowym pakiecie).
   final String verdict;
@@ -286,6 +313,8 @@ class FixLogEntry {
     this.uncertaintyM,
     this.reply = false,
     required this.verdict,
+    this.historical = false,
+    this.noDistanceReason,
   });
 
   /// Opóźnienie: od pomiaru GPS do odbioru w telefonie (s) = wiek pozycji
@@ -294,7 +323,8 @@ class FixLogEntry {
 
   static const csvHeader = 'odebrano;pomiar_gps;wyslano;wiek_pozycji_psa_s;wezel;pakiet;lat;lng;dokladnosc_m;hdop;satelity;'
       'seq;predkosc_m_s;kierunek;lora_rssi;snr;ble_rssi;dokladnosc_telefonu_m;wiek_pozycji_telefonu_s;'
-      'roznica_czasu_porownania_s;odleglosc_surowa_m;odleglosc_filtr_m;niepewnosc_m;odpowiedz;wynik';
+      'roznica_czasu_porownania_s;odleglosc_surowa_m;odleglosc_filtr_m;niepewnosc_m;odpowiedz;wynik;historyczny;'
+      'brak_odleglosci';
 
   String toCsv() {
     String n(num? v, [int digits = 1]) => v == null ? '' : (v is int ? '$v' : v.toStringAsFixed(digits));
@@ -325,6 +355,8 @@ class FixLogEntry {
       n(uncertaintyM),
       reply ? '1' : '0',
       verdict,
+      historical ? '1' : '0',
+      (noDistanceReason ?? '').replaceAll(';', ','),
     ].join(';');
   }
 }
@@ -368,6 +400,24 @@ class CollarDiagnostics {
   int bleFailures = 0;
   String? lastBleError;
 
+  /// Błędy Bluetooth wg kodu (np. deviceDisconnected, readFailed) i ile
+  /// z nich wystąpiło, gdy połączenie było już zerwane (skutek utraty, nie
+  /// osobny problem).
+  final Map<String, int> bleErrorCodes = {};
+  int bleErrorsWhileDown = 0;
+  DateTime? lastBleErrorAt;
+
+  /// Zdarzenia połączenia Bluetooth (utrata, ponowne połączenie, błąd).
+  final List<BleEvent> bleEvents = [];
+
+  /// Pomiary zaległe (z kolejki trackera po ponownym połączeniu).
+  int historical = 0;
+
+  /// Odstępy (s) między kolejnymi pakietami z pozycją psa wg chwili odbioru
+  /// w telefonie – niezależnie od czasu pomiaru GPS (ostatnie 100).
+  final List<double> rxIntervals = [];
+  DateTime? _lastRxAt;
+
   /// Zapytania aplikacji o pozycję i odpowiedzi na nie.
   int requestsSent = 0;
   int requestReplies = 0;
@@ -405,6 +455,64 @@ class CollarDiagnostics {
     if (s < 0 || s > 600) return;
     lags.add(s);
     if (lags.length > 50) lags.removeAt(0);
+  }
+
+  void addRx(DateTime t) {
+    final p = _lastRxAt;
+    _lastRxAt = t;
+    if (p == null) return;
+    final s = t.difference(p).inMilliseconds / 1000;
+    if (s <= 0 || s > 3600) return;
+    rxIntervals.add(s);
+    if (rxIntervals.length > 100) rxIntervals.removeAt(0);
+  }
+
+  Spread? get rxSpread => rxIntervals.length < 2 ? null : Spread.of(rxIntervals);
+
+  void addBleEvent(DateTime t, String kind, [String? detail]) {
+    bleEvents.add(BleEvent(t, kind, detail));
+    if (bleEvents.length > 500) bleEvents.removeAt(0);
+  }
+
+  /// Ostatnia utrata połączenia i ile trwała przerwa (s) do ponownego połączenia.
+  BleEvent? get lastLoss {
+    for (final e in bleEvents.reversed) {
+      if (e.kind == BleEvent.lost) return e;
+    }
+    return null;
+  }
+
+  /// Ostatnie ponowne połączenie po utracie.
+  BleEvent? get lastReconnect {
+    for (final e in bleEvents.reversed) {
+      if (e.kind == BleEvent.connected) return e;
+    }
+    return null;
+  }
+
+  void noteBleError(Object e, {required bool down, required DateTime at}) {
+    lastBleError = bleErrorText(e);
+    lastBleErrorAt = at;
+    final code = bleErrorCode(e);
+    bleErrorCodes[code] = (bleErrorCodes[code] ?? 0) + 1;
+    if (down) bleErrorsWhileDown++;
+  }
+
+  /// Krótki kod błędu Bluetooth (nazwa kodu UniversalBle albo numer GATT).
+  static String bleErrorCode(Object e) {
+    final s = e.toString();
+    final m = RegExp(r'Code: (?:UniversalBleErrorCode\.)?(\w+)').firstMatch(s);
+    if (m != null) return m.group(1)!;
+    final g = RegExp(r'\b(133|8|19|22|62|257)\b').firstMatch(s);
+    if (g != null) return 'gatt_${g.group(1)}';
+    return e.runtimeType.toString();
+  }
+
+  /// Czytelny, przycięty opis błędu Bluetooth.
+  static String bleErrorText(Object e) {
+    var s = e.toString().replaceFirst('UniversalBleException: ', '').replaceAll('UniversalBleErrorCode.', '');
+    s = s.replaceAll(RegExp(r',? Details: null'), '');
+    return s.length > 200 ? '${s.substring(0, 200)}…' : s;
   }
 
   void addSeq(int? seq) {
@@ -448,7 +556,27 @@ class CollarDiagnostics {
   void reject(FixReject r) => rejected[r] = (rejected[r] ?? 0) + 1;
 
   /// Dziennik pakietów jako CSV (separator „;” – otwiera się w arkuszu).
-  String csv() => [FixLogEntry.csvHeader, for (final e in log) e.toCsv()].join('\n');
+  /// Pod tabelą pakietów – osobne sekcje: zdarzenia Bluetooth i [extra]
+  /// (np. podsumowanie GPS telefonu).
+  String csv({List<String> extra = const []}) {
+    String n(double? v) => v == null ? '' : v.toStringAsFixed(1);
+    final rx = rxSpread;
+    return [
+      FixLogEntry.csvHeader,
+      for (final e in log) e.toCsv(),
+      '',
+      'zdarzenie_bluetooth;czas;szczegoly',
+      for (final e in bleEvents) '${e.kind};${e.at.toIso8601String()};${(e.detail ?? '').replaceAll(';', ',').replaceAll('\n', ' ')}',
+      '',
+      'podsumowanie;nazwa;wartosc',
+      'bluetooth;pakiety_historyczne;$historical',
+      'bluetooth;odstep_odbioru_min_sr_max_s;${n(rx?.min)};${n(rx?.avg)};${n(rx?.max)}',
+      'bluetooth;ponowne_polaczenia;$reconnects',
+      'bluetooth;bledy_wg_kodu;${bleErrorCodes.entries.map((e) => '${e.key}=${e.value}').join(',')}',
+      'bluetooth;bledy_po_utracie_polaczenia;$bleErrorsWhileDown',
+      ...extra,
+    ].join('\n');
+  }
 
   void clear() {
     packets = positions = accepted = still = reconnects = 0;
@@ -461,8 +589,27 @@ class CollarDiagnostics {
     bleRssiAt = null;
     rejected.clear();
     intervals.clear();
+    rxIntervals.clear();
+    _lastRxAt = null;
+    bleEvents.clear();
+    bleErrorCodes.clear();
+    bleErrorsWhileDown = 0;
+    lastBleErrorAt = null;
+    historical = 0;
     lags.clear();
     log.clear();
     lastError = null;
   }
+}
+
+/// Zdarzenie połączenia Bluetooth (do diagnostyki i CSV).
+class BleEvent {
+  static const lost = 'utrata';
+  static const connected = 'polaczono';
+  static const failed = 'blad_polaczenia';
+
+  final DateTime at;
+  final String kind;
+  final String? detail;
+  const BleEvent(this.at, this.kind, [this.detail]);
 }

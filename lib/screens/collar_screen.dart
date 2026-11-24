@@ -6,9 +6,11 @@ import 'package:universal_ble/universal_ble.dart';
 
 import '../collar/collar_link.dart';
 import '../collar/csv_file.dart';
+import '../collar/distance_view.dart';
 import '../collar/mesh_proto.dart';
 import '../collar/tracker_driver.dart';
 import '../dogs/dog_profiles.dart';
+import '../gps/phone_location.dart';
 import '../l10n/l10n.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
@@ -249,13 +251,36 @@ class _CollarScreenState extends State<CollarScreen> {
       FixReject.weak => tr('słaby sygnał GPS'),
       FixReject.jump => tr('niemożliwy skok'),
     };
+    // Długa wartość (np. treść błędu) idzie pod etykietą i się zawija –
+    // wcześniej ściskała etykietę do jednej litery w wierszu (pionowy napis).
     Widget row(String k, String v) => Padding(
           padding: const EdgeInsets.symmetric(vertical: 2),
-          child: Row(children: [
-            Expanded(child: Text(k, style: const TextStyle(color: K9.muted, fontSize: 12.5))),
-            Text(v, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
-          ]),
+          child: v.length > 28
+              ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(k, style: const TextStyle(color: K9.muted, fontSize: 12.5)),
+                  Text(v, softWrap: true, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
+                ])
+              : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Expanded(flex: 3, child: Text(k, style: const TextStyle(color: K9.muted, fontSize: 12.5))),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    flex: 2,
+                    child: Text(v,
+                        textAlign: TextAlign.right,
+                        softWrap: true,
+                        style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
+                  ),
+                ]),
         );
+    Widget head(String t) => Padding(
+          padding: const EdgeInsets.only(top: 10, bottom: 2),
+          child: Text(t, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+        );
+    final now = DateTime.now();
+    final loc = PhoneLocation.instance;
+    final rx = d.rxSpread;
+    final dv = DistanceView.of(c, CollarLink.activeDog(), now: now);
+    final loss = d.lastLoss, back = d.lastReconnect;
     return K9Card(
       child: Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
@@ -277,7 +302,15 @@ class _CollarScreenState extends State<CollarScreen> {
             row(tr('Zapytania o pozycję / odpowiedzi'), '${d.requestsSent} / ${d.requestReplies}'),
             row(tr('Odczyty Bluetooth'), '${d.bleReads}'),
             row(tr('Operacje Bluetooth ponowione / nieudane'), '${d.bleRetries} / ${d.bleFailures}'),
-            if (d.lastBleError != null) row(tr('Ostatni błąd Bluetooth'), d.lastBleError!),
+            if (d.bleErrorCodes.isNotEmpty)
+              row(tr('Błędy Bluetooth wg rodzaju'), d.bleErrorCodes.entries.map((e) => '${e.key} × ${e.value}').join(', ')),
+            if (d.bleErrorsWhileDown > 0) row(tr('w tym po zerwaniu połączenia'), '${d.bleErrorsWhileDown}'),
+            if (d.lastBleError != null)
+              row(tr('Ostatni błąd Bluetooth'), '${d.lastBleError!}${d.lastBleErrorAt == null ? '' : ' (${collarAge(d.lastBleErrorAt)})'}'),
+            if (rx != null) row(tr('Odstęp odbioru pakietów Bluetooth (min / śr. / max)'), spread(rx)),
+            row(tr('Pakiety historyczne (zaległe po połączeniu)'), '${d.historical}'),
+            if (loss != null) row(tr('Ostatnia utrata połączenia'), '${collarAge(loss.at)}${loss.detail == null ? '' : ' – ${loss.detail}'}'),
+            if (back != null) row(tr('Ostatnie połączenie'), '${collarAge(back.at)}${back.detail == null ? '' : ' – ${back.detail}'}'),
             row(tr('Sygnał Bluetooth'), d.bleRssi == null ? '–' : '${d.bleRssi} dBm'),
             if (fix != null) ...[
               row(tr('GPS psa: satelity / HDOP'),
@@ -288,8 +321,15 @@ class _CollarScreenState extends State<CollarScreen> {
               if (n?.movedAt != null) row(tr('Ostatni ruch psa'), collarAge(n!.movedAt)),
               if (n?.lastPacketAt != null) row(tr('Ostatni pakiet od psa'), collarAge(n!.lastPacketAt)),
             ],
+            head(tr('GPS telefonu')),
             row(tr('GPS telefonu: szacowany błąd'), phone?.accuracyM == null ? '–' : '~${phone!.accuracyM!.round()} m'),
             row(tr('Wiek pozycji telefonu'), phone == null ? '–' : collarAge(phone.at)),
+            row(tr('Rzeczywisty odstęp pomiarów telefonu'), loc.medianInterval == null ? '–' : tr('~{0} s', [loc.medianInterval!.toStringAsFixed(1).replaceAll('.', ',')])),
+            row(tr('Najdłuższa przerwa w pomiarach telefonu'), loc.updates < 2 ? '–' : tr('{0} s', [loc.maxGapSec.toStringAsFixed(1).replaceAll('.', ',')])),
+            row(tr('Restarty subskrypcji GPS'), '${loc.restarts}'),
+            if (loc.lastRestartReason != null) row(tr('Ostatni restart GPS'), '${collarAge(loc.lastRestartAt)} – ${loc.lastRestartReason}'),
+            row(tr('Brak aktualnej lokalizacji – przyczyna'), loc.reason(now) ?? tr('lokalizacja aktualna')),
+            row(tr('Odległość niewyświetlona – przyczyna'), dv.hasDistance ? tr('odległość wyświetlona') : (dv.reason ?? '–')),
             if (dd?.compareDtSec != null) row(tr('Różnica czasu porównywanych pozycji'), '${dd!.compareDtSec!.abs().toStringAsFixed(1).replaceAll('.', ',')} s'),
             if (dd?.rawM != null) row(tr('Odległość surowa / po filtrze'), '${dd!.rawM!.round()} / ${dd.matchedM!.round()} m'),
             if (dd?.bestUncertaintyM != null) row(tr('Niepewność odległości'), '± ${dd!.bestUncertaintyM!.round()} m'),
@@ -305,7 +345,7 @@ class _CollarScreenState extends State<CollarScreen> {
                 onPressed: d.log.isEmpty
                     ? null
                     : () async {
-                        await Clipboard.setData(ClipboardData(text: d.csv()));
+                        await Clipboard.setData(ClipboardData(text: d.csv(extra: PhoneLocation.instance.csvLines())));
                         if (mounted) {
                           toast(context, tr('Skopiowano {0} wierszy CSV. Wklej je do e-maila albo arkusza.', [d.log.length]));
                         }
@@ -325,7 +365,7 @@ class _CollarScreenState extends State<CollarScreen> {
                         final t = DateTime.now();
                         String two(int v) => v.toString().padLeft(2, '0');
                         final name = 'valkor-track-${t.year}${two(t.month)}${two(t.day)}-${two(t.hour)}${two(t.minute)}.csv';
-                        final path = await saveCsvFile(name, d.csv());
+                        final path = await saveCsvFile(name, d.csv(extra: PhoneLocation.instance.csvLines()));
                         if (!mounted) return;
                         toast(context, path == null
                             ? tr('Nie udało się zapisać pliku. Użyj kopiowania do schowka.')

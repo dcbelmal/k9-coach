@@ -257,5 +257,32 @@ void main() {
       await tester.pumpWidget(const SizedBox());
       c.state = CollarState.off;
     });
+
+    testWidgets('diagnostyka: długi błąd Bluetooth zawija się pod etykietą (bez pionowego napisu)', (tester) async {
+      tester.view.physicalSize = const Size(360, 2400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      c.deviceId = 'aa:bb';
+      c.state = CollarState.connected;
+      c.handleEvents([const MeshMyInfo(1), const MeshNodeInfo(1, longName: 'Pies', hwModel: hwT1000E)]);
+      const err = 'deviceDisconnected, Message: Device disconnected while reading characteristic 2c55e69e-4993-11ed-b878-0242ac120002';
+      c.diag.lastBleError = err;
+      await tester.pumpWidget(app());
+      await tester.pump();
+      await tester.scrollUntilVisible(find.text('Diagnostyka'), 300);
+      await tester.tap(find.text('Diagnostyka'));
+      await tester.pumpAndSettle();
+      final label = find.text('Ostatni błąd Bluetooth');
+      await tester.scrollUntilVisible(label, 300);
+      expect(label, findsOneWidget);
+      // Etykieta w jednej linii (szersza niż wysoka), treść błędu w całości.
+      final size = tester.getSize(label);
+      expect(size.width, greaterThan(size.height * 3));
+      expect(find.textContaining('Device disconnected while reading'), findsOneWidget);
+      expect(find.text('GPS telefonu'), findsOneWidget);
+      expect(find.text('Restarty subskrypcji GPS'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+      c.state = CollarState.off;
+    });
   });
 }

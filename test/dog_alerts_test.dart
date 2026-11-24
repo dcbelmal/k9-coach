@@ -27,8 +27,13 @@ void main() {
     late AlertEngine e;
     setUp(() => e = AlertEngine(AlertSettings(enabled: true, leashM: 100, lowBattery: null)));
 
+    // Odległość z pozycji telefonu z tej samej chwili co pomiar psa
+    // (niepewność ~10 m jak przy domyślnym błędzie GPS).
+    DogDistance dist(double m, {double unc = 10}) => DogDistance(matchedM: m, matchedUncertaintyM: unc, ageSec: 0, lagSec: 0);
     List<AlertKind> step(double m, num s, {DogLink link = DogLink.live, double? acc}) => [
-          for (final a in e.evaluate(AlertInput(now: at(s), link: link, fix: fx(m, s, acc: acc), handler: home))) a.kind
+          for (final a in e.evaluate(AlertInput(
+              now: at(s), link: link, fix: fx(m, s, acc: acc), handler: home, distance: dist(m, unc: (acc ?? 10).clamp(5, 50).toDouble()))))
+            a.kind
         ];
 
     test('alarm dopiero po 2 pomiarach poza smyczą', () {
@@ -64,9 +69,21 @@ void main() {
     });
 
     test('ten sam pomiar drugi raz nie liczy się jako kolejny', () {
-      e.evaluate(AlertInput(now: at(0), link: DogLink.live, fix: fx(150, 0), handler: home));
-      final out = e.evaluate(AlertInput(now: at(3), link: DogLink.live, fix: fx(150, 0), handler: home));
+      e.evaluate(AlertInput(now: at(0), link: DogLink.live, fix: fx(150, 0), handler: home, distance: dist(150)));
+      final out = e.evaluate(AlertInput(now: at(3), link: DogLink.live, fix: fx(150, 0), handler: home, distance: dist(150)));
       expect(out, isEmpty);
+    });
+
+    test('stara pozycja telefonu (bez dopasowania w czasie) nie uruchamia smyczy', () {
+      // Jest tylko „jakaś” pozycja przewodnika – bez odległości z tej samej chwili.
+      e.evaluate(AlertInput(now: at(0), link: DogLink.live, fix: fx(500, 0), handler: home));
+      expect(e.evaluate(AlertInput(now: at(5), link: DogLink.live, fix: fx(500, 5), handler: home)), isEmpty);
+    });
+
+    test('pomiar zaległy (historyczny) nie uruchamia smyczy', () {
+      CollarFix old(num s) => CollarFix(1, 50 + 500 / 111195, 20, at(s), historical: true);
+      e.evaluate(AlertInput(now: at(0), link: DogLink.live, fix: old(0), handler: home, distance: dist(500)));
+      expect(e.evaluate(AlertInput(now: at(5), link: DogLink.live, fix: old(5), handler: home, distance: dist(500))), isEmpty);
     });
 
     test('bez pozycji przewodnika smycz nie działa', () {
@@ -200,7 +217,8 @@ void main() {
       await tester.pump();
       expect(c.mode, TrackMode.search);
       expect(find.byType(DogRadar), findsOneWidget);
-      expect(find.text('Czekam na Twoją pozycję…'), findsOneWidget);
+      // Bez lokalizacji telefonu nie ma liczby ze starych danych – wprost to mówimy.
+      expect(find.text('Oczekiwanie na lokalizację telefonu'), findsWidgets);
       await tester.tap(find.text('Mapa'));
       await tester.pump();
       await tester.pump();

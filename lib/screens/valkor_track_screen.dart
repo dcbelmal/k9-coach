@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
-import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
@@ -9,8 +9,10 @@ import 'package:material_ui/material_ui.dart';
 
 import '../collar/collar_link.dart';
 import '../collar/dog_alerts.dart';
+import '../collar/distance_view.dart';
 import '../dogs/dog_profiles.dart';
 import '../gps/online_services.dart';
+import '../gps/phone_location.dart';
 import '../gps/recorder.dart';
 import '../l10n/l10n.dart';
 import '../models.dart';
@@ -38,11 +40,12 @@ enum TrackMapStyle { standard, terrain }
 class ValkorTrackScreen extends StatefulWidget {
   const ValkorTrackScreen({super.key});
 
-  /// Pozycje przewodnika, gdy nie trwa trening (podmieniane w testach).
-  @visibleForTesting
-  static Stream<Position> Function() handlerPositions = () => Geolocator.getPositionStream(
-        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, distanceFilter: 3),
-      );
+  /// Klient wspólnego źródła lokalizacji ([PhoneLocation]).
+  static const locationClient = 'valkor_track';
+
+  /// Ostatni widok mapy – po ponownym zbudowaniu mapy (np. przy ponownym
+  /// łączeniu Bluetooth) wraca ta sama skala i miejsce.
+  static MapCamera? lastCamera;
 
   @override
   State<ValkorTrackScreen> createState() => _ValkorTrackScreenState();
@@ -55,9 +58,9 @@ class _ValkorTrackScreenState extends State<ValkorTrackScreen> {
   bool mapReady = false;
   bool _fitted = false;
   TrackMapStyle style = TrackMapStyle.standard;
-  StreamSubscription<Position>? _posSub;
-  Position? _own;
+  bool _locOn = false;
   Timer? _clock;
+  final loc = PhoneLocation.instance;
   String? locError;
 
   /// Tryb poszukiwania: radar zamiast mapy, najczęstsze pomiary.
@@ -78,6 +81,7 @@ class _ValkorTrackScreenState extends State<ValkorTrackScreen> {
     rec.addListener(_changed);
     OnlineConsent.instance.addListener(_changed);
     DogAlerts.instance.addListener(_changed);
+    loc.addListener(_changed);
     c.reconnectSaved();
     _clock = Timer.periodic(const Duration(seconds: 1), (_) => _changed());
     _startOwn(ask: false);
@@ -90,7 +94,8 @@ class _ValkorTrackScreenState extends State<ValkorTrackScreen> {
     OnlineConsent.instance.removeListener(_changed);
     DogAlerts.instance.removeListener(_changed);
     if (radar) c.endSearch();
-    _posSub?.cancel();
+    loc.removeListener(_changed);
+    if (_locOn) loc.release(ValkorTrackScreen.locationClient);
     _clock?.cancel();
     super.dispose();
   }
@@ -107,7 +112,7 @@ class _ValkorTrackScreenState extends State<ValkorTrackScreen> {
   /// Pozycja przewodnika z telefonu. Bez pytania o zgodę przy otwarciu –
   /// pytamy dopiero po dotknięciu „Moja pozycja”.
   Future<void> _startOwn({required bool ask}) async {
-    if (kIsWeb || _posSub != null) return;
+    if (kIsWeb || _locOn) return;
     try {
       if (!await GpsServices.serviceEnabled()) {
         if (ask && mounted) setState(() => locError = tr('Włącz lokalizację (GPS) w telefonie.'));
@@ -121,17 +126,17 @@ class _ValkorTrackScreenState extends State<ValkorTrackScreen> {
       }
       if (!mounted) return;
       setState(() => locError = null);
-      _posSub = ValkorTrackScreen.handlerPositions().listen((p) {
-        _own = p;
-        DogAlerts.instance.setHandler(LatLng(p.latitude, p.longitude), accuracyM: p.accuracy, at: p.timestamp, speedMs: p.speed);
-        _changed();
-      }, onError: (_) {});
+      // Wspólne źródło z treningiem: jedna subskrypcja, co 1 s, także przy
+      // wygaszonym ekranie (powiadomienie Valkor Track).
+      _locOn = true;
+      await loc.acquire(ValkorTrackScreen.locationClient,
+          title: tr('Valkor Track'), text: tr('Śledzę psa i Twoją pozycję. Możesz wyłączyć ekran.'));
     } catch (_) {}
   }
 
-  /// Przewodnik: z nagrywanego treningu, a poza treningiem z własnego odczytu.
+  /// Przewodnik: ostatni pomiar ze wspólnego źródła lokalizacji.
   LatLng? get _meLl {
-    final p = rec.state != RecState.idle && rec.last != null ? rec.last : _own;
+    final p = loc.last ?? rec.last;
     return p == null ? null : LatLng(p.latitude, p.longitude);
   }
 
@@ -172,7 +177,7 @@ class _ValkorTrackScreenState extends State<ValkorTrackScreen> {
 
   /// Kierunek marszu przewodnika (z GPS telefonu, tylko w ruchu).
   double? get _myCourse {
-    final p = rec.state != RecState.idle && rec.last != null ? rec.last : _own;
+    final p = loc.fresh() ? loc.last : null;
     if (p == null || p.speed < 0.7 || p.heading < 0) return null;
     return p.heading;
   }
@@ -353,11 +358,17 @@ class _ValkorTrackScreenState extends State<ValkorTrackScreen> {
             FlutterMap(
               mapController: map,
               options: MapOptions(
-                initialCenter: dogLl ?? me ?? const LatLng(52.0, 19.0),
-                initialZoom: dogLl != null || me != null ? 16 : 6,
+                initialCenter: ValkorTrackScreen.lastCamera?.center ?? dogLl ?? me ?? const LatLng(52.0, 19.0),
+                initialZoom: ValkorTrackScreen.lastCamera?.zoom ?? (dogLl != null || me != null ? 16 : 6),
                 onMapReady: () {
                   mapReady = true;
+                  if (ValkorTrackScreen.lastCamera != null) _fitted = true;
                   _changed();
+                },
+                onPositionChanged: (cam, hasGesture) {
+                  ValkorTrackScreen.lastCamera = cam;
+                  // Użytkownik sam ustawił mapę – nie zmieniamy skali automatycznie.
+                  if (hasGesture) _fitted = true;
                 },
               ),
               children: [
@@ -459,55 +470,38 @@ class _ValkorTrackScreenState extends State<ValkorTrackScreen> {
     );
   }
 
-  /// Odległość do pokazania: na żywo – z dopasowaniem czasu i błędem GPS,
-  /// inaczej – od ostatniej znanej pozycji (bez udawania, że to teraz).
-  (double?, double?, DogDistance?) _distance(LatLng? me, LatLng? dogLl, bool live, DateTime now) {
-    final dd = live ? c.distanceTo(_viewId, now: now) : null;
-    if (dd?.bestM != null) return (dd!.bestM, dd.bestUncertaintyM, dd);
-    return (me == null || dogLl == null ? null : const Distance()(me, dogLl), null, null);
-  }
+  /// Odległość do pokazania – wspólna prezentacja z ekranem spaceru.
+  DistanceView _dv(DateTime now) => DistanceView.of(c, _viewId, now: now);
 
-  String _distText(double d, double? unc, [DogDistance? dd]) =>
-      dd != null && dd.withinError ? tr('Pies w pobliżu') : fmtDistance(d, unc);
-
-  /// Objaśnienie odległości: z której chwili i jak pewna.
-  String? _distNote(DogDistance? dd, DateTime now) {
-    if (dd == null) return null;
-    if (dd.withinError) {
-      return tr('Odległość mieści się w błędzie GPS telefonu i trackera (do ~{0} m) – dokładniej się nie da.',
-          [dd.nearbyRadiusM!.round()]);
-    }
-    if (dd.matchedM != null && dd.ageSec >= 8) {
-      return tr('Odległość w chwili pomiaru psa ({0} s temu). Pies mógł się od tego czasu przesunąć.', [dd.ageSec.round()]);
-    }
-    if (dd.matchedM == null && dd.ageSec >= 8) {
-      return tr('Pozycja psa sprzed {0} s porównana z Twoją bieżącą – odległość przybliżona.', [dd.ageSec.round()]);
-    }
-    return null;
+  /// Kierunek do psa tylko przy wiarygodnej odległości poza błędem GPS.
+  double? _bearing(LatLng? me, LatLng? dogLl, DistanceView v) {
+    if (me == null || dogLl == null || v.state != DistanceState.estimate) return null;
+    final d = v.m!;
+    if (d < 3 || (v.uncertaintyM != null && d <= v.uncertaintyM!)) return null;
+    return (const Distance().bearing(me, dogLl) + 360) % 360;
   }
 
   Widget _radarView(LatLng? me, LatLng? dogLl, bool live) {
     final now = DateTime.now();
-    final (dist, unc, dd) = _distance(me, dogLl, live, now);
-    final bearing = me == null || dogLl == null || dist == null || dist < 3 || (unc != null && dist <= unc) || (dd?.withinError ?? false)
-        ? null
-        : (const Distance().bearing(me, dogLl) + 360) % 360;
+    final v = _dv(now);
+    final dist = v.state == DistanceState.estimate || v.state == DistanceState.nearby ? v.m : null;
+    final unc = v.uncertaintyM;
+    final bearing = _bearing(me, dogLl, v);
     final trend = _trend(dist, now);
     final node = _node;
     final dogCourse = live ? node?.courseDeg : null;
-    final dogSpeed = live ? node?.speedMs : null;
+    final dogSpeed = c.currentSpeedMs(_viewId, now: now);
     return Container(
       color: K9.bg,
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
       child: Column(children: [
         Text(
-          dist == null
-              ? (dogLl == null ? tr('Czekam na pozycję psa…') : tr('Czekam na Twoją pozycję…'))
-              : _distText(dist, unc, dd),
-          style: const TextStyle(fontSize: 34, fontWeight: FontWeight.w800),
+          v.text,
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: v.state == DistanceState.waitingPhone ? 22 : 34, fontWeight: FontWeight.w800),
         ),
-        if (_distNote(dd, now) != null)
-          Text(_distNote(dd, now)!, textAlign: TextAlign.center, style: const TextStyle(color: K9.muted, fontSize: 12)),
+        if (v.note != null)
+          Text(v.note!, textAlign: TextAlign.center, style: const TextStyle(color: K9.muted, fontSize: 12)),
         if (bearing != null)
           Text(tr('Pies jest na {0} ({1}°)', [compassLabel(bearing), bearing.round()]),
               style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
@@ -517,7 +511,7 @@ class _ValkorTrackScreenState extends State<ValkorTrackScreen> {
         const SizedBox(height: 8),
         Expanded(
           child: DogRadar(
-            distM: dist,
+            distM: v.hasDistance ? v.m : null,
             bearingDeg: bearing,
             myCourseDeg: _myCourse,
             dogCourseDeg: dogCourse,
@@ -561,7 +555,7 @@ class _ValkorTrackScreenState extends State<ValkorTrackScreen> {
         ]),
       );
 
-  Widget _stat(String label, String value, {Widget? leading}) => Expanded(
+  Widget _stat(String label, String value, {Widget? leading, bool wrap = false}) => Expanded(
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(label, style: const TextStyle(color: K9.muted, fontSize: 11.5)),
           const SizedBox(height: 2),
@@ -569,9 +563,9 @@ class _ValkorTrackScreenState extends State<ValkorTrackScreen> {
             if (leading != null) ...[leading, const SizedBox(width: 4)],
             Flexible(
               child: Text(value,
-                  maxLines: 1,
+                  maxLines: wrap ? 2 : 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: wrap ? 13 : 15)),
             ),
           ]),
         ]),
@@ -585,12 +579,11 @@ class _ValkorTrackScreenState extends State<ValkorTrackScreen> {
     final last = _last;
     final Dog? dog = DogProfiles.instance.peek(_viewId);
     final dogs = DogProfiles.instance.dogs;
-    final (dist, unc, dd) = _distance(me, dogLl, link == DogLink.live, now);
-    final bearing = me == null || dogLl == null || dist == null || dist < 3 || (unc != null && dist <= unc) || (dd?.withinError ?? false)
-        ? null
-        : (const Distance().bearing(me, dogLl) + 360) % 360;
-    final speed = link == DogLink.live ? node?.speedMs : null;
-    final note = _distNote(dd, now);
+    final dv = _dv(now);
+    final bearing = _bearing(me, dogLl, dv);
+    // Prędkość psa tylko z pomiaru na żywo; postój = 0, bez starej wartości.
+    final speed = c.currentSpeedMs(_viewId, now: now);
+    final note = dv.note;
     final expected = c.expectedIntervalSec;
 
     final battery = node?.battery ?? last?.battery;
@@ -658,8 +651,9 @@ class _ValkorTrackScreenState extends State<ValkorTrackScreen> {
             const SizedBox(height: 12),
             Row(children: [
               _stat(
-                link == DogLink.live || dist == null ? tr('Odległość') : tr('Ostatnio'),
-                dist == null ? '–' : _distText(dist, unc, dd),
+                dv.state == DistanceState.lastKnown ? tr('Ostatnio') : tr('Odległość'),
+                dv.state == DistanceState.noDog ? '–' : dv.text,
+                wrap: dv.state == DistanceState.waitingPhone,
               ),
               _stat(
                 tr('Kierunek do psa'),
@@ -718,6 +712,10 @@ class _ValkorTrackScreenState extends State<ValkorTrackScreen> {
                   ),
                 ),
               ]),
+            ],
+            if (_locOn && loc.reason(now) != null && dv.state == DistanceState.waitingPhone) ...[
+              const SizedBox(height: 6),
+              Text(tr('GPS telefonu: {0}', [loc.reason(now)!]), style: const TextStyle(color: K9.yellow, fontSize: 12)),
             ],
             if (me == null && locError == null) ...[
               const SizedBox(height: 8),
