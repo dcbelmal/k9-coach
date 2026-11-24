@@ -5,6 +5,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../collar/collar_link.dart';
+import '../collar/distance_view.dart';
 import '../gps/gps_drafts.dart';
 import '../gps/online_services.dart';
 import '../gps/recorder.dart';
@@ -363,13 +364,15 @@ class _GpsScreenState extends State<GpsScreen> {
         child: Stack(
           children: [
             FlutterMap(
+              key: const ValueKey('walk-map'),
               mapController: map,
               options: MapOptions(
-                initialCenter: pos ?? const LatLng(52.07, 19.48),
-                initialZoom: pos == null ? 5.5 : 15.5,
+                initialCenter: (follow ? pos : null) ?? _cam?.center ?? pos ?? const LatLng(52.07, 19.48),
+                initialZoom: _cam?.zoom ?? (pos == null ? 5.5 : 15.5),
                 backgroundColor: K9.cardHi,
                 onMapReady: () => mapReady = true,
                 onPositionChanged: (c, hasGesture) {
+                  _cam = c;
                   if (hasGesture && follow) setState(() => follow = false);
                 },
               ),
@@ -430,11 +433,17 @@ class _GpsScreenState extends State<GpsScreen> {
 
   /// Ostatnia pozycja psa z obroży (w trakcie treningu albo na ekranie startu).
   LatLng? _dogPos() {
-    final f = _rec.dogLast;
-    if (f != null) return LatLng(f.lat, f.lng);
+    // Pozycja po filtrze (jak w Valkor Track); trasa psa rysuje się z surowych.
     final d = CollarLink.instance.dogWithFix;
-    return d?.fix?.ll;
+    if (d?.displayLl != null) return d!.displayLl;
+    final f = _rec.dogLast;
+    return f == null ? null : LatLng(f.lat, f.lng);
   }
+
+  /// Ostatni widok mapy – mapa zbudowana od nowa (np. gdy nad nią pojawi
+  /// się lub zniknie karta przy ponownym łączeniu Bluetooth) wraca do tej
+  /// samej skali zamiast do domyślnej.
+  static MapCamera? _cam;
 
   /// Niebieski znacznik = pozycja na żywo, szary = ostatnia znana.
   Marker _dogMarker(LatLng p) {
@@ -486,8 +495,10 @@ class _GpsScreenState extends State<GpsScreen> {
   Widget _dogLive() {
     final c = CollarLink.instance;
     final f = _rec.dogLast;
-    final me = _rec.last;
-    final dist = f == null || me == null ? null : const Distance()(LatLng(f.lat, f.lng), LatLng(me.latitude, me.longitude));
+    final now = DateTime.now();
+    // Ta sama prezentacja odległości co w Valkor Track: dopasowanie czasu,
+    // błąd GPS, „Pies w pobliżu”, „Oczekiwanie na lokalizację telefonu”.
+    final dv = DistanceView.of(c, CollarLink.activeDog(), now: now);
     final link = c.status();
     final stale = link != DogLink.live;
     return K9Card(
@@ -502,17 +513,15 @@ class _GpsScreenState extends State<GpsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  dist == null
-                      ? (f == null ? tr('Czekam na pozycję psa…') : tr('Pies: pozycja {0}', [collarAge(f.fixAt)]))
-                      : stale
-                          ? tr('Ostatnio {0} m od Ciebie', [dist.round()])
-                          : tr('Pies {0} m od Ciebie', [dist.round()]),
+                  dv.state == DistanceState.noDog && f != null ? tr('Pies: pozycja {0}', [collarAge(f.fixAt)]) : dv.sentence,
                   style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
+                if (dv.state == DistanceState.nearby || dv.state == DistanceState.waitingPhone)
+                  Text(dv.note ?? '', style: const TextStyle(color: K9.muted, fontSize: 12)),
                 Text(
                   [
                     dogLinkText(c),
-                    if (f != null && stale) tr('ostatnia znana pozycja {0}', [collarAge(f.fixAt)]),
+                    if (stale && dv.lastAgeSec != null) tr('ostatnia znana pozycja {0}', [fmtAgo(dv.lastAgeSec!)]),
                     if (_rec.dogMeters >= 20) tr('pies: {0} km', [fmtKm(_rec.dogMeters / 1000)]),
                     if (c.dog?.battery != null) collarBattery(c.dog!.battery),
                   ].join(' · '),
@@ -922,7 +931,9 @@ class _GpsScreenState extends State<GpsScreen> {
       children: [
         Expanded(
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            // Odstęp od paska tytułu – bez niego górna krawędź karty statystyk
+            // wyglądała na obciętą.
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
             children: [
               if (paused)
                 Padding(
@@ -1001,7 +1012,7 @@ class _GpsScreenState extends State<GpsScreen> {
               ),
               if (gps && (CollarLink.instance.paired || _rec.dogLast != null)) ...[gap12, _dogLive()],
               if (gps && CollarLink.instance.dogCoarse) ...[gap12, const CollarCoarseWarning()],
-              if (gps) ...[gap12, _map(height: 300)],
+              if (gps) ...[gap12, KeyedSubtree(key: const ValueKey('walk-map-box'), child: _map(height: 300))],
             ],
           ),
         ),

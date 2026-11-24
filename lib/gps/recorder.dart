@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -7,7 +8,6 @@ import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../collar/collar_link.dart';
-import '../collar/dog_alerts.dart';
 import '../collar/tracker_driver.dart';
 import '../collar/fix_filter.dart' show FixFilter;
 import '../dogs/dog_profiles.dart';
@@ -15,6 +15,7 @@ import '../models.dart';
 import '../storage/safe_prefs.dart';
 import 'gps_drafts.dart';
 import 'online_services.dart';
+import 'phone_location.dart';
 import '../notifications.dart';
 import '../theme.dart' show fmtKm;
 import 'track.dart';
@@ -143,34 +144,8 @@ class TrackRecorder extends ChangeNotifier {
     return null;
   }
 
-  LocationSettings _settings() {
-    if (defaultTargetPlatform == TargetPlatform.android) {
-      return AndroidSettings(
-        accuracy: LocationAccuracy.best,
-        distanceFilter: 3,
-        intervalDuration: const Duration(seconds: 1),
-        foregroundNotificationConfig: ForegroundNotificationConfig(
-          notificationTitle: tr('Valkor Coach – trening {0}', [discipline.label]),
-          notificationText: tr('Nagrywam trasę. Możesz wyłączyć ekran.'),
-          notificationChannelName: tr('Trening GPS'),
-          enableWakeLock: true,
-          setOngoing: true,
-          notificationIcon: AndroidResource(name: 'ic_stat_valkor', defType: 'drawable'),
-        ),
-      );
-    }
-    if (defaultTargetPlatform == TargetPlatform.iOS) {
-      return AppleSettings(
-        accuracy: LocationAccuracy.best,
-        distanceFilter: 3,
-        activityType: ActivityType.fitness,
-        pauseLocationUpdatesAutomatically: false,
-        showBackgroundLocationIndicator: true,
-        allowBackgroundLocationUpdates: true,
-      );
-    }
-    return const LocationSettings(accuracy: LocationAccuracy.best, distanceFilter: 3);
-  }
+  /// Klient wspólnego źródła lokalizacji ([PhoneLocation]).
+  static const locationClient = 'training';
 
   Future<void> start() async {
     // Nigdy dwa nagrania naraz: drugi start nie może wyzerować trwającej sesji.
@@ -222,21 +197,60 @@ class TrackRecorder extends ChangeNotifier {
     }
   }
 
+  /// Lokalizacja ze wspólnego źródła – jedna subskrypcja GPS dla treningu
+  /// i Valkor Track (z usługą w tle, co 1 s, bez filtra odległości).
   void _listen() {
     _sub?.cancel();
-    _sub = Geolocator.getPositionStream(locationSettings: _settings()).listen(_onPosition, onError: (e) {
-      error = tr('Brak sygnału GPS');
-      notifyListeners();
-    });
+    final loc = PhoneLocation.instance;
+    _sub = loc.positions.listen(onPosition);
+    loc.removeListener(_onLocState);
+    loc.addListener(_onLocState);
+    unawaited(loc.acquire(locationClient,
+        title: tr('Valkor Coach – trening {0}', [discipline.label]), text: tr('Nagrywam trasę. Możesz wyłączyć ekran.')));
   }
 
-  void _onPosition(Position p) {
+  void _onLocState() {
+    if (state == RecState.idle) return;
+    final loc = PhoneLocation.instance;
+    final e = switch (loc.state) {
+      PhoneGps.serviceOff => tr('Włącz lokalizację (GPS) w telefonie.'),
+      PhoneGps.denied => tr('Brak dostępu do lokalizacji'),
+      PhoneGps.stale || PhoneGps.error => tr('Brak sygnału GPS'),
+      _ => null,
+    };
+    if (e != error) {
+      error = e;
+      notifyListeners();
+    }
+  }
+
+  /// Prędkość starsza niż tyle sekund nie jest już „bieżąca”.
+  static const speedMaxAgeSec = 5;
+  DateTime? _speedAt;
+
+  /// Dystans liczony od punktu kotwicy (ostatniego dodanego), więc wolny
+  /// marsz nie ginie, a dryf na postoju nie dodaje metrów.
+  /// Próg: postój (prędkość z GPS < 0,5 m/s) – co najmniej błąd pozycji
+  /// (min. 3 m); w ruchu – połowa błędu, od 2 do 5 m.
+  static double moveThresholdM(double accuracyM, double? speedMs) {
+    final acc = accuracyM > 0 ? accuracyM : 10.0;
+    final still = speedMs != null && speedMs >= 0 && speedMs < 0.5;
+    return still ? math.max(3.0, acc) : (acc * 0.5).clamp(2.0, 5.0);
+  }
+
+  @visibleForTesting
+  void onPosition(Position p) {
     if (state != RecState.running) return;
-    error = null;
     final seg = segments.last;
-    if (p.accuracy > (seg.isEmpty ? 40 : 25)) return; // za słaby sygnał
-    // Każda dobra pozycja telefonu – także na postoju – do porównania z psem.
-    DogAlerts.instance.setHandler(LatLng(p.latitude, p.longitude), accuracyM: p.accuracy, at: p.timestamp, speedMs: p.speed);
+    // Prędkość bieżąca – także na postoju (0), nie tylko gdy dodajemy punkt.
+    if (p.speed >= 0 && p.accuracy <= 40) {
+      currentSpeedKmh = p.speed < 0.5 ? 0 : p.speed * 3.6;
+      _speedAt = DateTime.now();
+    }
+    if (p.accuracy > (seg.isEmpty ? 40 : 25)) {
+      notifyListeners();
+      return; // za słaby sygnał
+    }
     final t = seconds;
     if (seg.isNotEmpty) {
       final prev = seg.last;
@@ -244,12 +258,17 @@ class TrackRecorder extends ChangeNotifier {
       final dt = t - prev.t;
       if (dt <= 0 && d > 10) return; // dwa odczyty w tej samej chwili daleko od siebie – błąd
       if (dt > 0 && d / dt > 16) return; // skok GPS (>57 km/h)
-      if (d < 2) return;
-      // Dryf w miejscu: przesunięcie mniejsze niż połowa dokładności przy niemal
-      // zerowej prędkości z GPS – nie dodajemy fałszywych metrów na postoju.
-      if (p.speed >= 0 && p.speed < 0.3 && d < p.accuracy * 0.5) return;
+      final speed = p.speed >= 0 ? p.speed : null;
+      if (d < moveThresholdM(p.accuracy, speed)) {
+        last = p;
+        notifyListeners();
+        return;
+      }
       meters += d;
-      currentSpeedKmh = p.speed >= 0 ? p.speed * 3.6 : (dt > 0 ? d / dt * 3.6 : null);
+      if (p.speed < 0) {
+        currentSpeedKmh = dt > 0 ? d / dt * 3.6 : null;
+        _speedAt = DateTime.now();
+      }
     }
     seg.add(TrackPoint(p.latitude, p.longitude, t, p.speed >= 0 ? p.speed : null));
     last = p;
@@ -283,7 +302,8 @@ class TrackRecorder extends ChangeNotifier {
     }
     // Czas punktu = czas pomiaru GPS przeliczony na czas ruchu treningu.
     final seg = dogSegments.last;
-    var t = seconds - f.lagSec.clamp(0, 60);
+    // Pomiar zaległy (po ponownym połączeniu) trafia w swoje miejsce trasy.
+    var t = seconds - f.lagSec.clamp(0, f.historical ? FixFilter.maxHistorySec : 60);
     if (seg.isNotEmpty) {
       final prev = seg.last;
       if (t < prev.t) t = prev.t;
@@ -320,6 +340,11 @@ class TrackRecorder extends ChangeNotifier {
       targetTimeDone = true;
       HapticFeedback.heavyImpact();
       _say(tr('Cel osiągnięty. {0} {1} treningu. Brawo!', [targetMin, _minWord(targetMin)]));
+    }
+    // Prędkość bez świeżego pomiaru nie jest bieżąca – pokazujemy „–”.
+    final sa = _speedAt;
+    if (currentSpeedKmh != null && (sa == null || DateTime.now().difference(sa).inSeconds > speedMaxAgeSec)) {
+      currentSpeedKmh = null;
     }
     if (seconds - _lastNotif >= 10) _updateNotification();
     if (seconds - _lastDraftT >= draftEverySec) unawaited(_saveDraft());
@@ -377,6 +402,8 @@ class TrackRecorder extends ChangeNotifier {
     _watch.stop();
     await _sub?.cancel();
     _sub = null;
+    PhoneLocation.instance.removeListener(_onLocState);
+    await PhoneLocation.instance.release(locationClient);
     await _dogSub?.cancel();
     _dogSub = null;
     _ticker?.cancel();

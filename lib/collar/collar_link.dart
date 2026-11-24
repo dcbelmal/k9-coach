@@ -18,7 +18,7 @@ import 'pos_filter.dart';
 import 'tracker_config.dart';
 
 export 'dog_distance.dart';
-export 'fix_filter.dart' show CollarFix, FixReject, CollarDiagnostics, FixLogEntry, Spread;
+export 'fix_filter.dart' show CollarFix, FixReject, CollarDiagnostics, FixLogEntry, Spread, BleEvent;
 export 'pos_filter.dart';
 export 'tracker_config.dart';
 
@@ -402,6 +402,10 @@ class CollarLink extends ChangeNotifier {
   /// Liczniki do ekranu diagnostyki.
   final diag = CollarDiagnostics();
 
+  /// Przez tyle sekund po połączeniu opóźnione pakiety traktujemy jako
+  /// zaległą kolejkę trackera (pomiary historyczne).
+  static const backlogWindowSec = 30;
+
   /// Po tylu sekundach bez wiadomości od trackera w sieci LoRa uznajemy go za niesłyszalnego.
   static const loraSilentSec = 180;
 
@@ -660,7 +664,7 @@ class CollarLink extends ChangeNotifier {
       await _connSub?.cancel();
       await UniversalBle.connect(id, timeout: const Duration(seconds: 20));
       _connSub = UniversalBle.connectionStream(id).listen((up) {
-        if (!up) _onLost();
+        if (!up) _onLost(why: tr('Bluetooth rozłączony'));
       });
       final services = await UniversalBle.discoverServices(id);
       if (!services.any((s) => s.uuid.toLowerCase() == MeshBle.service)) {
@@ -694,12 +698,16 @@ class CollarLink extends ChangeNotifier {
       state = CollarState.connected;
       _retrySec = 5;
       diag.connectedAt = DateTime.now();
+      final loss = diag.lastLoss;
+      diag.addBleEvent(diag.connectedAt!, BleEvent.connected,
+          loss == null ? null : tr('po {0} s przerwy', [diag.connectedAt!.difference(loss.at).inSeconds]));
       notifyListeners();
       _poll?.cancel();
       _poll = Timer.periodic(const Duration(seconds: 1), (_) => _tickPoll());
     } catch (e) {
       error = _message(e);
-      diag.lastError = e.toString();
+      diag.lastError = CollarDiagnostics.bleErrorText(e);
+      diag.addBleEvent(DateTime.now(), BleEvent.failed, CollarDiagnostics.bleErrorText(e));
       try {
         await UniversalBle.disconnect(id);
       } catch (_) {}
@@ -713,14 +721,19 @@ class CollarLink extends ChangeNotifier {
     return tr('Nie udało się połączyć z obrożą. Sprawdź, czy jest włączona i blisko telefonu, a aplikacja Meshtastic jest z nią rozłączona.');
   }
 
-  void _onLost() {
+  void _onLost({String? why}) {
     _poll?.cancel();
     _poll = null;
+    if (state == CollarState.connected) {
+      diag.addBleEvent(DateTime.now(), BleEvent.lost, why ?? error);
+    }
     if (!_wanted) {
       state = CollarState.off;
       notifyListeners();
       return;
     }
+    // Już czekamy na ponowne łączenie – drugie zgłoszenie utraty nic nie zmienia.
+    if (state == CollarState.lost && _retry?.isActive == true) return;
     state = CollarState.lost;
     diag.reconnects++;
     notifyListeners();
@@ -789,8 +802,11 @@ class CollarLink extends ChangeNotifier {
           c.complete(await op());
           return;
         } catch (e) {
-          diag.lastBleError = e.toString();
-          if (attempt >= retries || state == CollarState.off) {
+          // Po zerwaniu połączenia operacje w toku kończą się błędem – to
+          // skutek utraty, nie osobny problem: liczymy osobno i nie ponawiamy.
+          final down = state == CollarState.off || state == CollarState.lost;
+          diag.noteBleError(e, down: down, at: DateTime.now());
+          if (attempt >= retries || down || _disconnectError(e)) {
             diag.bleFailures++;
             c.completeError(e);
             return;
@@ -801,6 +817,11 @@ class CollarLink extends ChangeNotifier {
       }
     });
     return c.future;
+  }
+
+  static bool _disconnectError(Object e) {
+    final c = CollarDiagnostics.bleErrorCode(e);
+    return c == 'deviceDisconnected' || c == 'connectionTerminated' || c == 'operationCancelled' || c == 'deviceNotFound';
   }
 
   int _tick = 0;
@@ -815,13 +836,12 @@ class CollarLink extends ChangeNotifier {
     final now = DateTime.now();
     // Sygnał Bluetooth co 10 s.
     final id = deviceId;
+    // Przez kolejkę – odczyt sygnału równolegle z odczytem danych daje błędy GATT.
     if (id != null && tick % 10 == 0) {
-      try {
-        UniversalBle.readRssi(id).then((v) {
-          diag.bleRssi = v;
-          diag.bleRssiAt = DateTime.now();
-        }).catchError((_) {});
-      } catch (_) {}
+      bleOp(() => UniversalBle.readRssi(id), retries: 0).then((v) {
+        diag.bleRssi = v;
+        diag.bleRssiAt = DateTime.now();
+      }).catchError((_) {});
     }
     final req = positionRequestDue(now);
     if (req != null) {
@@ -911,7 +931,11 @@ class CollarLink extends ChangeNotifier {
           final reply = e.requestId != null && _requestIds.remove(e.requestId);
           if (reply) diag.requestReplies++;
           if (isDog) diag.addSeq(e.position.seq);
-          final v = n.filter.check(e.position, t, packetId: e.packetId);
+          if (isDog) diag.addRx(t);
+          // Tuż po (ponownym) połączeniu tracker oddaje zaległą kolejkę pakietów.
+          final opened = _openedAt;
+          final afterConnect = opened != null && t.difference(opened).inSeconds.abs() <= backlogWindowSec;
+          final v = n.filter.check(e.position, t, packetId: e.packetId, afterConnect: afterConnect);
           if (v.accepted) n.smooth.update(v.fix!.ll, v.fix!.fixAt, accuracyM: v.fix!.accuracyM, speedMs: v.fix!.speedMs);
           _log(e, t, v, reply, n);
           if (!v.accepted) {
@@ -921,7 +945,8 @@ class CollarLink extends ChangeNotifier {
             break;
           }
           final f = v.fix!;
-          if (isDog && f.timeIsFix) diag.addLag(f.lagSec);
+          if (f.historical) diag.historical++;
+          if (isDog && f.timeIsFix && !f.historical) diag.addLag(f.lagSec);
           if (isDog && n.fix != null) {
             diag.addInterval(f.fixAt.difference(n.fix!.fixAt).inMilliseconds / 1000);
           }
@@ -988,6 +1013,8 @@ class CollarLink extends ChangeNotifier {
       distanceM: h == null ? null : const Distance()(h.ll, LatLng(p.lat, p.lng)),
       reply: reply,
       verdict: f == null ? v.reject!.name : (f.moved ? 'ok' : 'postoj'),
+      historical: f?.historical ?? false,
+      noDistanceReason: f == null || dd?.matchedM != null ? null : DogDistance.whyNot(f, HandlerTrack.instance, now: t),
     ));
   }
 
@@ -996,6 +1023,21 @@ class CollarLink extends ChangeNotifier {
     final n = nodeOf(dogId);
     return DogDistance.of(n?.fix, HandlerTrack.instance,
         now: now ?? DateTime.now(), dogFiltered: n?.smooth.position, dogFilteredAccM: n?.smooth.accuracyM);
+  }
+
+  /// Bieżąca prędkość psa (m/s) – tylko z pomiaru na żywo, nie starszego
+  /// niż 2 × rzeczywisty odstęp pomiarów (min. 15 s). Postój = 0. Starej
+  /// prędkości nie pokazujemy jako bieżącej (null = „–”).
+  double? currentSpeedMs(String dogId, {DateTime? now}) {
+    final t = now ?? DateTime.now();
+    if (status(now: t, dogId: dogId) != DogLink.live) return null;
+    final n = nodeOf(dogId);
+    final f = n?.fix;
+    if (f == null) return null;
+    final m = diag.medianInterval;
+    final limit = math.max(15.0, (m ?? 7.5) * 2);
+    if (f.ageSec(t) > limit) return null;
+    return n!.speedMs;
   }
 
   /// Tracker na psie wysyła pozycję zaokrągloną przez ustawienia kanału.
@@ -1037,7 +1079,8 @@ class CollarLink extends ChangeNotifier {
     final loraSilent = !direct && (heardAge == null || heardAge > loraSilentSec);
     final f = d?.fix;
     if (f == null) return loraSilent ? DogLink.loraSilent : DogLink.waitingGps;
-    if (f.ageSec(t) <= liveLimitSec) return DogLink.live;
+    // Pomiar zaległy (z kolejki po połączeniu) nigdy nie jest „na żywo”.
+    if (f.ageSec(t) <= liveLimitSec && !f.historical) return DogLink.live;
     return loraSilent ? DogLink.loraSilent : DogLink.stale;
   }
 
