@@ -245,9 +245,26 @@ class TrackerProfileCard extends StatelessWidget {
           ].join(' '),
           style: small,
         ),
+        const SizedBox(height: 6),
+        Text(
+          [
+            tr('Wybrany tryb: {0}.', [c.mode.label]),
+            tr('Zapisane w trackerze: {0}.', [c.deviceMode?.label ?? tr('własne ustawienia')]),
+            if (c.diag.intervalSpread != null)
+              tr('Obserwowany odstęp: ~{0} s (max {1} s).',
+                  [c.diag.medianInterval!.round(), c.diag.intervalSpread!.max.round()]),
+          ].join(' '),
+          style: small,
+        ),
+        if (c.intervalMismatch) ...[
+          const SizedBox(height: 4),
+          Text(
+              tr('Tracker wysyła rzadziej, niż pozwalają jego ustawienia. Najczęstsze przyczyny: limit nadawania radia, słaby sygnał GPS (np. pod drzewami) albo tracker zasłonięty ciałem psa.'),
+              style: const TextStyle(color: K9.yellow, fontSize: 12.5)),
+        ],
         const SizedBox(height: 8),
         if (state == ProfileApply.waiting)
-          Text(tr('Zapisuję ustawienia. Tracker uruchomi się ponownie i połączy po kilkunastu sekundach…'),
+          Text(tr('Zapisuję ustawienia. Tracker uruchomi się ponownie, a potwierdzenie pojawi się dopiero po odczycie ustawień z trackera (ok. 30 s)…'),
               style: const TextStyle(color: K9.yellow, fontSize: 12.5))
         else if (state == ProfileApply.verified && diff.isEmpty)
           Text(tr('Tracker potwierdził ustawienia trybu {0}.', [c.mode.label]),

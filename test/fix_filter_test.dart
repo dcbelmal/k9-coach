@@ -43,7 +43,8 @@ void main() {
 
     test('duplikat i zła kolejność', () {
       expect(f.check(pos(0, time: 10), at(11)).accepted, isTrue);
-      expect(f.check(pos(0, time: 10), at(12)).reject, FixReject.duplicate);
+      // Ten sam czas pomiaru GPS w nowym pakiecie = ten sam pomiar (nie odświeża aktualności).
+      expect(f.check(pos(0, time: 10), at(12)).reject, FixReject.repeated);
       expect(f.check(pos(20, time: 5), at(13)).reject, FixReject.outOfOrder);
     });
 

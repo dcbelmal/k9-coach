@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:latlong2/latlong.dart';
@@ -13,10 +14,12 @@ import '../l10n/l10n.dart';
 import 'dog_distance.dart';
 import 'fix_filter.dart';
 import 'mesh_proto.dart';
+import 'pos_filter.dart';
 import 'tracker_config.dart';
 
 export 'dog_distance.dart';
 export 'fix_filter.dart' show CollarFix, FixReject, CollarDiagnostics, FixLogEntry, Spread;
+export 'pos_filter.dart';
 export 'tracker_config.dart';
 
 /// UUID usługi i charakterystyk Bluetooth urządzeń Meshtastic.
@@ -40,10 +43,33 @@ class CollarNode {
   DateTime? lastHeard;
   int? rssi;
 
-  /// Ostatni przyjęty (sprawdzony) pomiar GPS.
+  /// Ostatni przyjęty (sprawdzony) pomiar GPS. Każdy nowy pomiar – także
+  /// z identycznymi współrzędnymi (postój) – odświeża go.
   CollarFix? fix;
   final FixFilter filter;
   CollarNode(this.num) : filter = FixFilter(num);
+
+  /// Kiedy telefon dostał ostatni pakiet od tego urządzenia (dowolny).
+  DateTime? lastPacketAt;
+
+  /// Filtr adaptacyjny – pozycja do wyświetlania i odległości (trasa i
+  /// dystans liczą się z surowych pomiarów).
+  final smooth = PosFilter();
+
+  /// Pozycja do pokazania na mapie: po filtrze, a bez niego surowa.
+  LatLng? get displayLl => fix == null ? null : (smooth.position ?? fix!.ll);
+
+  /// Szacowany błąd pozycji do pokazania (m).
+  double? get displayAccM {
+    final f = fix;
+    if (f == null) return null;
+    final raw = f.accuracyM ?? DogDistance.unknownDogAccM;
+    final a = smooth.accuracyM;
+    return a == null ? raw : math.max(a, raw * 0.5);
+  }
+
+  /// Chwila ostatniego pomiaru z ruchem (null = brak).
+  DateTime? get movedAt => lastMoved?.fixAt;
 
   /// Dwa ostatnie pomiary z ruchem – do kierunku i prędkości.
   CollarFix? lastMoved, prevMoved;
@@ -84,10 +110,10 @@ class CollarNode {
 /// użytkownik może zatwierdzić, a rzeczywisty odstęp pokazujemy osobno
 /// ([CollarDiagnostics.medianInterval]).
 enum TrackMode {
-  sport('Sportowy', '1–5 s', 2, 5, TrackerProfile.sport),
-  walk('Spacerowy', '10–15 s', 5, 15, TrackerProfile.walk),
-  saver('Oszczędny', '30–60 s', 5, 60, TrackerProfile.saver),
-  search('Poszukiwanie', 'najczęściej', 1, 5, TrackerProfile.sport);
+  sport('Sportowy', 'ok. 5 s', 2, 5, TrackerProfile.sport),
+  walk('Spacerowy', 'ok. 15 s', 5, 15, TrackerProfile.walk),
+  saver('Oszczędny', 'ok. 60 s', 5, 60, TrackerProfile.saver),
+  search('Poszukiwanie', 'najczęściej (ok. 5 s)', 1, 5, TrackerProfile.sport);
 
   final String _label;
   final String range;
@@ -229,6 +255,24 @@ class CollarLink extends ChangeNotifier {
   /// Ustawienia trackera pasują do trybu (null = nie wiadomo).
   bool? get trackerMatchesMode => direct && config.known ? mode.profile.matches(config) : null;
 
+  /// Tryb, którego ustawienia są zapisane w trackerze (odczyt z urządzenia);
+  /// null = ustawienia własne albo nieznane.
+  TrackMode? get deviceMode {
+    if (!direct || !config.known) return null;
+    for (final m in const [TrackMode.sport, TrackMode.walk, TrackMode.saver]) {
+      if (m.profile.matches(config)) return m;
+    }
+    return null;
+  }
+
+  /// Obserwowany odstęp wyraźnie gorszy niż wynika z ustawień trackera
+  /// (mediana ponad 1,5 × albo pojedyncze przerwy ponad 4 × i ponad 30 s).
+  bool get intervalMismatch {
+    final e = expectedIntervalSec, m = diag.medianInterval, sp = diag.intervalSpread;
+    if (e == null || m == null) return false;
+    return m > e * 1.5 || (sp != null && sp.max > math.max(30, e * 4));
+  }
+
   /// Zmiana ustawień trackera: stan, profil, błąd.
   ProfileApply applyState = ProfileApply.idle;
   TrackerProfile? pendingProfile;
@@ -251,15 +295,20 @@ class CollarLink extends ChangeNotifier {
     applyState = ProfileApply.waiting;
     applyError = null;
     _appliedAt = DateTime.now();
+    _verifyPending = false;
+    _expectReboot = true;
     notifyListeners();
     try {
-      // Każda sekcja osobno: firmware zapisuje ją od razu i po kilku
-      // sekundach uruchamia się ponownie.
+      // Każda sekcja osobno, przez kolejkę Bluetooth (bez równoległego
+      // odczytu). Firmware zapisuje sekcję od razu i po kilku sekundach
+      // uruchamia się ponownie – wtedy Android zgłasza zwykle błąd GATT 133
+      // albo rozłączenie. To oczekiwane: łączymy się ponownie i sprawdzamy.
       if (lora != null) await _write(encodeSetConfig(me, 6, lora, id: meshRandomId()));
       await _write(encodeSetConfig(me, 2, pos, id: meshRandomId()));
     } catch (e) {
+      _expectReboot = false;
       applyState = ProfileApply.failed;
-      applyError = tr('Nie udało się wysłać ustawień: {0}', [e]);
+      applyError = gattHint(e) ?? tr('Nie udało się wysłać ustawień: {0}', [e]);
       notifyListeners();
       return applyError;
     }
@@ -268,9 +317,8 @@ class CollarLink extends ChangeNotifier {
     _verify = Timer(const Duration(seconds: 25), () async {
       if (applyState != ProfileApply.waiting) return;
       if (connected) {
-        _configId = meshRandomId();
         try {
-          await _write(encodeWantConfig(_configId));
+          await verifyRead();
           await _drain();
         } catch (_) {}
       }
@@ -284,10 +332,25 @@ class CollarLink extends ChangeNotifier {
     return null;
   }
 
+  /// Prosi tracker o pełny odczyt ustawień, który potwierdzi (albo nie)
+  /// zapis profilu. Zwraca identyfikator odczytu.
+  @visibleForTesting
+  Future<int> verifyRead() async {
+    _expectReboot = false;
+    _configId = meshRandomId();
+    _verifyPending = true;
+    await _write(encodeWantConfig(_configId));
+    return _configId;
+  }
+
   /// Po odczycie ustawień: czy zmiana z aplikacji naprawdę się zapisała.
-  void _checkApplied(DateTime t) {
+  /// Liczy się tylko pełny odczyt ustawień rozpoczęty po zapisie (po
+  /// ponownym połączeniu albo nasz ponowny odczyt) – nie wcześniejszy.
+  void _checkApplied(DateTime t, int completeId) {
     final p = pendingProfile, at = _appliedAt;
     if (applyState != ProfileApply.waiting || p == null || at == null || !t.isAfter(at)) return;
+    if (!_verifyPending || completeId != _configId) return;
+    _verifyPending = false;
     _verify?.cancel();
     if (p.matches(config)) {
       applyState = ProfileApply.verified;
@@ -306,6 +369,22 @@ class CollarLink extends ChangeNotifier {
   /// Identyfikatory wysłanych zapytań o pozycję (do liczenia odpowiedzi).
   final Set<int> _requestIds = {};
   DateTime? _openedAt;
+
+  /// Odczyt ustawień po zapisie – tylko on potwierdza zmianę.
+  bool _verifyPending = false;
+
+  /// Tracker uruchomi się ponownie po zapisie ustawień (rozłączenie oczekiwane).
+  bool _expectReboot = false;
+
+  /// Czytelny opis błędu Bluetooth GATT (133 i podobne), null = inny błąd.
+  static String? gattHint(Object e) {
+    final s = e.toString();
+    if (s.contains('133') || s.toUpperCase().contains('GATT')) {
+      return tr('Błąd Bluetooth (GATT {0}). Zwykle znaczy, że połączenie zerwało się w trakcie operacji – np. tracker uruchamia się ponownie albo jest za daleko. Aplikacja połączy się ponownie i sprawdzi ustawienia.',
+          [RegExp(r'133|\d{2,3}').firstMatch(s)?.group(0) ?? '?']);
+    }
+    return null;
+  }
 
   /// Przypisanie trackerów do profili psów: numer urządzenia → id psa.
   final Map<int, String> assigned = {};
@@ -607,6 +686,9 @@ class CollarLink extends ChangeNotifier {
       _openedAt = DateTime.now();
       config.clear();
       _configId = meshRandomId();
+      // Po zapisie ustawień ten odczyt je weryfikuje.
+      if (applyState == ProfileApply.waiting) _verifyPending = true;
+      _expectReboot = false;
       await _write(encodeWantConfig(_configId));
       await _drain();
       state = CollarState.connected;
@@ -642,6 +724,12 @@ class CollarLink extends ChangeNotifier {
     state = CollarState.lost;
     diag.reconnects++;
     notifyListeners();
+    // Po zapisie ustawień tracker uruchamia się ponownie – łączymy po 8 s.
+    if (_expectReboot) {
+      _retry?.cancel();
+      _retry = Timer(const Duration(seconds: 8), _open);
+      return;
+    }
     // Ponawianie z rosnącą przerwą (5, 10, 20, 30 s) – oszczędza baterię telefonu.
     _retry?.cancel();
     _retry = Timer(Duration(seconds: _retrySec), _open);
@@ -681,10 +769,38 @@ class CollarLink extends ChangeNotifier {
 
   Future<void> _write(Uint8List data) async {
     final w = writeOverride;
-    if (w != null) return w(data);
     final id = deviceId;
-    if (id == null) return;
-    await UniversalBle.write(id, MeshBle.service, MeshBle.toRadio, data);
+    if (w == null && id == null) return;
+    await bleOp(() => w != null ? w(data) : UniversalBle.write(id!, MeshBle.service, MeshBle.toRadio, data), retries: 2);
+  }
+
+  /// Kolejka operacji Bluetooth: jedna naraz. Android nie obsługuje dwóch
+  /// operacji GATT jednocześnie – zapis w trakcie odczytu kończy się często
+  /// błędem 133. Nieudana operacja jest ponawiana najwyżej [retries] razy
+  /// (po 0,4 s, 0,8 s…), potem błąd idzie dalej.
+  Future<void> _bleChain = Future.value();
+
+  @visibleForTesting
+  Future<T> bleOp<T>(Future<T> Function() op, {int retries = 1}) {
+    final c = Completer<T>();
+    _bleChain = _bleChain.then((_) async {
+      for (var attempt = 0;; attempt++) {
+        try {
+          c.complete(await op());
+          return;
+        } catch (e) {
+          diag.lastBleError = e.toString();
+          if (attempt >= retries || state == CollarState.off) {
+            diag.bleFailures++;
+            c.completeError(e);
+            return;
+          }
+          diag.bleRetries++;
+          await Future<void>.delayed(Duration(milliseconds: 400 * (attempt + 1)));
+        }
+      }
+    });
+    return c.future;
   }
 
   int _tick = 0;
@@ -692,6 +808,8 @@ class CollarLink extends ChangeNotifier {
   void _tickPoll() {
     if (state != CollarState.connected) return;
     final tick = _tick++;
+    // W trakcie zapisu ustawień nie odczytujemy – kolejka i tak by czekała.
+    if (_expectReboot) return;
     // Odczyt kolejki co [TrackMode.readSec] s (powiadomienia i tak budzą odczyt od razu).
     if (tick % mode.readSec == 0) _drain();
     final now = DateTime.now();
@@ -746,7 +864,7 @@ class CollarLink extends ChangeNotifier {
       do {
         _drainAgain = false;
         for (var i = 0; i < 200; i++) {
-          final bytes = await UniversalBle.read(id, MeshBle.service, MeshBle.fromRadio);
+          final bytes = await bleOp(() => UniversalBle.read(id, MeshBle.service, MeshBle.fromRadio));
           diag.bleReads++;
           if (bytes.isEmpty) break;
           diag.packets++;
@@ -786,14 +904,16 @@ class CollarLink extends ChangeNotifier {
         case MeshPositionEvent():
           final n = nodes.putIfAbsent(e.node, () => CollarNode(e.node));
           n.lastHeard = t;
+          n.lastPacketAt = t;
           n.rssi = e.rssi ?? n.rssi;
           diag.positions++;
           final isDog = e.node == dogNode;
           final reply = e.requestId != null && _requestIds.remove(e.requestId);
           if (reply) diag.requestReplies++;
           if (isDog) diag.addSeq(e.position.seq);
-          final v = n.filter.check(e.position, t);
-          _log(e, t, v, reply);
+          final v = n.filter.check(e.position, t, packetId: e.packetId);
+          if (v.accepted) n.smooth.update(v.fix!.ll, v.fix!.fixAt, accuracyM: v.fix!.accuracyM, speedMs: v.fix!.speedMs);
+          _log(e, t, v, reply, n);
           if (!v.accepted) {
             diag.reject(v.reject!);
             // Zaokrąglona pozycja: pokazujemy ostrzeżenie, ale nie traktujemy jej jako pomiaru.
@@ -813,6 +933,7 @@ class CollarLink extends ChangeNotifier {
           n.position = e.position;
           n.positionAt = t;
           diag.accepted++;
+          if (!f.moved) diag.still++;
           _rememberLast(e.node, f, t);
           _fixes.add(f);
         case MeshBattery():
@@ -822,7 +943,7 @@ class CollarLink extends ChangeNotifier {
         case MeshConfigEvent():
           config.set(e.section, e.raw, t);
         case MeshConfigComplete():
-          _checkApplied(t);
+          _checkApplied(t, e.id);
         case MeshRoutingEvent():
           // Błąd dostarczenia (np. limit nadawania radia) – do diagnostyki.
           if (e.error != 0) diag.lastError = tr('Błąd Meshtastic nr {0} (pakiet {1})', [e.error, e.requestId]);
@@ -833,14 +954,23 @@ class CollarLink extends ChangeNotifier {
     notifyListeners();
   }
 
-  void _log(MeshPositionEvent e, DateTime t, FixVerdict v, bool reply) {
+  void _log(MeshPositionEvent e, DateTime t, FixVerdict v, bool reply, CollarNode n) {
     final p = e.position;
     final f = v.fix;
     final at = f?.fixAt ?? (p.timeIsFix ? p.time : null);
     final h = at == null ? null : HandlerTrack.instance.at(at);
+    final dd = f == null
+        ? null
+        : DogDistance.of(f, HandlerTrack.instance, now: t, dogFiltered: n.smooth.position, dogFilteredAccM: n.smooth.accuracyM);
+    final phone = HandlerTrack.instance.last;
     diag.addLog(FixLogEntry(
       receivedAt: t,
       node: e.node,
+      packetId: e.packetId,
+      phoneAgeSec: phone == null ? null : t.difference(phone.at).inMilliseconds / 1000,
+      compareDtSec: dd?.compareDtSec,
+      filteredDistanceM: dd?.matchedM,
+      uncertaintyM: dd?.matchedUncertaintyM,
       fixAt: p.timeIsFix ? p.time : null,
       sentAt: p.sentTime,
       lat: p.lat,
@@ -862,8 +992,11 @@ class CollarLink extends ChangeNotifier {
   }
 
   /// Odległość psa od przewodnika z dopasowaniem czasu i niepewnością.
-  DogDistance? distanceTo(String dogId, {DateTime? now}) =>
-      DogDistance.of(nodeOf(dogId)?.fix, HandlerTrack.instance, now: now ?? DateTime.now());
+  DogDistance? distanceTo(String dogId, {DateTime? now}) {
+    final n = nodeOf(dogId);
+    return DogDistance.of(n?.fix, HandlerTrack.instance,
+        now: now ?? DateTime.now(), dogFiltered: n?.smooth.position, dogFilteredAccM: n?.smooth.accuracyM);
+  }
 
   /// Tracker na psie wysyła pozycję zaokrągloną przez ustawienia kanału.
   bool get dogCoarse => dog?.position?.coarse ?? false;
@@ -933,6 +1066,9 @@ class CollarLink extends ChangeNotifier {
     _requestIds.clear();
     _openedAt = null;
     writeOverride = null;
+    _verifyPending = false;
+    _expectReboot = false;
+    _bleChain = Future.value();
     lastSeen.clear();
     _lastSeenSaved.clear();
     _loaded = loaded;

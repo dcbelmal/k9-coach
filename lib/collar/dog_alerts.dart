@@ -156,7 +156,7 @@ class AlertEngine {
     if (!live && since != null && i.now.difference(since).inSeconds >= settings.lostSec) {
       if (!_lostActive) {
         _lostActive = true;
-        fire(AlertKind.lost, _lostText(i.link));
+        fire(AlertKind.lost, _lostText(i));
       }
     } else if (live && _lostActive) {
       _lostActive = false;
@@ -221,10 +221,14 @@ class AlertEngine {
     return out;
   }
 
-  String _lostText(DogLink l) => switch (l) {
+  /// Ostrzeżenie o nieaktualnej pozycji – osobne od alarmu oddalenia:
+  /// mówi, czego brakuje (Bluetooth, radio czy nowy pomiar GPS).
+  String _lostText(AlertInput i) => switch (i.link) {
         DogLink.bluetoothOff || DogLink.connecting => tr('Utracono połączenie Bluetooth z trackerem.'),
         DogLink.loraSilent => tr('Brak sygnału radiowego od psa.'),
-        _ => tr('Brak świeżej pozycji psa.'),
+        _ => i.fix == null
+            ? tr('Brak świeżej pozycji psa.')
+            : tr('Brak nowej pozycji psa od {0} sekund. Bluetooth działa.', [i.now.difference(i.fix!.fixAt).inSeconds]),
       };
 }
 
@@ -283,14 +287,16 @@ class DogAlerts extends ChangeNotifier {
 
   /// Pozycja przewodnika; trafia też do historii pozycji telefonu
   /// ([HandlerTrack]), z której liczymy odległość w chwili pomiaru psa.
-  void setHandler(LatLng? p, {double? accuracyM, DateTime? at}) {
+  void setHandler(LatLng? p, {double? accuracyM, DateTime? at, double? speedMs}) {
     final now = DateTime.now();
     handler = p;
     handlerAt = p == null ? null : now;
     if (p != null) {
       // Czas pomiaru z GPS telefonu, chyba że wyraźnie odbiega od zegara.
       final t = at != null && now.difference(at).inSeconds.abs() <= 30 ? at.toLocal() : now;
-      HandlerTrack.instance.add(HandlerFix(t, p.latitude, p.longitude, accuracyM: accuracyM != null && accuracyM > 0 ? accuracyM : null));
+      HandlerTrack.instance.add(HandlerFix(t, p.latitude, p.longitude,
+          accuracyM: accuracyM != null && accuracyM > 0 ? accuracyM : null,
+          speedMs: speedMs != null && speedMs >= 0 ? speedMs : null));
     }
   }
 
@@ -316,7 +322,7 @@ class DogAlerts extends ChangeNotifier {
       fix: c.dog?.fix,
       handler: h,
       battery: c.dog?.battery,
-      distance: DogDistance.of(c.dog?.fix, HandlerTrack.instance, now: t),
+      distance: c.distanceTo(CollarLink.activeDog(), now: t),
     ));
     for (final a in out) {
       _emit(a);

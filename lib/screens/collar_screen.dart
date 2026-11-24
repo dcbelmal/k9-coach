@@ -5,6 +5,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:universal_ble/universal_ble.dart';
 
 import '../collar/collar_link.dart';
+import '../collar/csv_file.dart';
 import '../collar/mesh_proto.dart';
 import '../collar/tracker_driver.dart';
 import '../dogs/dog_profiles.dart';
@@ -63,7 +64,12 @@ String dogLinkText(CollarLink c, {DateTime? now, String? dogId}) {
     case DogLink.waitingGps:
       return tr('czekam na GPS psa');
     case DogLink.stale:
-      return tr('brak świeżego GPS');
+      // Bluetooth działa, ale nowego pomiaru GPS nie ma – to nie to samo co postój.
+      final heard = (dogId == null ? c.dog : c.nodeOf(dogId))?.lastPacketAt;
+      return [
+        if (f != null) tr('brak nowego pomiaru GPS od {0} s', [(now ?? DateTime.now()).difference(f.fixAt).inSeconds]),
+        if (heard != null) tr('ostatni pakiet {0}', [collarAge(heard, now: now)]),
+      ].join(' · ');
     case DogLink.live:
       final m = c.diag.medianInterval;
       return [
@@ -232,11 +238,13 @@ class _CollarScreenState extends State<CollarScreen> {
     final n = c.dog;
     final fix = n?.fix;
     final phone = HandlerTrack.instance.last;
+    final dd = c.distanceTo(CollarLink.activeDog());
     String spread(Spread x) => '${x.min.round()} / ${x.avg.round()} / ${x.max.round()} s';
     String why(FixReject r) => switch (r) {
       FixReject.coarse => tr('zaokrąglona pozycja'),
       FixReject.stale => tr('nieaktualne'),
-      FixReject.duplicate => tr('powtórzone'),
+      FixReject.duplicate => tr('ten sam pakiet drugi raz'),
+      FixReject.repeated => tr('ten sam pomiar GPS w nowym pakiecie'),
       FixReject.outOfOrder => tr('w złej kolejności'),
       FixReject.weak => tr('słaby sygnał GPS'),
       FixReject.jump => tr('niemożliwy skok'),
@@ -259,22 +267,32 @@ class _CollarScreenState extends State<CollarScreen> {
             row(tr('Pakiety z urządzenia'), '${d.packets}'),
             row(tr('Pozycje odebrane'), '${d.positions}'),
             row(tr('Pozycje przyjęte'), '${d.accepted}'),
+            row(tr('w tym postój (bez dystansu)'), '${d.still}'),
             for (final e in d.rejected.entries) row(tr('Odrzucone: {0}', [why(e.key)]), '${e.value}'),
             row(tr('Rzeczywisty odstęp pomiarów'), m == null ? '–' : tr('~{0} s', [m.round()])),
             if (iv != null) row(tr('Odstęp min / śr. / max'), spread(iv)),
             if (c.expectedIntervalSec != null) row(tr('Odstęp wg ustawień trackera'), tr('~{0} s', [c.expectedIntervalSec!.round()])),
             if (lag != null) row(tr('Opóźnienie pomiar → telefon (min / śr. / max)'), spread(lag)),
-            row(tr('Zgubione pakiety (luki w numeracji)'), '${d.missingSeq}'),
+            row(tr('Zgubione pakiety'), d.missingSeq == null ? tr('nieznane – tracker nie numeruje pakietów') : '${d.missingSeq}'),
             row(tr('Zapytania o pozycję / odpowiedzi'), '${d.requestsSent} / ${d.requestReplies}'),
             row(tr('Odczyty Bluetooth'), '${d.bleReads}'),
+            row(tr('Operacje Bluetooth ponowione / nieudane'), '${d.bleRetries} / ${d.bleFailures}'),
+            if (d.lastBleError != null) row(tr('Ostatni błąd Bluetooth'), d.lastBleError!),
             row(tr('Sygnał Bluetooth'), d.bleRssi == null ? '–' : '${d.bleRssi} dBm'),
             if (fix != null) ...[
               row(tr('GPS psa: satelity / HDOP'),
                   '${fix.sats ?? '–'} / ${fix.hdop == null ? '–' : fix.hdop!.toStringAsFixed(1).replaceAll('.', ',')}'),
               row(tr('GPS psa: szacowany błąd'), fix.accuracyM == null ? tr('tracker nie podaje') : '~${fix.accuracyM!.round()} m'),
               row(tr('Czas pomiaru psa'), fix.timeIsFix ? tr('z GPS trackera') : tr('nieznany – przyjmuję czas odbioru')),
+              row(tr('Wiek pozycji psa'), collarAge(fix.fixAt)),
+              if (n?.movedAt != null) row(tr('Ostatni ruch psa'), collarAge(n!.movedAt)),
+              if (n?.lastPacketAt != null) row(tr('Ostatni pakiet od psa'), collarAge(n!.lastPacketAt)),
             ],
             row(tr('GPS telefonu: szacowany błąd'), phone?.accuracyM == null ? '–' : '~${phone!.accuracyM!.round()} m'),
+            row(tr('Wiek pozycji telefonu'), phone == null ? '–' : collarAge(phone.at)),
+            if (dd?.compareDtSec != null) row(tr('Różnica czasu porównywanych pozycji'), '${dd!.compareDtSec!.abs().toStringAsFixed(1).replaceAll('.', ',')} s'),
+            if (dd?.rawM != null) row(tr('Odległość surowa / po filtrze'), '${dd!.rawM!.round()} / ${dd.matchedM!.round()} m'),
+            if (dd?.bestUncertaintyM != null) row(tr('Niepewność odległości'), '± ${dd!.bestUncertaintyM!.round()} m'),
             if (n?.rssi != null && !c.direct) row(tr('Sygnał LoRa od psa'), '${n!.rssi} dBm'),
             row(tr('Ponowne połączenia'), '${d.reconnects}'),
             if (d.lastPacketAt != null) row(tr('Ostatni pakiet'), collarAge(d.lastPacketAt)),
@@ -294,6 +312,27 @@ class _CollarScreenState extends State<CollarScreen> {
                       },
                 icon: const Icon(Icons.copy_rounded, size: 18),
                 label: Text(tr('Kopiuj dziennik pomiarów (CSV)')),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: FilledButton.tonalIcon(
+                style: FilledButton.styleFrom(minimumSize: const Size(0, 40)),
+                onPressed: d.log.isEmpty
+                    ? null
+                    : () async {
+                        final t = DateTime.now();
+                        String two(int v) => v.toString().padLeft(2, '0');
+                        final name = 'valkor-track-${t.year}${two(t.month)}${two(t.day)}-${two(t.hour)}${two(t.minute)}.csv';
+                        final path = await saveCsvFile(name, d.csv());
+                        if (!mounted) return;
+                        toast(context, path == null
+                            ? tr('Nie udało się zapisać pliku. Użyj kopiowania do schowka.')
+                            : tr('Zapisano {0} wierszy: {1}', [d.log.length, path]));
+                      },
+                icon: const Icon(Icons.save_alt_rounded, size: 18),
+                label: Text(tr('Zapisz cały test do pliku (CSV)')),
               ),
             ),
           ],

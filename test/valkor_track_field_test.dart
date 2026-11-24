@@ -185,13 +185,30 @@ void main() {
   });
 
   group('Powtórzone pakiety i złe znaczniki czasu', () {
-    test('ten sam numer kolejny i miejsce – duplikat; ten sam pomiar z nowym czasem wysłania – duplikat', () {
+    test('ten sam pakiet – duplikat; ten sam pomiar GPS w nowym pakiecie – powtórzony', () {
       final f = FixFilter(1);
-      expect(f.check(pos(50, 20, at(0), seq: 7), at(2)).accepted, isTrue);
-      expect(f.check(pos(50, 20, at(0), seq: 7), at(3)).reject, FixReject.duplicate);
-      // Firmware wysyła ten sam pomiar drugi raz (nowe pole time, ten sam timestamp).
-      final again = MeshPosition(50, 20, time: at(0), sentTime: at(10), seq: 8);
-      expect(f.check(again, at(10)).reject, FixReject.duplicate);
+      expect(f.check(pos(50, 20, at(0), seq: 1), at(2), packetId: 11).accepted, isTrue);
+      expect(f.check(pos(50, 20, at(0), seq: 1), at(3), packetId: 11).reject, FixReject.duplicate);
+      // Firmware wysyła ten sam pomiar drugi raz (nowy pakiet, ten sam timestamp).
+      final again = MeshPosition(50, 20, time: at(0), sentTime: at(10), seq: 1);
+      expect(f.check(again, at(10), packetId: 12).reject, FixReject.repeated);
+    });
+
+    test('regresja: identyczne współrzędne i seq = 1, ale nowy czas GPS – nowy pomiar (postój)', () {
+      final f = FixFilter(1);
+      for (var i = 0; i < 5; i++) {
+        final v = f.check(pos(50, 20, at(i * 5), seq: 1, hdop: 0.6), at(i * 5 + 1), packetId: 100 + i);
+        expect(v.accepted, isTrue, reason: 'pomiar $i');
+        expect(v.fix!.fixAt, at(i * 5));
+        if (i > 0) expect(v.fix!.moved, isFalse);
+      }
+    });
+
+    test('powtórzony pakiet ze starym czasem GPS nie odświeża aktualności', () {
+      final f = FixFilter(1);
+      f.check(pos(50, 20, at(10)), at(11), packetId: 1);
+      expect(f.check(pos(50, 20, at(5)), at(20), packetId: 2).reject, FixReject.outOfOrder);
+      expect(f.last!.fixAt, at(10));
     });
 
     test('zegar trackera bez GPS (różnica > 10 min) – czas odbioru, oznaczony jako nieznany', () {
@@ -218,20 +235,36 @@ void main() {
   });
 
   group('Diagnostyka', () {
-    test('luki w numeracji, opóźnienia, odstępy i eksport CSV', () {
+    test('seq stale 1 (Meshtastic) – liczba zgubionych pakietów nieznana; rosnąca numeracja – liczona', () {
+      final d = CollarDiagnostics();
+      for (var i = 0; i < 10; i++) {
+        d.addSeq(1);
+      }
+      expect(d.seqReliable, isFalse);
+      expect(d.missingSeq, isNull);
+      final d2 = CollarDiagnostics();
+      for (final s in [1, 2, 3, 4, 5, 6, 8, 9, 10]) {
+        d2.addSeq(s);
+      }
+      expect(d2.missingSeq, 1);
+    });
+
+    test('opóźnienia, odstępy, postoje i eksport CSV', () {
       final c = CollarLink.instance..resetForTest();
       c.deviceId = 'x';
       c.state = CollarState.connected;
       c.handleEvents([const MeshMyInfo(1)], now: at(0));
-      for (final (i, seq) in [1, 2, 5, 6].indexed) {
+      for (var i = 0; i < 4; i++) {
         final fix = at(i * 15);
-        c.handleEvents([MeshPositionEvent(1, MeshPosition(north(i * 30.0), 20, time: fix, seq: seq, hdop: 1))],
+        c.handleEvents([MeshPositionEvent(1, MeshPosition(north(i < 2 ? 0 : 30.0), 20, time: fix, seq: 1, hdop: 1), packetId: 50 + i)],
             now: fix.add(const Duration(seconds: 9)));
       }
       final d = c.diag;
-      expect(d.missingSeq, 2);
+      expect(d.missingSeq, isNull);
+      expect(d.still, 2); // pomiar 2 (postój) i 4 (blisko 3.)
       expect(d.lagSpread!.avg, 9);
       expect(d.intervalSpread!.min, 15);
+      expect(d.accepted, 4);
       expect(d.log, hasLength(4));
       final csv = d.csv().split('\n');
       expect(csv.first, FixLogEntry.csvHeader);
@@ -360,19 +393,25 @@ void main() {
       expect(cfgMsg.message(2)!.integer(1), 5);
       expect(c.applyState, ProfileApply.waiting);
 
-      // Tracker po restarcie podaje stare ustawienia – zmiana się nie zapisała.
+      // Odczyt ustawień, który nie jest naszym odczytem po zapisie – nic nie potwierdza.
       await Future<void>.delayed(const Duration(milliseconds: 5));
-      c.handleEvents([MeshConfigEvent(2, posCfg()), const MeshConfigComplete(2)]);
+      c.handleEvents([MeshConfigEvent(2, posCfg(broadcast: 5, gps: 2)), const MeshConfigComplete(2)]);
+      expect(c.applyState, ProfileApply.waiting);
+
+      // Nasz odczyt po zapisie: tracker podaje stare ustawienia – zmiana się nie zapisała.
+      final id1 = await c.verifyRead();
+      c.handleEvents([MeshConfigEvent(2, posCfg()), MeshConfigComplete(id1)]);
       expect(c.applyState, ProfileApply.failed);
       expect(c.applyError, isNotNull);
 
       // Drugie podejście – tracker podaje nowe ustawienia.
       await c.applyProfile(TrackerProfile.sport);
       await Future<void>.delayed(const Duration(milliseconds: 5));
+      final id2 = await c.verifyRead();
       c.handleEvents([
         MeshConfigEvent(2, posCfg(broadcast: 5, gps: 2)),
         MeshConfigEvent(6, loraCfg(preset: 6)),
-        const MeshConfigComplete(3),
+        MeshConfigComplete(id2),
       ]);
       expect(c.applyState, ProfileApply.verified);
       expect(c.trackerMatchesMode, isTrue);

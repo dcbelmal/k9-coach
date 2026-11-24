@@ -89,6 +89,12 @@ class K9CoachApp extends StatelessWidget {
         supportedLocales: [for (final l in appLanguages) Locale(l.code)],
         localizationsDelegates: GlobalMaterialLocalizations.delegates,
         home: _Boot(skipSplash: _started),
+        // Android 15+ rysuje aplikację pod systemowym paskiem nawigacji –
+        // odsuwamy całą treść (także arkusze i przyciski na dole ekranu).
+        builder: (context, child) => ColoredBox(
+          color: K9.bg,
+          child: SafeArea(top: false, left: false, right: false, child: child ?? const SizedBox.shrink()),
+        ),
       ),
     );
   }
