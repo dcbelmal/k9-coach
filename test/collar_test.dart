@@ -62,8 +62,11 @@ void main() {
       expect(p.position.lat, closeTo(52.2297, 1e-7));
       expect(p.position.lng, closeTo(-21.0122, 1e-7));
       expect(p.position.altitude, 120);
-      expect(p.position.speedMs, 4);
+      // Tracker podaje prędkość w km/h – aplikacja liczy w m/s.
+      expect(p.position.speedMs, closeTo(4 / 3.6, 1e-9));
+      // Bez pola timestamp (7) czas wysłania (4) zastępuje czas pomiaru – oznaczone.
       expect(p.position.time!.toUtc(), DateTime.utc(2023, 11, 14, 22, 13, 20));
+      expect(p.position.timeIsFix, isFalse);
       expect(p.rssi, -90);
     });
 

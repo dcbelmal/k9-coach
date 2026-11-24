@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:latlong2/latlong.dart';
 
 import 'mesh_proto.dart';
@@ -21,8 +23,24 @@ class CollarFix {
   /// „ostatni pomiar”, ale nie dodaje punktu ani dystansu.
   final bool moved;
 
+  /// true = [fixAt] to czas pomiaru podany przez GPS trackera; false = tracker
+  /// podał tylko czas wysłania albo nic (prawdziwy pomiar mógł być wcześniej).
+  final bool timeIsFix;
+
+  /// Kierunek ruchu z trackera (stopnie), HDOP i numer kolejny pozycji.
+  final double? courseDeg, hdop;
+  final int? seq;
+
   const CollarFix(this.node, this.lat, this.lng, this.fixAt,
-      {DateTime? receivedAt, this.speedMs, this.accuracyM, this.sats, this.moved = true})
+      {DateTime? receivedAt,
+      this.speedMs,
+      this.accuracyM,
+      this.sats,
+      this.moved = true,
+      this.timeIsFix = true,
+      this.courseDeg,
+      this.hdop,
+      this.seq})
       : receivedAt = receivedAt ?? fixAt;
 
   LatLng get ll => LatLng(lat, lng);
@@ -109,12 +127,14 @@ class FixFilter {
 
     // Czas pomiaru: z pakietu, chyba że zegar trackera jest wyraźnie zły.
     var fixAt = receivedAt;
+    var timeIsFix = false;
     final t = p.time;
     if (t != null) {
       final skew = receivedAt.difference(t).inMilliseconds / 1000;
       if (skew.abs() <= clockSkewSec) {
         // Pomiar „z przyszłości” o kilka sekund to różnica zegarów – przycinamy.
         fixAt = skew < 0 ? receivedAt : t;
+        timeIsFix = p.timeIsFix;
       }
     }
     if (receivedAt.difference(fixAt).inMilliseconds / 1000 > maxAgeSec) {
@@ -124,6 +144,8 @@ class FixFilter {
     final prev = _last;
     if (prev != null) {
       final same = (prev.lat - p.lat).abs() < 1e-7 && (prev.lng - p.lng).abs() < 1e-7;
+      // Ten sam numer kolejny i to samo miejsce = ten sam pakiet odczytany drugi raz.
+      if (p.seq != null && p.seq == prev.seq && same) return const FixVerdict.no(FixReject.duplicate);
       if (t != null && fixAt == prev.fixAt && same) return const FixVerdict.no(FixReject.duplicate);
       if (t != null && fixAt.isBefore(prev.fixAt)) return const FixVerdict.no(FixReject.outOfOrder);
       if (t != null && fixAt == prev.fixAt) return const FixVerdict.no(FixReject.duplicate);
@@ -142,17 +164,134 @@ class FixFilter {
       final dt = fixAt.difference(ref.fixAt).inMilliseconds / 1000;
       if (dt > 0 && d / dt > maxSpeedMs) return const FixVerdict.no(FixReject.jump);
       if (dt <= 0 && d > 20) return const FixVerdict.no(FixReject.jump);
-      // Dryf w miejscu: przesunięcie w granicach błędu GPS.
-      final acc = p.accuracyM ?? 0;
-      final still = d < minMoveM || d < acc * 0.6;
-      if (still && (p.speedMs == null || p.speedMs! < 1)) moved = false;
+      moved = !isDrift(d, p.accuracyM, p.speedMs);
     }
 
     final fix = CollarFix(node, p.lat, p.lng, fixAt,
-        receivedAt: receivedAt, speedMs: p.speedMs, accuracyM: p.accuracyM, sats: p.sats, moved: moved);
+        receivedAt: receivedAt,
+        speedMs: p.speedMs,
+        accuracyM: p.accuracyM,
+        sats: p.sats,
+        moved: moved,
+        timeIsFix: timeIsFix,
+        courseDeg: p.courseDeg,
+        hdop: p.hdop,
+        seq: p.seq);
     _last = fix;
     if (moved) _lastMoved = fix;
     return FixVerdict.ok(fix);
+  }
+
+  /// Czy przesunięcie o [d] m od ostatniego punktu z ruchem to dryf GPS
+  /// w miejscu. Promień dryfu = szacowany błąd pozycji (co najmniej
+  /// [minMoveM], bez danych 8 m). Prędkość z trackera (m/s) rozstrzyga,
+  /// gdy jest: poniżej 0,5 m/s pies stoi (do 2 × promień), od 1,5 m/s idzie.
+  static bool isDrift(double d, double? accuracyM, double? speedMs) {
+    final r = math.max(minMoveM, accuracyM ?? 8);
+    final v = speedMs;
+    if (v != null && v >= 1.5 && d >= minMoveM) return false;
+    if (v != null && v < 0.5) return d < r * 2;
+    return d < r;
+  }
+}
+
+/// Jeden odebrany pakiet z pozycją – do diagnostyki i eksportu CSV.
+class FixLogEntry {
+  final DateTime receivedAt;
+  final int node;
+
+  /// Czas pomiaru GPS i czas wysłania z pakietu (null = brak w pakiecie).
+  final DateTime? fixAt, sentAt;
+  final double lat, lng;
+  final double? accuracyM, hdop, speedMs, courseDeg;
+  final int? sats, seq;
+
+  /// Sygnał radia LoRa (dBm, SNR) – tylko pakiety, które przeszły przez radio.
+  final int? loraRssi;
+  final double? snr;
+
+  /// Sygnał Bluetooth telefon–urządzenie (dBm) w chwili odbioru.
+  final int? bleRssi;
+
+  /// Dokładność GPS telefonu (m) i odległość pies–telefon w chwili pomiaru psa.
+  final double? phoneAccuracyM, distanceM;
+
+  /// Odpowiedź na zapytanie aplikacji o pozycję.
+  final bool reply;
+
+  /// „ok”, „postój” albo nazwa powodu odrzucenia.
+  final String verdict;
+
+  const FixLogEntry({
+    required this.receivedAt,
+    required this.node,
+    this.fixAt,
+    this.sentAt,
+    required this.lat,
+    required this.lng,
+    this.accuracyM,
+    this.hdop,
+    this.speedMs,
+    this.courseDeg,
+    this.sats,
+    this.seq,
+    this.loraRssi,
+    this.snr,
+    this.bleRssi,
+    this.phoneAccuracyM,
+    this.distanceM,
+    this.reply = false,
+    required this.verdict,
+  });
+
+  /// Opóźnienie: od pomiaru GPS do odbioru w telefonie (s).
+  double? get lagSec => fixAt == null ? null : receivedAt.difference(fixAt!).inMilliseconds / 1000;
+
+  static const csvHeader = 'odebrano;pomiar_gps;wyslano;opoznienie_s;wezel;lat;lng;dokladnosc_m;hdop;satelity;'
+      'seq;predkosc_m_s;kierunek;lora_rssi;snr;ble_rssi;dokladnosc_telefonu_m;odleglosc_m;odpowiedz;wynik';
+
+  String toCsv() {
+    String n(num? v, [int digits = 1]) => v == null ? '' : (v is int ? '$v' : v.toStringAsFixed(digits));
+    String d(DateTime? t) => t?.toIso8601String() ?? '';
+    return [
+      d(receivedAt),
+      d(fixAt),
+      d(sentAt),
+      n(lagSec),
+      meshNodeId(node),
+      lat.toStringAsFixed(6),
+      lng.toStringAsFixed(6),
+      n(accuracyM),
+      n(hdop, 2),
+      n(sats),
+      n(seq),
+      n(speedMs, 2),
+      n(courseDeg, 0),
+      n(loraRssi),
+      n(snr),
+      n(bleRssi),
+      n(phoneAccuracyM),
+      n(distanceM),
+      reply ? '1' : '0',
+      verdict,
+    ].join(';');
+  }
+}
+
+/// Min / średnia / max z listy liczb.
+class Spread {
+  final double min, avg, max;
+  final int count;
+  const Spread(this.min, this.avg, this.max, this.count);
+  static Spread? of(Iterable<double> v) {
+    if (v.isEmpty) return null;
+    var lo = double.infinity, hi = -double.infinity, sum = 0.0;
+    for (final x in v) {
+      lo = math.min(lo, x);
+      hi = math.max(hi, x);
+      sum += x;
+    }
+    return Spread(lo, sum / v.length, hi, v.length);
   }
 }
 
@@ -167,13 +306,56 @@ class CollarDiagnostics {
   DateTime? connectedAt;
   DateTime? lastPacketAt;
 
+  /// Odczyty Bluetooth (każdy odczyt kolejki wiadomości z urządzenia).
+  int bleReads = 0;
+
+  /// Zapytania aplikacji o pozycję i odpowiedzi na nie.
+  int requestsSent = 0;
+  int requestReplies = 0;
+  DateTime? lastRequestAt;
+
+  /// Brakujące numery kolejne pozycji psa (pakiety, które nie dotarły).
+  int missingSeq = 0;
+  int? _lastSeq;
+
+  /// Sygnał Bluetooth (dBm) i kiedy go zmierzono.
+  int? bleRssi;
+  DateTime? bleRssiAt;
+
   /// Odstępy (s) między kolejnymi przyjętymi pomiarami psa (ostatnie 20).
   final List<double> intervals = [];
+
+  /// Opóźnienia (s) od pomiaru GPS do odbioru (ostatnie 50, tylko gdy
+  /// tracker podał czas pomiaru).
+  final List<double> lags = [];
+
+  /// Ostatnie pakiety z pozycją (do 600 ≈ 50 min przy pomiarze co 5 s).
+  final List<FixLogEntry> log = [];
+  static const logMax = 600;
 
   void addInterval(double s) {
     if (s <= 0 || s > 600) return;
     intervals.add(s);
     if (intervals.length > 20) intervals.removeAt(0);
+  }
+
+  void addLag(double s) {
+    if (s < 0 || s > 600) return;
+    lags.add(s);
+    if (lags.length > 50) lags.removeAt(0);
+  }
+
+  /// Numer kolejny pozycji psa – liczy luki (pakiety zgubione po drodze).
+  void addSeq(int? seq) {
+    if (seq == null) return;
+    final last = _lastSeq;
+    if (last != null && seq > last + 1 && seq - last < 1000) missingSeq += seq - last - 1;
+    if (last == null || seq > last || last - seq > 1000) _lastSeq = seq;
+  }
+
+  void addLog(FixLogEntry e) {
+    log.add(e);
+    if (log.length > logMax) log.removeAt(0);
   }
 
   /// Rzeczywisty odstęp między pomiarami (mediana), null = za mało danych.
@@ -183,12 +365,25 @@ class CollarDiagnostics {
     return s[s.length ~/ 2];
   }
 
+  Spread? get intervalSpread => intervals.length < 2 ? null : Spread.of(intervals);
+  Spread? get lagSpread => Spread.of(lags);
+
   void reject(FixReject r) => rejected[r] = (rejected[r] ?? 0) + 1;
+
+  /// Dziennik pakietów jako CSV (separator „;” – otwiera się w arkuszu).
+  String csv() => [FixLogEntry.csvHeader, for (final e in log) e.toCsv()].join('\n');
 
   void clear() {
     packets = positions = accepted = reconnects = 0;
+    bleReads = requestsSent = requestReplies = missingSeq = 0;
+    _lastSeq = null;
+    lastRequestAt = null;
+    bleRssi = null;
+    bleRssiAt = null;
     rejected.clear();
     intervals.clear();
+    lags.clear();
+    log.clear();
     lastError = null;
   }
 }

@@ -235,6 +235,8 @@ class TrackRecorder extends ChangeNotifier {
     error = null;
     final seg = segments.last;
     if (p.accuracy > (seg.isEmpty ? 40 : 25)) return; // za słaby sygnał
+    // Każda dobra pozycja telefonu – także na postoju – do porównania z psem.
+    DogAlerts.instance.setHandler(LatLng(p.latitude, p.longitude), accuracyM: p.accuracy, at: p.timestamp);
     final t = seconds;
     if (seg.isNotEmpty) {
       final prev = seg.last;
@@ -250,7 +252,6 @@ class TrackRecorder extends ChangeNotifier {
       currentSpeedKmh = p.speed >= 0 ? p.speed * 3.6 : (dt > 0 ? d / dt * 3.6 : null);
     }
     seg.add(TrackPoint(p.latitude, p.longitude, t, p.speed >= 0 ? p.speed : null));
-    DogAlerts.instance.setHandler(LatLng(p.latitude, p.longitude));
     last = p;
     _checkKm();
     notifyListeners();

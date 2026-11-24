@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:material_ui/material_ui.dart';
 import 'package:universal_ble/universal_ble.dart';
 
@@ -227,6 +228,11 @@ class _CollarScreenState extends State<CollarScreen> {
   Widget _diagnostics() {
     final d = c.diag;
     final m = d.medianInterval;
+    final iv = d.intervalSpread, lag = d.lagSpread;
+    final n = c.dog;
+    final fix = n?.fix;
+    final phone = HandlerTrack.instance.last;
+    String spread(Spread x) => '${x.min.round()} / ${x.avg.round()} / ${x.max.round()} s';
     String why(FixReject r) => switch (r) {
       FixReject.coarse => tr('zaokrąglona pozycja'),
       FixReject.stale => tr('nieaktualne'),
@@ -255,9 +261,41 @@ class _CollarScreenState extends State<CollarScreen> {
             row(tr('Pozycje przyjęte'), '${d.accepted}'),
             for (final e in d.rejected.entries) row(tr('Odrzucone: {0}', [why(e.key)]), '${e.value}'),
             row(tr('Rzeczywisty odstęp pomiarów'), m == null ? '–' : tr('~{0} s', [m.round()])),
+            if (iv != null) row(tr('Odstęp min / śr. / max'), spread(iv)),
+            if (c.expectedIntervalSec != null) row(tr('Odstęp wg ustawień trackera'), tr('~{0} s', [c.expectedIntervalSec!.round()])),
+            if (lag != null) row(tr('Opóźnienie pomiar → telefon (min / śr. / max)'), spread(lag)),
+            row(tr('Zgubione pakiety (luki w numeracji)'), '${d.missingSeq}'),
+            row(tr('Zapytania o pozycję / odpowiedzi'), '${d.requestsSent} / ${d.requestReplies}'),
+            row(tr('Odczyty Bluetooth'), '${d.bleReads}'),
+            row(tr('Sygnał Bluetooth'), d.bleRssi == null ? '–' : '${d.bleRssi} dBm'),
+            if (fix != null) ...[
+              row(tr('GPS psa: satelity / HDOP'),
+                  '${fix.sats ?? '–'} / ${fix.hdop == null ? '–' : fix.hdop!.toStringAsFixed(1).replaceAll('.', ',')}'),
+              row(tr('GPS psa: szacowany błąd'), fix.accuracyM == null ? tr('tracker nie podaje') : '~${fix.accuracyM!.round()} m'),
+              row(tr('Czas pomiaru psa'), fix.timeIsFix ? tr('z GPS trackera') : tr('nieznany – przyjmuję czas odbioru')),
+            ],
+            row(tr('GPS telefonu: szacowany błąd'), phone?.accuracyM == null ? '–' : '~${phone!.accuracyM!.round()} m'),
+            if (n?.rssi != null && !c.direct) row(tr('Sygnał LoRa od psa'), '${n!.rssi} dBm'),
             row(tr('Ponowne połączenia'), '${d.reconnects}'),
             if (d.lastPacketAt != null) row(tr('Ostatni pakiet'), collarAge(d.lastPacketAt)),
             if (d.lastError != null) row(tr('Ostatni błąd'), d.lastError!),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(minimumSize: const Size(0, 40)),
+                onPressed: d.log.isEmpty
+                    ? null
+                    : () async {
+                        await Clipboard.setData(ClipboardData(text: d.csv()));
+                        if (mounted) {
+                          toast(context, tr('Skopiowano {0} wierszy CSV. Wklej je do e-maila albo arkusza.', [d.log.length]));
+                        }
+                      },
+                icon: const Icon(Icons.copy_rounded, size: 18),
+                label: Text(tr('Kopiuj dziennik pomiarów (CSV)')),
+              ),
+            ),
           ],
         ),
       ),

@@ -10,10 +10,14 @@ import '../dogs/dog_profiles.dart';
 import '../models.dart' show jsonInt;
 import '../storage/safe_prefs.dart';
 import '../l10n/l10n.dart';
+import 'dog_distance.dart';
 import 'fix_filter.dart';
 import 'mesh_proto.dart';
+import 'tracker_config.dart';
 
-export 'fix_filter.dart' show CollarFix, FixReject, CollarDiagnostics;
+export 'dog_distance.dart';
+export 'fix_filter.dart' show CollarFix, FixReject, CollarDiagnostics, FixLogEntry, Spread;
+export 'tracker_config.dart';
 
 /// UUID usługi i charakterystyk Bluetooth urządzeń Meshtastic.
 class MeshBle {
@@ -71,28 +75,39 @@ class CollarNode {
   bool get isT1000E => hwModel == hwT1000E;
 }
 
-/// Tryb pracy Valkor Track: jak często aplikacja prosi tracker o pozycję
-/// (tylko przy połączeniu bezpośrednim przez Bluetooth). Tracker i tak nie
-/// poda pozycji częściej, niż pozwala jego ustawienie GPS w Meshtastic –
-/// rzeczywisty odstęp pokazujemy osobno ([CollarDiagnostics.medianInterval]).
+/// Tryb pracy Valkor Track.
+///
+/// Częstotliwość pozycji ustawia firmware trackera (interwał rozgłaszania,
+/// interwał GPS, limit nadawania radia) – zapytania z telefonu jej nie
+/// zwiększą: Meshtastic odpowiada na zapytanie o pozycję najwyżej raz na
+/// 3 minuty. Dlatego tryb ma swój [profile] ustawień trackera, który
+/// użytkownik może zatwierdzić, a rzeczywisty odstęp pokazujemy osobno
+/// ([CollarDiagnostics.medianInterval]).
 enum TrackMode {
-  sport('Sportowy', '1–5 s', 3, 5),
-  walk('Spacerowy', '10–15 s', 12, 15),
-  saver('Oszczędny', '30–60 s', 45, 60),
-  search('Poszukiwanie', 'najczęściej', 2, 5);
+  sport('Sportowy', '1–5 s', 2, 5, TrackerProfile.sport),
+  walk('Spacerowy', '10–15 s', 5, 15, TrackerProfile.walk),
+  saver('Oszczędny', '30–60 s', 5, 60, TrackerProfile.saver),
+  search('Poszukiwanie', 'najczęściej', 1, 5, TrackerProfile.sport);
 
   final String _label;
   final String range;
 
-  /// Co ile sekund prosimy o pozycję.
-  final int requestSec;
+  /// Co ile sekund aplikacja odczytuje kolejkę wiadomości przez Bluetooth
+  /// (dodatkowo od razu po powiadomieniu z urządzenia).
+  final int readSec;
 
   /// Najdłuższy odstęp zgodny z trybem (do ostrzeżenia, że tracker wysyła rzadziej).
   final int targetSec;
-  const TrackMode(this._label, this.range, this.requestSec, this.targetSec);
+
+  /// Ustawienia trackera dla tego trybu.
+  final TrackerProfile profile;
+  const TrackMode(this._label, this.range, this.readSec, this.targetSec, this.profile);
   String get label => tr(_label);
   String get rangeLabel => tr(range);
 }
+
+/// Stan zmiany ustawień trackera z aplikacji.
+enum ProfileApply { idle, waiting, verified, failed }
 
 /// Ostatnia znana pozycja psa – zapamiętana w telefonie, żeby była
 /// widoczna także po zamknięciu aplikacji albo utracie łączności.
@@ -186,7 +201,6 @@ class CollarLink extends ChangeNotifier {
     if (m == mode) return;
     if (m == TrackMode.search && mode != TrackMode.search) _beforeSearch = mode;
     mode = m;
-    _lastRequest = null;
     notifyListeners();
     await _save();
   }
@@ -203,6 +217,95 @@ class CollarLink extends ChangeNotifier {
     final m = diag.medianInterval;
     return m != null && m > mode.targetSec * 1.5;
   }
+
+  /// Ustawienia urządzenia połączonego przez Bluetooth (odczytane po połączeniu).
+  final config = TrackerConfig();
+
+  /// Oczekiwany odstęp pozycji psa wg ustawień trackera (s). Tylko przy
+  /// połączeniu bezpośrednim – przy dwóch modułach odczytujemy ustawienia
+  /// urządzenia w kieszeni, a nie trackera na psie.
+  double? get expectedIntervalSec => direct ? config.expectedIntervalSec : null;
+
+  /// Ustawienia trackera pasują do trybu (null = nie wiadomo).
+  bool? get trackerMatchesMode => direct && config.known ? mode.profile.matches(config) : null;
+
+  /// Zmiana ustawień trackera: stan, profil, błąd.
+  ProfileApply applyState = ProfileApply.idle;
+  TrackerProfile? pendingProfile;
+  String? applyError;
+  DateTime? _appliedAt;
+  Timer? _verify;
+
+  /// Zapisuje w trackerze ustawienia profilu [p]. Tracker po zmianie
+  /// uruchamia się ponownie; po ponownym połączeniu aplikacja odczytuje
+  /// ustawienia i sprawdza, czy zmiana się zapisała. Zwraca błąd albo null.
+  Future<String?> applyProfile(TrackerProfile p) async {
+    final me = myNode;
+    if (!connected || me == null || !config.known) return tr('Najpierw połącz tracker i poczekaj na odczyt jego ustawień.');
+    if (!direct) {
+      return tr('Zmiana ustawień działa, gdy telefon jest połączony bezpośrednio z trackerem na psie.');
+    }
+    final lora = p.loraBytes(config);
+    final pos = p.positionBytes(config);
+    pendingProfile = p;
+    applyState = ProfileApply.waiting;
+    applyError = null;
+    _appliedAt = DateTime.now();
+    notifyListeners();
+    try {
+      // Każda sekcja osobno: firmware zapisuje ją od razu i po kilku
+      // sekundach uruchamia się ponownie.
+      if (lora != null) await _write(encodeSetConfig(me, 6, lora, id: meshRandomId()));
+      await _write(encodeSetConfig(me, 2, pos, id: meshRandomId()));
+    } catch (e) {
+      applyState = ProfileApply.failed;
+      applyError = tr('Nie udało się wysłać ustawień: {0}', [e]);
+      notifyListeners();
+      return applyError;
+    }
+    // Gdy tracker nie uruchomi się ponownie, sami odczytujemy ustawienia.
+    _verify?.cancel();
+    _verify = Timer(const Duration(seconds: 25), () async {
+      if (applyState != ProfileApply.waiting) return;
+      if (connected) {
+        _configId = meshRandomId();
+        try {
+          await _write(encodeWantConfig(_configId));
+          await _drain();
+        } catch (_) {}
+      }
+      _verify = Timer(const Duration(seconds: 35), () {
+        if (applyState != ProfileApply.waiting) return;
+        applyState = ProfileApply.failed;
+        applyError = tr('Tracker nie potwierdził zmiany. Sprawdź ustawienia w aplikacji Meshtastic.');
+        notifyListeners();
+      });
+    });
+    return null;
+  }
+
+  /// Po odczycie ustawień: czy zmiana z aplikacji naprawdę się zapisała.
+  void _checkApplied(DateTime t) {
+    final p = pendingProfile, at = _appliedAt;
+    if (applyState != ProfileApply.waiting || p == null || at == null || !t.isAfter(at)) return;
+    _verify?.cancel();
+    if (p.matches(config)) {
+      applyState = ProfileApply.verified;
+      applyError = null;
+    } else {
+      applyState = ProfileApply.failed;
+      applyError = tr('Tracker nie przyjął wszystkich zmian: {0}.', [p.diff(config).map((d) => d.$1).join(', ')]);
+    }
+  }
+
+  /// Ile czasu (s) firmware Meshtastic nie odpowiada na kolejne zapytanie
+  /// o pozycję (PositionModule: „Skip Position reply since we sent a reply
+  /// <3min ago”). Częstsze zapytania tylko zajmują Bluetooth i radio.
+  static const requestThrottleSec = 180;
+
+  /// Identyfikatory wysłanych zapytań o pozycję (do liczenia odpowiedzi).
+  final Set<int> _requestIds = {};
+  DateTime? _openedAt;
 
   /// Przypisanie trackerów do profili psów: numer urządzenia → id psa.
   final Map<int, String> assigned = {};
@@ -234,7 +337,6 @@ class CollarLink extends ChangeNotifier {
   bool _draining = false;
   bool _drainAgain = false;
   int _configId = 0;
-  DateTime? _lastRequest;
 
   bool get supported => !kIsWeb && (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS);
   bool get connected => state == CollarState.connected;
@@ -502,6 +604,8 @@ class CollarLink extends ChangeNotifier {
       } catch (_) {
         // Bez powiadomień i tak odpytujemy urządzenie co kilka sekund.
       }
+      _openedAt = DateTime.now();
+      config.clear();
       _configId = meshRandomId();
       await _write(encodeWantConfig(_configId));
       await _drain();
@@ -571,7 +675,13 @@ class CollarLink extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Zamiast zapisu przez Bluetooth (testy).
+  @visibleForTesting
+  Future<void> Function(Uint8List data)? writeOverride;
+
   Future<void> _write(Uint8List data) async {
+    final w = writeOverride;
+    if (w != null) return w(data);
     final id = deviceId;
     if (id == null) return;
     await UniversalBle.write(id, MeshBle.service, MeshBle.toRadio, data);
@@ -581,19 +691,46 @@ class CollarLink extends ChangeNotifier {
 
   void _tickPoll() {
     if (state != CollarState.connected) return;
-    // Odczyt co 5 s (powiadomienia i tak budzą odczyt od razu), w poszukiwaniu co 1 s.
-    if (mode == TrackMode.search || _tick++ % 5 == 0) _drain();
-    // Obroża połączona bezpośrednio: prosimy o świeżą pozycję tylko wtedy,
-    // gdy ostatni pomiar jest starszy niż odstęp trybu (oszczędza baterię trackera).
-    final me = myNode;
+    final tick = _tick++;
+    // Odczyt kolejki co [TrackMode.readSec] s (powiadomienia i tak budzą odczyt od razu).
+    if (tick % mode.readSec == 0) _drain();
     final now = DateTime.now();
-    final f = dog?.fix;
-    final every = mode.requestSec;
-    final fresh = f != null && f.ageSec(now) < every;
-    if (direct && me != null && !fresh && (_lastRequest == null || now.difference(_lastRequest!).inSeconds >= every)) {
-      _lastRequest = now;
-      _write(encodePositionRequest(me)).catchError((_) {});
+    // Sygnał Bluetooth co 10 s.
+    final id = deviceId;
+    if (id != null && tick % 10 == 0) {
+      try {
+        UniversalBle.readRssi(id).then((v) {
+          diag.bleRssi = v;
+          diag.bleRssiAt = DateTime.now();
+        }).catchError((_) {});
+      } catch (_) {}
     }
+    final req = positionRequestDue(now);
+    if (req != null) {
+      final rid = meshRandomId();
+      _requestIds.add(rid);
+      if (_requestIds.length > 20) _requestIds.remove(_requestIds.first);
+      diag.requestsSent++;
+      diag.lastRequestAt = now;
+      _write(encodePositionRequest(req, id: rid)).catchError((_) {});
+    }
+  }
+
+  /// Do kogo wysłać zapytanie o pozycję teraz (null = nie wysyłać).
+  ///
+  /// Firmware odpowiada najwyżej raz na 3 minuty, więc pytamy tylko wtedy,
+  /// gdy naprawdę brakuje pozycji: chwilę po połączeniu, jeśli jeszcze jej
+  /// nie ma, albo gdy ostatni pomiar psa ma ponad 3 minuty. Pozycje na
+  /// bieżąco przychodzą same – co interwał rozgłaszania trackera.
+  @visibleForTesting
+  int? positionRequestDue(DateTime now) {
+    final target = dogNode, me = myNode, opened = _openedAt;
+    if (target == null || me == null || opened == null) return null;
+    final f = dog?.fix;
+    final need = f == null ? now.difference(opened).inSeconds >= 3 : f.ageSec(now) >= requestThrottleSec;
+    final last = diag.lastRequestAt;
+    if (!need || (last != null && now.difference(last).inSeconds < requestThrottleSec)) return null;
+    return target;
   }
 
   /// Odczyt wszystkich oczekujących wiadomości z urządzenia.
@@ -610,6 +747,7 @@ class CollarLink extends ChangeNotifier {
         _drainAgain = false;
         for (var i = 0; i < 200; i++) {
           final bytes = await UniversalBle.read(id, MeshBle.service, MeshBle.fromRadio);
+          diag.bleReads++;
           if (bytes.isEmpty) break;
           diag.packets++;
           diag.lastPacketAt = DateTime.now();
@@ -650,7 +788,12 @@ class CollarLink extends ChangeNotifier {
           n.lastHeard = t;
           n.rssi = e.rssi ?? n.rssi;
           diag.positions++;
+          final isDog = e.node == dogNode;
+          final reply = e.requestId != null && _requestIds.remove(e.requestId);
+          if (reply) diag.requestReplies++;
+          if (isDog) diag.addSeq(e.position.seq);
           final v = n.filter.check(e.position, t);
+          _log(e, t, v, reply);
           if (!v.accepted) {
             diag.reject(v.reject!);
             // Zaokrąglona pozycja: pokazujemy ostrzeżenie, ale nie traktujemy jej jako pomiaru.
@@ -658,7 +801,8 @@ class CollarLink extends ChangeNotifier {
             break;
           }
           final f = v.fix!;
-          if (e.node == dogNode && n.fix != null) {
+          if (isDog && f.timeIsFix) diag.addLag(f.lagSec);
+          if (isDog && n.fix != null) {
             diag.addInterval(f.fixAt.difference(n.fix!.fixAt).inMilliseconds / 1000);
           }
           if (f.moved) {
@@ -675,13 +819,51 @@ class CollarLink extends ChangeNotifier {
           final n = nodes.putIfAbsent(e.node, () => CollarNode(e.node));
           n.battery = e.level;
           n.lastHeard = t;
+        case MeshConfigEvent():
+          config.set(e.section, e.raw, t);
         case MeshConfigComplete():
+          _checkApplied(t);
+        case MeshRoutingEvent():
+          // Błąd dostarczenia (np. limit nadawania radia) – do diagnostyki.
+          if (e.error != 0) diag.lastError = tr('Błąd Meshtastic nr {0} (pakiet {1})', [e.error, e.requestId]);
         case MeshRebooted():
           break;
       }
     }
     notifyListeners();
   }
+
+  void _log(MeshPositionEvent e, DateTime t, FixVerdict v, bool reply) {
+    final p = e.position;
+    final f = v.fix;
+    final at = f?.fixAt ?? (p.timeIsFix ? p.time : null);
+    final h = at == null ? null : HandlerTrack.instance.at(at);
+    diag.addLog(FixLogEntry(
+      receivedAt: t,
+      node: e.node,
+      fixAt: p.timeIsFix ? p.time : null,
+      sentAt: p.sentTime,
+      lat: p.lat,
+      lng: p.lng,
+      accuracyM: p.accuracyM,
+      hdop: p.hdop,
+      speedMs: p.speedMs,
+      courseDeg: p.courseDeg,
+      sats: p.sats,
+      seq: p.seq,
+      loraRssi: e.rssi == 0 ? null : e.rssi,
+      snr: e.rssi == null || e.rssi == 0 ? null : e.snr,
+      bleRssi: diag.bleRssi,
+      phoneAccuracyM: h?.accuracyM,
+      distanceM: h == null ? null : const Distance()(h.ll, LatLng(p.lat, p.lng)),
+      reply: reply,
+      verdict: f == null ? v.reject!.name : (f.moved ? 'ok' : 'postoj'),
+    ));
+  }
+
+  /// Odległość psa od przewodnika z dopasowaniem czasu i niepewnością.
+  DogDistance? distanceTo(String dogId, {DateTime? now}) =>
+      DogDistance.of(nodeOf(dogId)?.fix, HandlerTrack.instance, now: now ?? DateTime.now());
 
   /// Tracker na psie wysyła pozycję zaokrągloną przez ustawienia kanału.
   bool get dogCoarse => dog?.position?.coarse ?? false;
@@ -726,6 +908,10 @@ class CollarLink extends ChangeNotifier {
     return loraSilent ? DogLink.loraSilent : DogLink.stale;
   }
 
+  /// Udaje otwarte połączenie od chwili [t] (testy zapytań o pozycję).
+  @visibleForTesting
+  void markOpenedForTest(DateTime t) => _openedAt = t;
+
   @visibleForTesting
   void resetForTest({bool loaded = true}) {
     state = CollarState.off;
@@ -738,6 +924,15 @@ class CollarLink extends ChangeNotifier {
     _beforeSearch = null;
     nodes.clear();
     diag.clear();
+    config.clear();
+    applyState = ProfileApply.idle;
+    pendingProfile = null;
+    applyError = null;
+    _appliedAt = null;
+    _verify?.cancel();
+    _requestIds.clear();
+    _openedAt = null;
+    writeOverride = null;
     lastSeen.clear();
     _lastSeenSaved.clear();
     _loaded = loaded;
