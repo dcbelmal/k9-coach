@@ -1,3 +1,4 @@
+import '../app_version.dart';
 import 'dart:convert';
 
 import 'package:image_picker/image_picker.dart';
@@ -556,7 +557,7 @@ class _Settings extends StatelessWidget {
         ),
         Padding(
           padding: EdgeInsets.symmetric(vertical: 10),
-          child: Text(tr('Valkor Coach · wersja {0} · dane zapisane tylko na tym telefonie', ['0.13']),
+          child: Text(tr('Valkor Coach · wersja {0} · dane zapisane tylko na tym telefonie', [appVersion]),
               textAlign: TextAlign.center, style: TextStyle(color: K9.muted, fontSize: 11.5)),
         ),
       ]),
