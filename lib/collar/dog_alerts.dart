@@ -98,13 +98,19 @@ class AlertInput {
   /// Pozycja przewodnika (null = nieznana – smycz nie działa).
   final LatLng? handler;
   final int? battery;
-  const AlertInput({required this.now, required this.link, this.fix, this.handler, this.battery});
+
+  /// Odległość pies–przewodnik z dopasowaniem czasu i niepewnością. Gdy jest,
+  /// smycz liczy się z niej (pozycja telefonu z chwili pomiaru psa).
+  final DogDistance? distance;
+  const AlertInput({required this.now, required this.link, this.fix, this.handler, this.battery, this.distance});
 }
 
 /// Logika alarmów – bez efektów ubocznych, łatwa do testów.
 ///
 /// Ochrona przed fałszywymi alarmami:
-/// * smycz i strefy liczone tylko z pozycji na żywo, z zapasem na błąd GPS;
+/// * smycz i strefy liczone tylko z pozycji na żywo, z zapasem na błąd GPS
+///   psa i telefonu; smycz porównuje pozycję psa z pozycją telefonu z tej
+///   samej chwili (pozycja psa przychodzi z opóźnieniem);
 /// * alarm dopiero po 2 kolejnych pomiarach poza granicą;
 /// * histereza: alarm uzbraja się ponownie, gdy pies wróci wyraźnie do środka;
 /// * ten sam alarm najwcześniej co [repeatSec] s.
@@ -166,9 +172,12 @@ class AlertEngine {
 
       final leash = settings.leashM;
       final h = i.handler;
-      if (leash != null && leash > 0 && h != null) {
-        final d = const Distance()(h, f.ll);
-        if (d > leash + acc) {
+      final dd = i.distance;
+      final matched = dd?.matchedM != null;
+      if (leash != null && leash > 0 && (matched || h != null)) {
+        final d = matched ? dd!.matchedM! : const Distance()(h!, f.ll);
+        final margin = matched ? dd!.matchedUncertaintyM! : acc;
+        if (d > leash + margin) {
           _leashOut++;
           if (_leashOut >= confirmFixes && _armed[AlertKind.leash]!) {
             _armed[AlertKind.leash] = false;
@@ -272,9 +281,17 @@ class DogAlerts extends ChangeNotifier {
     }
   }
 
-  void setHandler(LatLng? p) {
+  /// Pozycja przewodnika; trafia też do historii pozycji telefonu
+  /// ([HandlerTrack]), z której liczymy odległość w chwili pomiaru psa.
+  void setHandler(LatLng? p, {double? accuracyM, DateTime? at}) {
+    final now = DateTime.now();
     handler = p;
-    handlerAt = p == null ? null : DateTime.now();
+    handlerAt = p == null ? null : now;
+    if (p != null) {
+      // Czas pomiaru z GPS telefonu, chyba że wyraźnie odbiega od zegara.
+      final t = at != null && now.difference(at).inSeconds.abs() <= 30 ? at.toLocal() : now;
+      HandlerTrack.instance.add(HandlerFix(t, p.latitude, p.longitude, accuracyM: accuracyM != null && accuracyM > 0 ? accuracyM : null));
+    }
   }
 
   /// Włączone alarmy sprawdzamy co 2 s.
@@ -299,6 +316,7 @@ class DogAlerts extends ChangeNotifier {
       fix: c.dog?.fix,
       handler: h,
       battery: c.dog?.battery,
+      distance: DogDistance.of(c.dog?.fix, HandlerTrack.instance, now: t),
     ));
     for (final a in out) {
       _emit(a);
@@ -336,6 +354,7 @@ class DogAlerts extends ChangeNotifier {
     history.clear();
     handler = null;
     handlerAt = null;
+    HandlerTrack.instance.clear();
     _timer?.cancel();
     _timer = null;
     _loaded = true;

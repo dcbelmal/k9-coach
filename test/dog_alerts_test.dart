@@ -237,9 +237,10 @@ void main() {
       c.state = CollarState.connected;
       final now = DateTime.now();
       a.setHandler(home);
-      c.handleEvents([const MeshMyInfo(4), MeshPositionEvent(4, MeshPosition(50.002, 20, time: now))]);
+      c.handleEvents([const MeshMyInfo(4), MeshPositionEvent(4, MeshPosition(50.002, 20, time: now))], now: now);
       a.check(now: now);
-      c.handleEvents([MeshPositionEvent(4, MeshPosition(50.0021, 20, time: now.add(const Duration(seconds: 5))))]);
+      c.handleEvents([MeshPositionEvent(4, MeshPosition(50.0021, 20, time: now.add(const Duration(seconds: 5))))],
+          now: now.add(const Duration(seconds: 5)));
       a.check(now: now.add(const Duration(seconds: 5)));
       expect(got.single.kind, AlertKind.leash);
       expect(a.history, hasLength(1));

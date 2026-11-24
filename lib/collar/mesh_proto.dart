@@ -163,6 +163,8 @@ class PbWriter {
 /// Numery portów (PortNum) używane przez obrożę.
 class MeshPort {
   static const position = 3;
+  static const routing = 5;
+  static const admin = 6;
   static const nodeInfo = 4;
   static const telemetry = 67;
 }
@@ -175,10 +177,25 @@ class MeshPosition {
   final double lat, lng;
   final int? altitude;
 
-  /// Czas ustalenia pozycji przez urządzenie (jeśli GPS go podał).
+  /// Czas pomiaru GPS (pole `timestamp`), a gdy go brak – czas wysłania
+  /// (pole `time`, patrz [timeIsFix]).
   final DateTime? time;
+
+  /// Czas wysłania pakietu przez urządzenie (pole `time`) – nie czas pomiaru.
+  final DateTime? sentTime;
+
+  /// true = [time] to czas pomiaru GPS, false = tylko czas wysłania.
+  final bool timeIsFix;
+
+  /// Prędkość w m/s (urządzenie wysyła km/h w liczbach całkowitych).
   final double? speedMs;
+
+  /// Kierunek ruchu (stopnie od północy), jeśli podany.
+  final double? courseDeg;
   final int? sats;
+
+  /// PDOP (×1), jeśli podany.
+  final double? pdop;
 
   /// Precyzja pozycji w bitach (32 = pełna). Mniej = kanał celowo zaokrągla
   /// pozycję (np. ok. 1,5 km na domyślnym publicznym kanale Meshtastic).
@@ -197,7 +214,19 @@ class MeshPosition {
   final int? seq;
 
   const MeshPosition(this.lat, this.lng,
-      {this.altitude, this.time, this.speedMs, this.sats, this.precisionBits, this.hdop, this.gpsAccuracyM, this.fixType, this.seq});
+      {this.altitude,
+      this.time,
+      this.sentTime,
+      this.timeIsFix = true,
+      this.speedMs,
+      this.courseDeg,
+      this.sats,
+      this.pdop,
+      this.precisionBits,
+      this.hdop,
+      this.gpsAccuracyM,
+      this.fixType,
+      this.seq});
 
   /// Szacowana dokładność pozycji w metrach (null = urządzenie jej nie podaje).
   /// Wzór jak w Meshtastic: HDOP × dokładność odbiornika (domyślnie ok. 5 m).
@@ -218,13 +247,28 @@ class MeshPosition {
     if (lat == null || lng == null || (lat == 0 && lng == 0)) return null;
     final la = lat / 1e7, lo = lng / 1e7;
     if (la.abs() > 90 || lo.abs() > 180) return null;
-    final t = p.integer(4) ?? p.integer(7);
+    DateTime? epoch(int? s, [int ms = 0]) =>
+        s == null || s == 0 ? null : DateTime.fromMillisecondsSinceEpoch(s * 1000 + ms, isUtc: true).toLocal();
+    // Pole 7 (timestamp) = chwila pomiaru GPS; pole 4 (time) = chwila wysłania
+    // (firmware wpisuje tam bieżący czas przy każdym wysłaniu).
+    final fix = epoch(p.integer(7), p.signed32(8) ?? 0);
+    final sent = epoch(p.integer(4));
+    // ground_speed: km/h (MeshPosition.ground_speed, firmware: reader.speed.kmph()).
+    final kmh = p.integer(15);
+    // ground_track: firmware zapisuje stopnie × 10^5 (GPS.cpp: course.value() * 1e3).
+    final track = p.integer(16);
+    final course = track == null ? null : track / 1e5;
+    int? dop(int f) => p.integer(f) == null || p.integer(f) == 0 ? null : p.integer(f);
     return MeshPosition(
       la,
       lo,
       altitude: p.signed32(3),
-      time: t == null || t == 0 ? null : DateTime.fromMillisecondsSinceEpoch(t * 1000, isUtc: true).toLocal(),
-      speedMs: p.integer(15)?.toDouble(),
+      time: fix ?? sent,
+      sentTime: sent,
+      timeIsFix: fix != null,
+      speedMs: kmh == null ? null : kmh / 3.6,
+      courseDeg: course == null || course < 0 || course >= 360 ? null : course,
+      pdop: dop(11) == null ? null : dop(11)! / 100,
       sats: p.integer(19),
       precisionBits: p.integer(23),
       hdop: p.integer(12) == null || p.integer(12) == 0 ? null : p.integer(12)! / 100,
@@ -263,7 +307,30 @@ class MeshPositionEvent extends MeshEvent {
   final MeshPosition position;
   final int? rssi;
   final double? snr;
-  const MeshPositionEvent(this.node, this.position, {this.rssi, this.snr});
+
+  /// Identyfikator pakietu i – dla odpowiedzi – identyfikator zapytania.
+  final int? packetId, requestId;
+  const MeshPositionEvent(this.node, this.position, {this.rssi, this.snr, this.packetId, this.requestId});
+}
+
+/// Ustawienia urządzenia (Config) – z pobierania stanu po połączeniu albo
+/// z odpowiedzi na zapytanie administracyjne.
+class MeshConfigEvent extends MeshEvent {
+  /// Numer pola w `Config` (1 = device, 2 = position, 6 = lora).
+  final int section;
+
+  /// Surowa wiadomość sekcji (do zmiany wybranych pól bez utraty reszty).
+  final Uint8List raw;
+  const MeshConfigEvent(this.section, this.raw);
+}
+
+/// Potwierdzenie albo błąd pakietu wysłanego z telefonu (ROUTING_APP).
+class MeshRoutingEvent extends MeshEvent {
+  final int requestId;
+
+  /// 0 = bez błędu.
+  final int error;
+  const MeshRoutingEvent(this.requestId, this.error);
 }
 
 /// Poziom baterii urządzenia (0–100, 101 = zasilanie z kabla).
@@ -316,6 +383,8 @@ List<MeshEvent> decodeFromRadio(List<int> bytes) {
           heard: heard == null || heard == 0 ? null : DateTime.fromMillisecondsSinceEpoch(heard * 1000))!);
     }
   }
+  final cfg = f.message(5);
+  if (cfg != null) out.addAll(_config(cfg));
   if (f.has(7)) out.add(MeshConfigComplete(f.integer(7) ?? 0));
   if (f.has(8)) out.add(const MeshRebooted());
   final pk = f.message(2);
@@ -335,7 +404,19 @@ List<MeshEvent> _packet(PbFields pk) {
       case MeshPort.position:
         final p = MeshPosition.parse(PbFields.parse(payload));
         if (p == null) return const [];
-        return [MeshPositionEvent(from, p, rssi: pk.signed32(12), snr: pk.float32(8))];
+        final req = data.integer(6);
+        return [
+          MeshPositionEvent(from, p,
+              rssi: pk.signed32(12), snr: pk.float32(8), packetId: pk.integer(6), requestId: req == 0 ? null : req)
+        ];
+      case MeshPort.admin:
+        final a = PbFields.parse(payload);
+        final cfg = a.message(6); // get_config_response
+        return cfg == null ? const [] : _config(cfg);
+      case MeshPort.routing:
+        final req = data.integer(6);
+        if (req == null || req == 0) return const [];
+        return [MeshRoutingEvent(req, PbFields.parse(payload).integer(3) ?? 0)];
       case MeshPort.nodeInfo:
         return [_user(from, PbFields.parse(payload))!];
       case MeshPort.telemetry:
@@ -348,6 +429,11 @@ List<MeshEvent> _packet(PbFields pk) {
   }
   return const [];
 }
+
+List<MeshEvent> _config(PbFields cfg) => [
+      for (final section in const [1, 2, 6])
+        if (cfg.raw(section) != null) MeshConfigEvent(section, cfg.raw(section)!),
+    ];
 
 final _rnd = Random();
 
@@ -376,3 +462,76 @@ Uint8List encodeHeartbeat() => (PbWriter()..bytes(7, const [])).toBytes();
 
 /// Krótka nazwa urządzenia jak w Meshtastic: „!a1b2c3d4”.
 String meshNodeId(int node) => '!${(node & 0xffffffff).toRadixString(16).padLeft(8, '0')}';
+
+/// Typy konfiguracji w AdminMessage.get_config_request.
+class MeshConfigType {
+  static const device = 0;
+  static const position = 1;
+  static const lora = 5;
+}
+
+/// Numer pola sekcji w `Config` dla typu z [MeshConfigType].
+int meshConfigSection(int type) => switch (type) {
+      MeshConfigType.device => 1,
+      MeshConfigType.position => 2,
+      MeshConfigType.lora => 6,
+      _ => throw ArgumentError(type),
+    };
+
+/// ToRadio: wiadomość administracyjna do urządzenia połączonego z telefonem
+/// (pakiet bez nadawcy = z telefonu; firmware nie wymaga wtedy klucza sesji).
+Uint8List _admin(int to, List<int> admin, int id) {
+  final data = PbWriter()
+    ..varint(1, MeshPort.admin)
+    ..bytes(2, admin)
+    ..boolean(3, true);
+  final pkt = PbWriter()
+    ..fixed32(2, to)
+    ..bytes(4, data.toBytes())
+    ..fixed32(6, id)
+    ..boolean(10, true); // want_ack
+  return (PbWriter()..bytes(1, pkt.toBytes())).toBytes();
+}
+
+/// AdminMessage.get_config_request.
+Uint8List encodeGetConfig(int to, int type, {required int id}) => _admin(to, (PbWriter()..varint(5, type)).toBytes(), id);
+
+/// AdminMessage.set_config z sekcją [section] (pole w `Config`).
+Uint8List encodeSetConfig(int to, int section, List<int> sectionBytes, {required int id}) =>
+    _admin(to, (PbWriter()..bytes(34, (PbWriter()..bytes(section, sectionBytes)).toBytes())).toBytes(), id);
+
+/// Kopia wiadomości protobuf z podmienionymi polami liczbowymi (varint).
+/// Pozostałe pola – także nieznane tej wersji aplikacji – zostają bez zmian.
+Uint8List pbWithVarints(List<int> msg, Map<int, int> values) {
+  final out = BytesBuilder();
+  final r = _Reader(msg);
+  final done = <int>{};
+  final w = PbWriter();
+  while (!r.done) {
+    final start = r.i;
+    final key = r.varint();
+    final field = key >> 3;
+    switch (key & 7) {
+      case 0:
+        r.varint();
+      case 1:
+        r.fixed64();
+      case 2:
+        r.bytes(r.varint());
+      case 5:
+        r.fixed32();
+      default:
+        throw const FormatException('Nieobsługiwany typ pola protobuf');
+    }
+    if (values.containsKey(field) && (key & 7) == 0) {
+      if (done.add(field)) w.varint(field, values[field]!);
+      continue;
+    }
+    out.add(msg.sublist(start, r.i));
+  }
+  for (final e in values.entries) {
+    if (!done.contains(e.key)) w.varint(e.key, e.value);
+  }
+  out.add(w.toBytes());
+  return out.toBytes();
+}

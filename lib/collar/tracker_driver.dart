@@ -27,7 +27,8 @@ enum TrackerCapability {
   /// Pozycje przez sieć komórkową (karta SIM).
   cellular('sieć komórkowa'),
 
-  /// Zmiana ustawień trackera z aplikacji.
+  /// Zmiana ustawień trackera z aplikacji (profil trybu – tylko przy
+  /// połączeniu bezpośrednim przez Bluetooth).
   remoteConfig('ustawienia z aplikacji');
 
   final String _label;
@@ -100,6 +101,7 @@ class TrackerModels {
       TrackerCapability.positionRequest,
       TrackerCapability.battery,
       TrackerCapability.accuracy,
+      TrackerCapability.remoteConfig,
     },
     note: 'Bez historii tras w urządzeniu: trasa zapisuje się w telefonie, gdy tracker jest w zasięgu.',
   );
