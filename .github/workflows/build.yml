@@ -3,8 +3,10 @@ name: Zbuduj aplikację
 # Dwa osobne etapy:
 #  1. „Sprawdzenie” – każdy PR i push: analiza, testy i kompilacja testowa (debug).
 #     Bez dostępu do sekretów i bez prawa zapisu do repozytorium.
-#  2. „Wydanie” – tylko push do main (lub ręcznie z main): podpisany APK
+#  2. „Wydanie” – push do main (lub ręcznie z main): podpisany APK
 #     i publikacja „najnowsza”. Tylko ten etap ma sekrety i prawo zapisu.
+#     Uruchomiony ręcznie z innej gałęzi buduje podpisany APK testowy tylko jako
+#     artefakt Actions – bez publikacji „najnowsza”.
 on:
   push:
     branches: [main]
@@ -52,7 +54,7 @@ jobs:
   release:
     name: Wydanie (podpisany APK)
     needs: check
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    if: (github.ref == 'refs/heads/main' && github.event_name == 'push') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -106,10 +108,12 @@ jobs:
         with:
           name: Valkor-Coach-Android
           path: build/app/outputs/flutter-apk/app-release.apk
-      - run: |
+      - if: github.ref == 'refs/heads/main'
+        run: |
           cp build/app/outputs/flutter-apk/app-release.apk Valkor-Coach.apk
           cp build/app/outputs/flutter-apk/app-release.apk K9-Coach.apk
-      - uses: softprops/action-gh-release@v2
+      - if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: najnowsza
           name: Valkor Coach – najnowsza wersja
