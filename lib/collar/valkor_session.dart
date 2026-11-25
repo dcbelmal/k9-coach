@@ -5,6 +5,24 @@ import '../l10n/l10n.dart';
 import 'mesh_proto.dart';
 import 'valkor_proto.dart';
 
+/// Stan kanału Valkor w bieżącym połączeniu Bluetooth.
+enum ValkorChannel {
+  /// Usługa Valkor wykryta, subskrypcja jeszcze nie działa (albo błąd).
+  detected,
+
+  /// Powiadomienia włączone, czekamy na pierwszy pakiet.
+  subscribed,
+
+  /// Protokół Valkor potwierdzony (poprawny pakiet), brak pozycji.
+  confirmed,
+
+  /// Odbiór aktualnych pozycji.
+  receiving,
+
+  /// Kanał był albo powinien być aktywny, ale pakiety nie przychodzą.
+  silent,
+}
+
 class ValkorSession {
   /// Usługa Valkor znaleziona w urządzeniu.
   final DateTime detectedAt;
@@ -12,7 +30,10 @@ class ValkorSession {
 
   ValkorInfo? info;
   ValkorStatus? status;
+  DateTime? statusAt;
   ValkorDiag? diag;
+  ValkorPerf? perf;
+  ValkorBuildInfo? buildInfo;
   ValkorAck? lastAck;
   final stats = ValkorLinkStats();
 
@@ -21,13 +42,46 @@ class ValkorSession {
   ValkorMode? deviceMode;
   bool insecure = false;
   DateTime? lastRx;
+  int? lastSeq;
+
+  /// Ostatnia pozycja na żywo z kanału Valkor (surowy pakiet) i chwila odbioru.
+  ValkorPosition? lastPosition;
+  DateTime? lastPositionAt;
+  int? batteryMv;
+
+  /// Rzeczywiste MTU połączenia (null = nieznane, np. iOS).
+  int? mtu;
+
+  // --- bieżące połączenie Bluetooth ---
+  DateTime? detectedThisConnectionAt;
+  DateTime? subscribedAt;
+  String? subscribeError;
+  int subscribeErrors = 0;
+  DateTime? lastRxThisConnection;
+  int reinitThisConnection = 0;
+  DateTime? lastReinitAt;
+  String? lastReinitReason;
+
+  /// Ponowienia inicjalizacji kanału (cała sesja).
+  int reinits = 0;
+  int connections = 0;
 
   /// Pozycje Meshtastic tego samego trackera pominięte, bo przychodzą kanałem Valkor.
   int meshIgnored = 0;
 
-  /// Pomiary historyczne odebrane, ale nie wstawione w trasę (starsze niż
-  /// bieżąca pozycja – wstawianie w środek trasy: wersja 0.2).
-  int historyOutsideTrack = 0;
+  /// Pozycje Meshtastic tego trackera przyjęte w trybie awaryjnym (kanał Valkor niemy).
+  int meshFallback = 0;
+
+  /// Historia z pamięci trackera: przyjęte, odrzucone (zły fix, słaby sygnał,
+  /// poprzednia sesja), duplikaty i ile z przyjętych było starszych niż
+  /// bieżąca pozycja na żywo (wstawione w środek trasy).
+  int historyRecovered = 0, historyRejected = 0, historyDuplicates = 0, historyBeforeLive = 0;
+  final Set<int> historySeen = {};
+  DateTime? historySyncRequestedAt;
+
+  /// Liczniki firmware (narastające od uruchomienia trackera) z początku
+  /// sesji testowej – do liczników „w tej sesji”.
+  ValkorDiag? diagBaseline;
 
   /// Urządzenie odpowiada protokołem Valkor (przyszedł poprawny pakiet).
   bool get confirmed => lastRx != null;
@@ -35,70 +89,202 @@ class ValkorSession {
   /// Odstęp wysyłki w trybie ustawionym w trackerze (s).
   int? get periodSec => deviceMode?.periodSec;
 
+  /// Wersja protokołu (z BuildInfo; firmware 0.1.0 nie wysyła BuildInfo – „1.0”).
+  String get protocol => buildInfo?.protocol ?? (confirmed ? '1.0' : '');
+
   /// Rzeczywisty odstęp pomiarów GNSS zmierzony przez tracker (s).
   double? get gnssIntervalSec {
+    final p = perf;
+    if (p != null && p.gnssIntMedianMs > 0) return p.gnssIntMedianMs / 1000;
     final d = diag;
     return d == null || d.gnssIntervalAvgMs == 0 ? null : d.gnssIntervalAvgMs / 1000;
   }
 
+  void onDetected(DateTime t, {int? mtu}) {
+    detectedThisConnectionAt = t;
+    subscribedAt = null;
+    subscribeError = null;
+    lastRxThisConnection = null;
+    reinitThisConnection = 0;
+    lastReinitAt = null;
+    connections++;
+    if (mtu != null) this.mtu = mtu;
+  }
+
+  void onSubscribed(DateTime t) {
+    subscribedAt = t;
+    subscribeError = null;
+  }
+
+  void onSubscribeError(DateTime t, String e) {
+    subscribeError = e;
+    subscribeErrors++;
+  }
+
+  void onReinit(DateTime t, String why) {
+    reinitThisConnection++;
+    reinits++;
+    lastReinitAt = t;
+    lastReinitReason = why;
+  }
+
+  void onPacket(DateTime t) {
+    lastRx = t;
+    lastRxThisConnection = t;
+  }
+
+  void onDisconnected() {
+    subscribedAt = null;
+    detectedThisConnectionAt = null;
+  }
+
+  void onDiag(ValkorDiag d) {
+    // Mniejszy czas pracy = tracker uruchomił się ponownie: nowa podstawa.
+    final b = diagBaseline;
+    if (b == null || d.uptimeS < b.uptimeS) diagBaseline = d;
+    diag = d;
+  }
+
+  /// Nowa sesja testowa: liczniki telefonu od zera, liczniki firmware od bieżącej wartości.
+  void resetSession() {
+    stats.resetSession();
+    diagBaseline = diag;
+    meshIgnored = meshFallback = 0;
+    historyRecovered = historyRejected = historyDuplicates = historyBeforeLive = 0;
+    reinits = 0;
+  }
+
+  /// Stan kanału w chwili [t] ([delivering] – patrz CollarLink.valkorDelivering).
+  ValkorChannel channel(DateTime t, {required bool delivering}) {
+    if (subscribedAt == null && lastRxThisConnection == null) return ValkorChannel.detected;
+    if (!delivering) {
+      final rx = lastRxThisConnection;
+      final since = rx ?? subscribedAt!;
+      // Krótko po subskrypcji – jeszcze czekamy na pierwszy pakiet.
+      if (rx == null && t.difference(since).inSeconds < 6) return ValkorChannel.subscribed;
+      return ValkorChannel.silent;
+    }
+    final p = lastPositionAt;
+    if (p != null && t.difference(p).inSeconds <= 5 * (periodSec ?? 1) + 2) return ValkorChannel.receiving;
+    return ValkorChannel.confirmed;
+  }
+
+  /// Licznik firmware w bieżącej sesji testowej (różnica od podstawy).
+  int sessionDelta(int Function(ValkorDiag d) f) {
+    final d = diag, b = diagBaseline;
+    if (d == null) return 0;
+    if (b == null || identical(b, d)) return b == null ? f(d) : 0;
+    final v = f(d) - f(b);
+    return v < 0 ? f(d) : v;
+  }
+
   List<String> csvLines() {
-    final i = info, d = diag, s = status;
+    final i = info, d = diag, s = status, b = buildInfo, p = perf;
     String n(double? v) => v == null ? '' : v.toStringAsFixed(2);
     return [
       '',
       'valkor;nazwa;wartosc',
       'valkor;firmware;${firmware ?? ''}',
+      'valkor;firmware_nazwa;${b?.name ?? ''}',
+      'valkor;firmware_kompilacja;${b?.buildId ?? ''}',
+      'valkor;firmware_commit;${b?.commit ?? ''}',
+      'valkor;protokol;$protocol',
       'valkor;baza_meshtastic;${i?.upstream ?? ''}',
       'valkor;urzadzenie;${i?.hwName ?? ''}',
       'valkor;tryb;${deviceMode?.name ?? ''}',
+      'valkor;mtu;${mtu ?? ''}',
+      'valkor;mtu_wymagane;${ValkorBle.minMtu}',
       'valkor;polaczenie_bez_szyfrowania;$insecure',
-      'valkor;pakiety;${stats.packets}',
-      'valkor;pozycje_na_zywo;${stats.live}',
-      'valkor;pozycje_historyczne;${stats.historical}',
-      'valkor;historyczne_poza_trasa;$historyOutsideTrack',
-      'valkor;statusy;${stats.status}',
-      'valkor;utracone_pakiety;${stats.lost}',
-      'valkor;powtorzone_pakiety;${stats.duplicates}',
-      'valkor;bledne_ramki;${stats.badFrames}',
-      'valkor;restarty_trackera;${stats.restarts}',
-      'valkor;mediana_odstepu_odbioru_s;${n(stats.medianLiveInterval)}',
-      'valkor;pozycje_meshtastic_pominiete;$meshIgnored',
+      'valkor;ponowienia_inicjalizacji;$reinits',
+      'valkor;bledy_subskrypcji;$subscribeErrors',
+      // Liczniki telefonu – od początku sesji testowej.
+      'valkor_sesja;pakiety;${stats.packets}',
+      'valkor_sesja;pozycje_na_zywo;${stats.live}',
+      'valkor_sesja;pozycje_historyczne_odebrane;${stats.historical}',
+      'valkor_sesja;historia_przyjeta;$historyRecovered',
+      'valkor_sesja;historia_odrzucona;$historyRejected',
+      'valkor_sesja;historia_duplikaty;$historyDuplicates',
+      'valkor_sesja;historia_wstawiona_przed_pozycja_na_zywo;$historyBeforeLive',
+      'valkor_sesja;statusy;${stats.status}',
+      'valkor_sesja;utracone_pakiety;${stats.lost}',
+      'valkor_sesja;powtorzone_pakiety;${stats.duplicates}',
+      'valkor_sesja;bledne_ramki;${stats.badFrames}',
+      'valkor_sesja;restarty_trackera;${stats.restarts}',
+      'valkor_sesja;mediana_odstepu_odbioru_s;${n(stats.medianLiveInterval)}',
+      'valkor_sesja;najdluzsza_przerwa_odbioru_s;${n(stats.maxLiveGapSec)}',
+      'valkor_sesja;przerwy_ponad_2s;${stats.liveGapsOver2s}',
+      'valkor_sesja;pozycje_meshtastic_pominiete;$meshIgnored',
+      'valkor_sesja;pozycje_meshtastic_tryb_awaryjny;$meshFallback',
       if (d != null) ...[
-        'valkor;czas_pracy_s;${d.uptimeS}',
-        'valkor;gnss_odstep_sr_max_ms;${d.gnssIntervalAvgMs};${d.gnssIntervalMaxMs}',
-        'valkor;gnss_pomiary_odrzucone;${d.fixesTotal};${d.fixesRejected}',
-        'valkor;wyslane_na_zywo_historia;${d.liveSent};${d.historySent}',
-        'valkor;bledy_wysylki_ble;${d.notifyFailed}',
-        'valkor;za_male_mtu;${d.mtuTooSmall}',
-        'valkor;polaczenia_ponowne_tracker;${d.reconnects}',
-        'valkor;historia_w_pamieci_utracona;${d.historyStored};${d.historyDropped}',
-        'valkor;rssi_tracker_dbm;${d.rssi}',
-        'valkor;wolna_pamiec_kb;${d.freeHeapKb}',
-        'valkor;opoznienie_sr_max_ms;${d.latencyAvgMs};${d.latencyMaxMs}',
+        'valkor_sesja;gnss_pomiary_wszystkie;${sessionDelta((x) => x.fixesTotal)}',
+        'valkor_sesja;gnss_pomiary_odrzucone;${sessionDelta((x) => x.fixesRejected)}',
+        'valkor_sesja;wyslane_na_zywo;${sessionDelta((x) => x.liveSent)}',
+        'valkor_sesja;wyslane_historia;${sessionDelta((x) => x.historySent)}',
+        'valkor_sesja;bledy_wysylki_ble;${sessionDelta((x) => x.notifyFailed)}',
+        // Liczniki firmware – narastające od uruchomienia trackera.
+        'valkor_fw_od_startu;czas_pracy_s;${d.uptimeS}',
+        'valkor_fw_od_startu;gnss_pomiary_wszystkie;${d.fixesTotal}',
+        'valkor_fw_od_startu;gnss_pomiary_odrzucone;${d.fixesRejected}',
+        'valkor_fw_od_startu;gnss_odstep_sr_ms;${d.gnssIntervalAvgMs}',
+        'valkor_fw_od_startu;gnss_odstep_max_ms;${d.gnssIntervalMaxMs}',
+        'valkor_fw_od_startu;wyslane_na_zywo;${d.liveSent}',
+        'valkor_fw_od_startu;wyslane_historia;${d.historySent}',
+        'valkor_fw_od_startu;bledy_wysylki_ble;${d.notifyFailed}',
+        'valkor_fw_od_startu;za_male_mtu;${d.mtuTooSmall}',
+        'valkor_fw_od_startu;polaczenia_ponowne;${d.reconnects}',
+        'valkor_fw_od_startu;historia_w_pamieci;${d.historyStored}',
+        'valkor_fw_od_startu;historia_utracona;${d.historyDropped}',
+        'valkor_fw_od_startu;rssi_tracker_dbm;${d.rssi}',
+        'valkor_fw_od_startu;wolna_pamiec_kb;${d.freeHeapKb}',
+        'valkor_fw_od_startu;opoznienie_sr_ms;${d.latencyAvgMs}',
+        'valkor_fw_od_startu;opoznienie_max_ms;${d.latencyMaxMs}',
       ],
-      if (s != null) 'valkor;bateria_mv_proc;${s.batteryMv ?? ''};${s.batteryPct ?? ''}',
+      if (p != null) ...[
+        'valkor_fw_okno_10s;gnss_odstep_mediana_ms;${p.gnssIntMedianMs}',
+        'valkor_fw_okno_10s;ble_odstep_mediana_ms;${p.bleIntMedianMs}',
+        'valkor_fw_okno_10s;ble_odstep_max_ms;${p.bleIntMaxMs}',
+        'valkor_fw_okno_10s;opoznienie_gnss_ble_mediana_ms;${p.latencyMedianMs}',
+        'valkor_fw_okno_10s;nowe_pomiary;${p.windowFixes}',
+        'valkor_fw_od_startu;nmea_poprawne;${p.nmeaOk}',
+        'valkor_fw_od_startu;nmea_bledne;${p.nmeaBad}',
+        'valkor_fw_od_startu;pomiary_pominiete;${p.fixesSkipped}',
+        'valkor_fw_od_startu;pomiary_ta_sama_pozycja;${p.samePosition}',
+        'valkor_fw_od_startu;kolejka_pelna;${p.queueFull}',
+        'valkor_fw_od_startu;temperatura_c;${p.tempC ?? ''}',
+      ],
+      if (s != null) 'valkor;bateria_proc;${s.batteryPct ?? ''}',
+      'valkor;bateria_mv;${batteryMv ?? s?.batteryMv ?? ''}',
     ];
   }
 
   /// Wiersze do ekranu diagnostyki (etykieta, wartość).
   List<(String, String)> rows() {
-    final i = info, d = diag;
+    final i = info, d = diag, b = buildInfo, p = perf;
     String s1(double v) => v.toStringAsFixed(1).replaceAll('.', ',');
     final m = stats.medianLiveInterval;
     return [
       (tr('Firmware'), firmware == null ? '–' : 'Valkor Track $firmware${i == null ? '' : ' (Meshtastic ${i.upstream})'}'),
+      if (b != null) (tr('Kompilacja firmware'), '${b.buildId} · ${b.commit} · ${tr('protokół')} ${b.protocol}'),
       if (i != null) (tr('Urządzenie'), i.hwName),
       (tr('Tryb w trackerze'), deviceMode == null ? '–' : deviceMode!.name.toUpperCase()),
+      (tr('MTU (rzeczywiste / wymagane)'), '${mtu ?? '?'} / ${ValkorBle.minMtu}'),
       if (insecure) (tr('Uwaga'), tr('połączenie bez szyfrowania – ustaw PIN Bluetooth w trackerze')),
       (tr('Odstęp pomiarów GNSS (zmierzony w trackerze)'), gnssIntervalSec == null ? '–' : tr('~{0} s', [s1(gnssIntervalSec!)])),
-      if (d != null) (tr('Najdłuższy odstęp GNSS (ostatnie 10 s)'), tr('{0} s', [s1(d.gnssIntervalMaxMs / 1000)])),
+      if (d != null) (tr('Najdłuższy odstęp GNSS (od startu trackera)'), tr('{0} s', [s1(d.gnssIntervalMaxMs / 1000)])),
       (tr('Odstęp odbioru pozycji w telefonie'), m == null ? '–' : tr('~{0} s', [s1(m)])),
+      (tr('Najdłuższa przerwa odbioru'), tr('{0} s', [s1(stats.maxLiveGapSec)])),
+      if (p != null) (tr('Opóźnienie GNSS → Bluetooth (mediana)'), '${p.latencyMedianMs} ms'),
       if (d != null) (tr('Opóźnienie w trackerze śr. / max'), '${d.latencyAvgMs} / ${d.latencyMaxMs} ms'),
       (tr('Pakiety Valkor / utracone / powtórzone'), '${stats.packets} / ${stats.lost} / ${stats.duplicates}'),
       (tr('Pozycje na żywo / historyczne'), '${stats.live} / ${stats.historical}'),
-      if (historyOutsideTrack > 0) (tr('Historyczne poza trasą'), '$historyOutsideTrack'),
+      if (historyRecovered + historyRejected + historyDuplicates > 0)
+        (tr('Historia: przyjęta / odrzucona / duplikaty'), '$historyRecovered / $historyRejected / $historyDuplicates'),
+      if (meshFallback > 0) (tr('Pozycje Meshtastic w trybie awaryjnym'), '$meshFallback'),
+      if (reinits > 0) (tr('Ponowienia kanału Valkor'), '$reinits${lastReinitReason == null ? '' : ' ($lastReinitReason)'}'),
+      if (subscribeError != null) (tr('Błąd subskrypcji'), subscribeError!),
       if (stats.badFrames > 0) (tr('Błędne ramki'), '${stats.badFrames}'),
       if (stats.restarts > 0) (tr('Restarty trackera'), '${stats.restarts}'),
+      if (d != null) (tr('GNSS: pomiary / odrzucone (od startu trackera)'), '${d.fixesTotal} / ${d.fixesRejected}'),
       if (d != null) (tr('Sygnał Bluetooth w trackerze'), d.rssi == 0 ? '–' : '${d.rssi} dBm'),
       if (d != null) (tr('Czas pracy trackera'), tr('{0} min', [(d.uptimeS / 60).floor()])),
       if (d != null) (tr('Wolna pamięć trackera'), '${d.freeHeapKb} kB'),
@@ -109,7 +295,8 @@ class ValkorSession {
 }
 
 /// Pozycja Valkor w postaci używanej przez istniejący filtr i trasę.
-/// Dokładność: firmware liczy HDOP × 3 m – tu ten sam mnożnik.
+/// Dokładność: wartość podana przez tracker (accuracyM); tylko gdy jej nie
+/// ma – HDOP × 3 m (ten sam mnożnik co w firmware).
 MeshPosition valkorToMesh(ValkorPosition p) {
   final age = p.ageMs;
   return MeshPosition(
@@ -124,5 +311,10 @@ MeshPosition valkorToMesh(ValkorPosition p) {
     sats: p.sats,
     hdop: p.hdop > 0 ? p.hdop : null,
     gpsAccuracyM: 3,
+    reportedAccuracyM: p.accuracyM,
+    fixValid: p.fixValid,
+    fixQuality: p.fixQuality,
+    fixId: p.fixId,
+    stationary: p.stationary,
   );
 }

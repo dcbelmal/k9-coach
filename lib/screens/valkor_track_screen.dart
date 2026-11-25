@@ -589,14 +589,15 @@ class _ValkorTrackScreenState extends State<ValkorTrackScreen> {
     final expected = c.expectedIntervalSec;
 
     final battery = node?.battery ?? last?.battery;
-    final ble = c.connected ? K9.green : (c.state == CollarState.off ? K9.red : K9.yellow);
-    final heard = node?.lastHeard == null ? null : now.difference(node!.lastHeard!).inSeconds;
-    final lora = heard != null && heard <= CollarLink.loraSilentSec ? K9.green : K9.red;
-    final gps = switch (link) {
-      DogLink.live => K9.green,
-      DogLink.stale || DogLink.waitingGps => K9.yellow,
-      _ => K9.red,
-    };
+    // Osobne wskaźniki: Bluetooth, kanał Valkor, GNSS trackera, GPS telefonu,
+    // LoRa (tylko przy dwóch urządzeniach – przy jednym trackerze nie dotyczy).
+    final ind = c.indicators(now: now, phone: PhoneLocation.instance.snapshot(now));
+    Color col(IndicatorLevel l) => switch (l) {
+          IndicatorLevel.ok => K9.green,
+          IndicatorLevel.warn => K9.yellow,
+          IndicatorLevel.bad => K9.red,
+          IndicatorLevel.na => K9.muted,
+        };
 
     return Material(
       color: K9.card,
@@ -634,9 +635,12 @@ class _ValkorTrackScreenState extends State<ValkorTrackScreen> {
                   Text(
                     [
                       dogLinkText(c, now: now, dogId: _viewId),
-                      if (last != null && link != DogLink.live) tr('ostatnia znana pozycja {0}', [collarAge(last.at, now: now)]),
+                      if (last != null && !link.current) tr('ostatnia znana pozycja {0}', [collarAge(last.at, now: now)]),
                     ].join(' · '),
-                    style: const TextStyle(color: K9.muted, fontSize: 12.5),
+                    style: TextStyle(
+                        color: link == DogLink.noData || link == DogLink.valkorSilent ? K9.red : K9.muted,
+                        fontSize: 12.5,
+                        fontWeight: link == DogLink.noData ? FontWeight.w700 : FontWeight.normal),
                   ),
                 ]),
               ),
@@ -645,9 +649,10 @@ class _ValkorTrackScreenState extends State<ValkorTrackScreen> {
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(children: [
-                _chip(tr('Bluetooth'), ble),
-                if (!c.direct && c.paired) _chip(tr('LoRa'), lora),
-                _chip(tr('GPS psa'), gps),
+                for (final i in ind)
+                  // Kanał Valkor tylko przy firmware Valkor, LoRa tylko przy dwóch urządzeniach.
+                  if (!(i.level == IndicatorLevel.na && (i.name == tr('Valkor BLE') || i.name == tr('LoRa'))))
+                    Tooltip(message: '${i.name}: ${i.text}', child: _chip(i.name, col(i.level))),
               ]),
             ),
             const SizedBox(height: 12),

@@ -9,7 +9,8 @@ import 'package:latlong2/latlong.dart';
 
 import '../collar/collar_link.dart';
 import '../collar/tracker_driver.dart';
-import '../collar/fix_filter.dart' show FixFilter;
+import '../collar/fix_filter.dart' show FixSource;
+import 'dog_track_builder.dart';
 import '../dogs/dog_profiles.dart';
 import '../models.dart';
 import '../storage/safe_prefs.dart';
@@ -55,19 +56,93 @@ class TrackRecorder extends ChangeNotifier {
   List<List<TrackPoint>> segments = [];
   List<double> laps = [];
 
-  /// Trasa psa z obroży GPS (T1000-E) i jej dystans.
-  /// Segmenty trasy psa (nowy po pauzie i po utracie sygnału dłuższej niż [dogGapSec]).
-  List<List<TrackPoint>> dogSegments = [];
-  double dogMeters = 0;
+  /// Trasa psa z obroży GPS (T1000-E): surowe pomiary, punkty trasy i dystans
+  /// (patrz [DogTrackBuilder]). Segmenty: nowy po pauzie, po utracie
+  /// wiarygodności i po przerwie w pomiarach dłuższej niż próg trybu trackera
+  /// (Valkor SPORT 5 s, WALK 12 s, ECO 45 s; zwykły Meshtastic [dogGapSec]).
+  final dogTrack = DogTrackBuilder(gapSec: dogGapSec.toDouble());
+  List<List<TrackPoint>> get dogSegments => dogTrack.segments;
+  set dogSegments(List<List<TrackPoint>> v) {
+    dogTrack.clear();
+    dogTrack.segments = v;
+  }
+
+  double get dogMeters => dogTrack.meters;
+  set dogMeters(double v) => dogTrack.meters = v;
   CollarFix? dogLast;
 
   /// Tracker, którego pozycje zapisujemy – ustalany na starcie i niezmienny
   /// do końca treningu (zmiana wyboru w trakcie nie przełącza źródła).
   int? dogNode;
-  DateTime? _dogLastFixAt;
 
-  /// Przerwa w pomiarach psa (s), po której zaczynamy nowy segment.
+  /// Przerwa w pomiarach psa (s) dla zwykłego Meshtastic, po której zaczynamy nowy segment.
   static const dogGapSec = 90;
+
+  /// Odcinki ruchu treningu w czasie zegarowym (do umieszczenia pomiaru psa
+  /// – także historycznego – w czasie treningu; pomiary z pauzy pomijamy).
+  final List<_Span> _spans = [];
+  DateTime? _legacyZero;
+
+  /// Czas treningu (s ruchu) dla chwili [wall]; null = pauza / przed startem.
+  @visibleForTesting
+  double? secondsAt(DateTime wall, {DateTime? now}) {
+    if (_spans.isEmpty) {
+      // Bez startu (testy): czas od pierwszego pomiaru, tylko w trakcie ruchu.
+      if (state != RecState.running) return null;
+      final z = _legacyZero ??= wall;
+      final v = wall.difference(z).inMilliseconds / 1000;
+      return v < 0 ? 0 : v;
+    }
+    for (final sp in _spans.reversed) {
+      if (wall.isBefore(sp.wall)) continue;
+      final end = sp.end;
+      if (end != null && wall.isAfter(end)) return null; // w pauzie po tym odcinku
+      final v = sp.t + wall.difference(sp.wall).inMilliseconds / 1000;
+      // Zegar trackera minimalnie przed zegarem telefonu – nie dalej niż „teraz”.
+      if (end == null && wall.isAfter(now ?? clock())) return sp.t + (now ?? clock()).difference(sp.wall).inMilliseconds / 1000;
+      return v;
+    }
+    return null;
+  }
+
+  /// Zegar (podmieniany w testach).
+  @visibleForTesting
+  static DateTime Function() clock = DateTime.now;
+
+  /// Udaje start treningu w chwili [t] (testy trasy psa i historii).
+  @visibleForTesting
+  void startClockForTest(DateTime t) {
+    state = RecState.running;
+    startedAt = t;
+    _spans
+      ..clear()
+      ..add(_Span(t, 0));
+    dogTrack.clear();
+    dogLast = null;
+  }
+
+  /// Udaje pauzę / wznowienie w chwili [t] (testy).
+  @visibleForTesting
+  void pauseAtForTest(DateTime t) {
+    state = RecState.paused;
+    if (_spans.isNotEmpty) _spans.last.end = t;
+  }
+
+  @visibleForTesting
+  void resumeAtForTest(DateTime t) {
+    final last = _spans.last;
+    final tPrev = last.t + last.end!.difference(last.wall).inMilliseconds / 1000;
+    _spans.add(_Span(t, tPrev));
+    state = RecState.running;
+  }
+
+  /// Numer odcinka ruchu dla chwili [wall] (zmienia się po pauzie).
+  int _spanOf(DateTime wall) {
+    for (var i = _spans.length - 1; i >= 0; i--) {
+      if (!wall.isBefore(_spans[i].wall)) return i;
+    }
+    return 0;
+  }
 
   List<TrackPoint> get dogPoints => [for (final s in dogSegments) ...s];
   StreamSubscription<CollarFix>? _dogSub;
@@ -153,11 +228,9 @@ class TrackRecorder extends ChangeNotifier {
     segments = [[]];
     laps = [];
     meters = 0;
-    dogSegments = [[]];
-    dogMeters = 0;
+    dogTrack.clear();
     dogLast = null;
     dogNode = TrackerDrivers.active.dogNode;
-    _dogLastFixAt = null;
     last = null;
     error = null;
     _announcedKm = 0;
@@ -170,6 +243,10 @@ class TrackRecorder extends ChangeNotifier {
     _lastNotif = -100;
     currentSpeedKmh = null;
     startedAt = DateTime.now();
+    _spans
+      ..clear()
+      ..add(_Span(startedAt!, 0));
+    _legacyZero = null;
     sessionId = 's${startedAt!.microsecondsSinceEpoch}';
     dogId = DogProfiles.instance.activeId;
     _lastDraftT = -100;
@@ -188,7 +265,6 @@ class TrackRecorder extends ChangeNotifier {
       // punkty i dystans liczą się dopiero po jej ustaleniu (bez sztywnego
       // czekania, gdy już jest wiarygodna).
       _phoneEpoch = PhoneLocation.instance.trust.stabilizations;
-      _dogWasTrusted = true;
       _dogSub?.cancel();
       _dogSub = TrackerDrivers.active.fixes.listen(onDogFix);
     }
@@ -230,7 +306,6 @@ class TrackRecorder extends ChangeNotifier {
   }
 
   int _phoneEpoch = -1;
-  bool _dogWasTrusted = true;
 
   /// Prędkość starsza niż tyle sekund nie jest już „bieżąca”.
   static const speedMaxAgeSec = 5;
@@ -302,58 +377,29 @@ class TrackRecorder extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Pozycja psa z obroży. Pauza nie zatrzymuje obroży – dopisujemy tylko
-  /// w trakcie ruchu, żeby czas punktów zgadzał się z trasą człowieka.
+  /// Pozycja psa z obroży. Pauza nie zatrzymuje obroży – pomiary z pauzy
+  /// nie trafiają do trasy. Pomiar historyczny (odzyskany z pamięci trackera
+  /// po utracie zasięgu) trafia w swoje miejsce w czasie treningu, a trasa
+  /// i dystans są przeliczane; nie zmienia bieżącej pozycji ([dogLast]).
   @visibleForTesting
   void onDogFix(CollarFix f) {
     if (state == RecState.idle) return;
     // Źródło ustalone na starcie; gdy tracker nie był jeszcze znany – pierwszy pies.
     dogNode ??= TrackerDrivers.active.dogNode;
     if (f.node != dogNode) return;
-    // Pomiar sprzed startu treningu (np. zaległy z kolejki) nie należy do
-    // tej trasy ani dystansu.
+    // Pomiar sprzed startu treningu (np. zaległy z kolejki albo z poprzedniego
+    // treningu) nie należy do tej trasy ani dystansu.
     final st = startedAt;
     if (st != null && f.fixAt.isBefore(st)) return;
     if (!f.historical) dogLast = f;
-    // Niewiarygodna pozycja (stabilizacja trackera): bez punktu i dystansu;
-    // po ustaleniu pozycji – nowy odcinek.
-    if (!f.trusted) {
-      _dogWasTrusted = false;
-      notifyListeners();
-      return;
-    }
-    if (!_dogWasTrusted) {
-      _dogWasTrusted = true;
-      if (dogSegments.isNotEmpty && dogSegments.last.isNotEmpty) dogSegments.add([]);
-    }
-    if (state != RecState.running) {
-      notifyListeners();
-      return;
-    }
-    if (dogSegments.isEmpty) dogSegments.add([]);
-    // Utrata sygnału: nowy segment, bez dystansu „przez lukę”.
-    final lastAt = _dogLastFixAt;
-    if (lastAt != null && f.fixAt.difference(lastAt).inSeconds > dogGapSec && dogSegments.last.isNotEmpty) {
-      dogSegments.add([]);
-    }
-    _dogLastFixAt = f.fixAt;
-    if (!f.moved && dogSegments.last.isNotEmpty) {
-      notifyListeners(); // postój – świeży pomiar, ale bez nowego punktu
-      return;
-    }
-    // Czas punktu = czas pomiaru GPS przeliczony na czas ruchu treningu.
-    final seg = dogSegments.last;
-    // Pomiar zaległy (po ponownym połączeniu) trafia w swoje miejsce trasy.
-    var t = seconds - f.lagSec.clamp(0, f.historical ? FixFilter.maxHistorySec : 60);
-    if (seg.isNotEmpty) {
-      final prev = seg.last;
-      if (t < prev.t) t = prev.t;
-      final d = const Distance()(prev.ll, LatLng(f.lat, f.lng));
-      final dt = t - prev.t;
-      if (dt > 0 && d / dt > FixFilter.maxSpeedMs) return; // drugi bezpiecznik na skoki
-      dogMeters += d;
-    }
-    seg.add(TrackPoint(f.lat, f.lng, t < 0 ? 0 : t, f.speedMs));
+    dogTrack.gapSec = f.source == FixSource.meshtastic
+        ? dogGapSec.toDouble()
+        : CollarLink.instance.valkorLimits.trackGapSec;
+    final live = !f.historical;
+    // Pomiar na żywo w czasie pauzy: bez punktu (i przerwa w odcinku).
+    final t = live && state != RecState.running ? null : secondsAt(f.fixAt);
+    dogTrack.add(DogSample(f.fixAt, t, _spanOf(f.fixAt), f.lat, f.lng,
+        speedMs: f.speedMs, accuracyM: f.accuracyM, source: f.source, trusted: f.trusted));
     notifyListeners();
   }
 
@@ -403,6 +449,7 @@ class TrackRecorder extends ChangeNotifier {
   void pause() {
     if (state != RecState.running) return;
     _watch.stop();
+    if (_spans.isNotEmpty && _spans.last.end == null) _spans.last.end = DateTime.now();
     state = RecState.paused;
     currentSpeedKmh = null;
     unawaited(_saveDraft());
@@ -415,8 +462,8 @@ class TrackRecorder extends ChangeNotifier {
   void resume() {
     if (state != RecState.paused) return;
     _watch.start();
+    _spans.add(_Span(DateTime.now(), seconds));
     segments.add([]);
-    if (dogSegments.isEmpty || dogSegments.last.isNotEmpty) dogSegments.add([]);
     state = RecState.running;
     _scheduleGoal();
     _updateNotification();
@@ -470,8 +517,7 @@ class TrackRecorder extends ChangeNotifier {
     sessionId = null;
     segments = [];
     meters = 0;
-    dogSegments = [];
-    dogMeters = 0;
+    dogTrack.clear();
     dogNode = null;
     notifyListeners();
   }
@@ -526,4 +572,13 @@ class TrackRecorder extends ChangeNotifier {
   void _say(String text) {
     _tts.speak(text).catchError((_) => null);
   }
+}
+
+/// Odcinek ruchu treningu: od [wall] (czas zegarowy) przy czasie treningu [t]
+/// do [end] (pauza; null = trwa).
+class _Span {
+  final DateTime wall;
+  final double t;
+  DateTime? end;
+  _Span(this.wall, this.t);
 }

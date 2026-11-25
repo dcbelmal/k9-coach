@@ -12,7 +12,7 @@ class ValkorBle {
   static const minMtu = 67;
 }
 
-enum ValkorType { position, status, info, diag, ack, unknown }
+enum ValkorType { position, status, info, diag, ack, perf, buildInfo, unknown }
 
 /// Tryby firmware (bajt trybu w pakietach i komendzie SET_MODE).
 enum ValkorMode {
@@ -72,6 +72,10 @@ class ValkorPosition {
   /// Od odebrania pomiaru z odbiornika do wysłania (ms); null dla historycznych.
   final int? ageMs;
   final int? batteryMv, batteryPct;
+
+  /// Numer nowego pomiaru GNSS w trackerze (protokół 1.1, firmware 0.1.1+).
+  /// null = brak (pakiet historyczny albo firmware 0.1.0).
+  final int? fixId;
   const ValkorPosition(this.h,
       {required this.fixTime,
       required this.lat,
@@ -85,7 +89,15 @@ class ValkorPosition {
       required this.fixQuality,
       this.ageMs,
       this.batteryMv,
-      this.batteryPct});
+      this.batteryPct,
+      this.fixId});
+
+  bool get fixValid => h.has(ValkorFlags.fixValid);
+  bool get timeValid => h.has(ValkorFlags.timeValid);
+  bool get stationary => h.has(ValkorFlags.stationary);
+
+  /// true = dokładność oszacowana przez tracker (np. z HDOP), nie zmierzona przez odbiornik.
+  bool get accuracyEstimated => h.has(ValkorFlags.accEstimated);
 }
 
 class ValkorStatus {
@@ -150,6 +162,62 @@ class ValkorAck {
   bool get ok => result == 0;
 }
 
+/// Pomiary czasu i stanu z trackera (typ 6, protokół 1.1). Okno ≈ 10 s.
+class ValkorPerf {
+  final ValkorHeader h;
+  final int nmeaOk, nmeaBad, windowFixes, gnssIntMedianMs, gnssIntMinMs, bleIntMedianMs, bleIntMaxMs;
+  final int latencyMedianMs, queueWaitAvgMs, queueWaitMaxMs, fixesSkipped, samePosition, queueFull, notifyErrors;
+  final int telemetrySent;
+  final bool gnssActive;
+
+  /// null = brak danych (0xFFFF / 0x7FFF w pakiecie).
+  final int? lastFixAgeMs, cpuPermille, fsFreeKb;
+  final double? tempC;
+  const ValkorPerf(this.h,
+      {required this.nmeaOk,
+      required this.nmeaBad,
+      required this.gnssActive,
+      required this.windowFixes,
+      required this.gnssIntMedianMs,
+      required this.gnssIntMinMs,
+      required this.bleIntMedianMs,
+      required this.bleIntMaxMs,
+      required this.latencyMedianMs,
+      required this.lastFixAgeMs,
+      required this.queueWaitAvgMs,
+      required this.queueWaitMaxMs,
+      required this.fixesSkipped,
+      required this.samePosition,
+      required this.queueFull,
+      required this.notifyErrors,
+      required this.telemetrySent,
+      required this.tempC,
+      required this.cpuPermille,
+      required this.fsFreeKb});
+}
+
+/// Identyfikacja firmware (typ 7, protokół 1.1).
+class ValkorBuildInfo {
+  final ValkorHeader h;
+  final int protoMajor, protoMinor, buildId, features;
+  final String firmware, commit, name;
+  final bool preRelease;
+
+  /// Okres wysyłki BLE (s) dla SPORT, WALK, ECO, SEARCH.
+  final List<int> blePeriodS;
+  const ValkorBuildInfo(this.h,
+      {required this.protoMajor,
+      required this.protoMinor,
+      required this.firmware,
+      required this.preRelease,
+      required this.buildId,
+      required this.commit,
+      required this.features,
+      required this.blePeriodS,
+      required this.name});
+  String get protocol => '$protoMajor.$protoMinor';
+}
+
 /// Pakiet z nieznanym typem (nowsze firmware) – ignorowany.
 class ValkorUnknown {
   final ValkorHeader h;
@@ -199,6 +267,8 @@ Object? decodeValkor(List<int> raw) {
     3 => ValkorType.info,
     4 => ValkorType.diag,
     5 => ValkorType.ack,
+    6 => ValkorType.perf,
+    7 => ValkorType.buildInfo,
     _ => ValkorType.unknown,
   };
   final h = ValkorHeader(
@@ -215,7 +285,7 @@ Object? decodeValkor(List<int> raw) {
       if (n < 54) return null;
       final t = u32(p), ms = u16(p + 4);
       final alt = i32(p + 14), spd = u16(p + 18), crs = u16(p + 20), acc = u16(p + 22), age = u16(p + 28);
-      final mv = u16(p + 30), pct = u8(p + 32);
+      final mv = u16(p + 30), pct = u8(p + 32), fixId = u16(p + 33);
       return ValkorPosition(h,
           fixTime: h.has(ValkorFlags.timeValid) && t > 0
               ? DateTime.fromMillisecondsSinceEpoch(t * 1000 + ms, isUtc: true)
@@ -231,7 +301,8 @@ Object? decodeValkor(List<int> raw) {
           fixQuality: u8(p + 27),
           ageMs: age == 0xFFFF ? null : age,
           batteryMv: mv == 0 ? null : mv,
-          batteryPct: pct == 0xFF ? null : pct);
+          batteryPct: pct == 0xFF ? null : pct,
+          fixId: fixId == 0 ? null : fixId);
     case ValkorType.status:
       if (n < 34) return null;
       final age = u32(p), mv = u16(p + 8), pct = u8(p + 10);
@@ -275,6 +346,43 @@ Object? decodeValkor(List<int> raw) {
     case ValkorType.ack:
       if (n < 22) return null;
       return ValkorAck(h, command: u8(p), result: u8(p + 1), value: u8(p + 2));
+    case ValkorType.perf:
+      if (n < 64) return null;
+      final lastAge = u16(p + 18), temp = d.getInt16(p + 40, Endian.little), cpu = u16(p + 42), fs = u16(p + 44);
+      return ValkorPerf(h,
+          nmeaOk: u32(p),
+          nmeaBad: u16(p + 4),
+          gnssActive: u8(p + 6) != 0,
+          windowFixes: u8(p + 7),
+          gnssIntMedianMs: u16(p + 8),
+          gnssIntMinMs: u16(p + 10),
+          bleIntMedianMs: u16(p + 12),
+          bleIntMaxMs: u16(p + 14),
+          latencyMedianMs: u16(p + 16),
+          lastFixAgeMs: lastAge == 0xFFFF ? null : lastAge,
+          queueWaitAvgMs: u16(p + 20),
+          queueWaitMaxMs: u16(p + 22),
+          fixesSkipped: u32(p + 24),
+          samePosition: u32(p + 28),
+          queueFull: u16(p + 32),
+          notifyErrors: u16(p + 34),
+          telemetrySent: u32(p + 36),
+          tempC: temp == 0x7FFF ? null : temp / 4,
+          cpuPermille: cpu == 0xFFFF ? null : cpu,
+          fsFreeKb: fs == 0xFFFF ? null : fs);
+    case ValkorType.buildInfo:
+      if (n < 64) return null;
+      String text(int o, int len) => String.fromCharCodes(raw.sublist(o, o + len).takeWhile((c) => c != 0));
+      return ValkorBuildInfo(h,
+          protoMajor: u8(p),
+          protoMinor: u8(p + 1),
+          firmware: '${u8(p + 2)}.${u8(p + 3)}.${u8(p + 4)}',
+          preRelease: u8(p + 5) != 0,
+          buildId: u32(p + 6),
+          commit: text(p + 10, 8),
+          features: u16(p + 18),
+          blePeriodS: [u8(p + 20), u8(p + 21), u8(p + 22), u8(p + 23)],
+          name: text(p + 24, 22));
     case ValkorType.unknown:
       return ValkorUnknown(h);
   }
@@ -287,6 +395,16 @@ class ValkorLinkStats {
   int? _lastSeq;
   DateTime? _lastLiveRx;
   final List<double> liveIntervals = [];
+
+  /// Numer kolejny ostatniego pakietu.
+  int? get lastSeq => _lastSeq;
+
+  /// Najdłuższa przerwa między pozycjami na żywo (s) i liczba przerw > 2 s.
+  double maxLiveGapSec = 0;
+  int liveGapsOver2s = 0;
+
+  /// Odstęp od poprzedniej pozycji na żywo (s), null dla pierwszej.
+  double? lastLiveIntervalSec;
 
   /// Rejestruje numer kolejny pakietu. Zwraca false dla duplikatu.
   bool seq(int s) {
@@ -311,13 +429,22 @@ class ValkorLinkStats {
 
   void liveRx(DateTime t) {
     final l = _lastLiveRx;
+    lastLiveIntervalSec = null;
     if (l != null) {
-      liveIntervals.add(t.difference(l).inMilliseconds / 1000);
+      final s = t.difference(l).inMilliseconds / 1000;
+      lastLiveIntervalSec = s;
+      liveIntervals.add(s);
       if (liveIntervals.length > 600) liveIntervals.removeAt(0);
+      if (s > maxLiveGapSec) maxLiveGapSec = s;
+      if (s > 2) liveGapsOver2s++;
     }
     _lastLiveRx = t;
     live++;
   }
+
+  /// Średni odstęp odbioru pozycji na żywo (s).
+  double? get meanLiveInterval =>
+      liveIntervals.isEmpty ? null : liveIntervals.reduce((a, b) => a + b) / liveIntervals.length;
 
   /// Mediana odstępu odbioru pozycji na żywo (s).
   double? get medianLiveInterval {
@@ -329,8 +456,20 @@ class ValkorLinkStats {
   /// Odsetek utraconych pakietów (0–1).
   double get lossRatio => packets + lost == 0 ? 0 : lost / (packets + lost);
 
+  /// Po zerwaniu połączenia: numeracja i odstępy liczone od nowa (przerwy
+  /// w łączności nie są „utraconymi pakietami” ani odstępem odbioru 1 Hz).
   void resetLink() {
     _lastSeq = null;
+    _lastLiveRx = null;
+  }
+
+  /// Nowa sesja testowa: wszystkie liczniki od zera.
+  void resetSession() {
+    packets = live = historical = status = lost = duplicates = badFrames = restarts = 0;
+    liveIntervals.clear();
+    maxLiveGapSec = 0;
+    liveGapsOver2s = 0;
+    lastLiveIntervalSec = null;
     _lastLiveRx = null;
   }
 }

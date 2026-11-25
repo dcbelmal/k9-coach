@@ -26,12 +26,12 @@ class TrackHomeCard extends StatelessWidget {
         final color = switch (link) {
           DogLink.live => K9.green,
           DogLink.none => K9.muted,
-          DogLink.stale || DogLink.waitingGps || DogLink.connecting => K9.yellow,
+          DogLink.stale || DogLink.waitingGps || DogLink.connecting || DogLink.delayed || DogLink.gnssLost => K9.yellow,
           _ => K9.red,
         };
         final lines = <String>[
           if (!c.paired) tr('Dodaj tracker GPS, żeby widzieć psa na mapie.') else dogLinkText(c, now: now, dogId: id),
-          if (last != null && link != DogLink.live) tr('ostatnia znana pozycja {0}', [collarAge(last.at, now: now)]),
+          if (last != null && !link.current) tr('ostatnia znana pozycja {0}', [collarAge(last.at, now: now)]),
           if (battery != null) collarBattery(battery),
         ];
         return K9Card(

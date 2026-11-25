@@ -521,7 +521,7 @@ class _GpsScreenState extends State<GpsScreen> {
     // błąd GPS, „Pies w pobliżu”, „Oczekiwanie na lokalizację telefonu”.
     final dv = DistanceView.of(c, CollarLink.activeDog(), now: now);
     final link = c.status();
-    final stale = link != DogLink.live;
+    final stale = !link.current;
     return K9Card(
       onTap: () => openValkorTrack(context),
       gradient: LinearGradient(colors: [K9.card, (stale ? K9.yellow : K9.blue).withValues(alpha: 0.18)]),

@@ -99,7 +99,8 @@ void main() {
     expect(c.dog!.battery, 81);
     expect(c.expectedIntervalSec, 1);
     c.markOpenedForTest(at(0));
-    expect(c.positionRequestDue(at(400)), isNull);
+    // Kanał Valkor dostarcza pakiety – bez zapytań Meshtastic.
+    expect(c.positionRequestDue(at(30.5)), isNull);
     await pumpEventQueue();
     await sub.cancel();
     expect(got.where((f) => !f.historical).length, 30);
@@ -112,18 +113,21 @@ void main() {
     expect(c.dog!.fix!.lat, north(0));
   });
 
-  test('pomiar historyczny: nigdy na żywo; starszy od bieżącej pozycji nie trafia w trasę', () async {
+  test('pomiar historyczny: nigdy na żywo; starszy od bieżącej pozycji idzie do trasy (wstawiany w swoje miejsce)', () async {
     final got = <CollarFix>[];
     final sub = c.fixes.listen(got.add);
     c.sessionStart = at(-600);
     c.handleValkor(position(north(0), at(100)), now: at(100.05));
     c.handleValkor(position(north(30), at(40), historical: true), now: at(100.5));
     expect(c.valkor!.stats.historical, 1);
-    expect(c.valkor!.historyOutsideTrack, 1);
+    expect(c.valkor!.historyBeforeLive, 1);
+    expect(c.valkor!.historyRecovered, 1);
     expect(c.dog!.lastHistorical!.historical, isTrue);
     expect(c.dog!.fix!.lat, north(0)); // pozycja na żywo bez zmian
     await pumpEventQueue();
-    expect(got.where((f) => f.historical), isEmpty);
+    // 0.27.1: historia trafia do trasy (TrackRecorder wstawia ją według czasu pomiaru).
+    expect(got.where((f) => f.historical), hasLength(1));
+    expect(got.where((f) => f.historical).single.source, FixSource.valkorHistory);
     expect(c.diag.historical, 1);
     await sub.cancel();
     // Historia sprzed pierwszej pozycji na żywo (np. zaraz po połączeniu) – do trasy jako historyczna.
@@ -135,7 +139,7 @@ void main() {
     final sub2 = c.fixes.listen(got.add);
     c.handleValkor(position(north(30), at(40), historical: true, seq: 1), now: at(100.5));
     await pumpEventQueue();
-    expect(got.where((f) => f.historical).length, 1);
+    expect(got.where((f) => f.historical).length, 2);
     expect(c.status(now: at(100.6)), isNot(DogLink.live));
     await sub2.cancel();
   });
@@ -179,7 +183,8 @@ void main() {
     expect(c.valkor!.status!.gnss, ValkorGnss.lost);
     expect(c.valkor!.gnssIntervalSec, closeTo(1.002, 1e-9));
     final csv = c.diag.csv(extra: c.valkor!.csvLines());
-    expect(csv, contains('valkor;gnss_odstep_sr_max_ms;1002;1180'));
+    expect(csv, contains('valkor_fw_od_startu;gnss_odstep_sr_ms;1002'));
+    expect(csv, contains('valkor_fw_od_startu;gnss_odstep_max_ms;1180'));
     expect(csv, contains('valkor;firmware;0.1.0'));
     expect(c.valkor!.rows().any((r) => r.$2.contains('1,0 s')), isTrue);
   });

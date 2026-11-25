@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
 
+import 'valkor_proto.dart';
+
 /// Minimalna obsługa protokołu Meshtastic (protobuf) – tylko to, czego
 /// potrzebuje obroża GPS: pozycje, nazwy urządzeń i bateria.
 ///
@@ -213,6 +215,22 @@ class MeshPosition {
   /// Numer kolejny pozycji (seq_number), jeśli podany.
   final int? seq;
 
+  /// Dokładność pozycji podana wprost przez tracker (m) – ma pierwszeństwo
+  /// przed wyliczeniem z HDOP (Valkor Track podaje własną wartość).
+  final double? reportedAccuracyM;
+
+  /// false = tracker oznaczył pomiar jako nieprawidłowy (brak fixu).
+  final bool fixValid;
+
+  /// Jakość fixu z NMEA GGA (0 brak, 1 GPS, 2 DGPS…), jeśli podana.
+  final int? fixQuality;
+
+  /// Numer pomiaru GNSS w trackerze (Valkor 1.1), jeśli podany.
+  final int? fixId;
+
+  /// Tracker oznaczył pomiar jako postój.
+  final bool stationary;
+
   const MeshPosition(this.lat, this.lng,
       {this.altitude,
       this.time,
@@ -226,11 +244,19 @@ class MeshPosition {
       this.hdop,
       this.gpsAccuracyM,
       this.fixType,
-      this.seq});
+      this.seq,
+      this.reportedAccuracyM,
+      this.fixValid = true,
+      this.fixQuality,
+      this.fixId,
+      this.stationary = false});
 
   /// Szacowana dokładność pozycji w metrach (null = urządzenie jej nie podaje).
-  /// Wzór jak w Meshtastic: HDOP × dokładność odbiornika (domyślnie ok. 5 m).
+  /// Wartość z trackera, a gdy jej nie ma – wzór jak w Meshtastic:
+  /// HDOP × dokładność odbiornika (domyślnie ok. 5 m).
   double? get accuracyM {
+    final r = reportedAccuracyM;
+    if (r != null && r > 0) return r;
     final h = hdop;
     if (h == null || h <= 0) return null;
     return h * ((gpsAccuracyM ?? 0) > 0 ? gpsAccuracyM! : 5);
@@ -313,7 +339,11 @@ class MeshPositionEvent extends MeshEvent {
 
   /// Pozycja z kanału Valkor Track (bezpośrednio z GNSS trackera), nie z Meshtastic.
   final bool valkor;
-  const MeshPositionEvent(this.node, this.position, {this.rssi, this.snr, this.packetId, this.requestId, this.valkor = false});
+
+  /// Surowy pakiet Valkor (numer kolejny, wiek, bateria) – do dziennika.
+  final ValkorPosition? valkorPacket;
+  const MeshPositionEvent(this.node, this.position,
+      {this.rssi, this.snr, this.packetId, this.requestId, this.valkor = false, this.valkorPacket});
 }
 
 /// Ustawienia urządzenia (Config) – z pobierania stanu po połączeniu albo

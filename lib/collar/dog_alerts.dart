@@ -149,7 +149,8 @@ class AlertEngine {
       out.add(DogAlert(k, text, i.now));
     }
 
-    final live = i.link == DogLink.live;
+    // Pozycja lekko opóźniona (np. SPORT 3–5 s) to jeszcze nie utrata psa.
+    final live = i.link.current;
     if (live) _lastLiveAt = i.now;
 
     // Utrata psa: brak świeżej pozycji przez lostSec (od ostatniej pozycji na żywo).
@@ -230,6 +231,8 @@ class AlertEngine {
   String _lostText(AlertInput i) => switch (i.link) {
         DogLink.bluetoothOff || DogLink.connecting => tr('Utracono połączenie Bluetooth z trackerem.'),
         DogLink.loraSilent => tr('Brak sygnału radiowego od psa.'),
+        DogLink.valkorSilent => tr('Brak nowych pakietów z trackera. Bluetooth działa.'),
+        DogLink.gnssLost => tr('Tracker nie ma sygnału GPS.'),
         _ => i.fix == null
             ? tr('Brak świeżej pozycji psa.')
             : tr('Brak nowej pozycji psa od {0} sekund. Bluetooth działa.', [i.now.difference(i.fix!.fixAt).inSeconds]),
