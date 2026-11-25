@@ -238,6 +238,7 @@ class _CollarScreenState extends State<CollarScreen> {
         ...PhoneLocation.instance.csvLines(),
         ...TileHealth.instance.csvLines(),
         ...c.fast.csvLines(),
+        ...?c.valkor?.csvLines(),
       ];
 
   /// Eksperyment: tracker co 5 s (odniesienie), 2 s i 1 s (test).
@@ -383,6 +384,10 @@ class _CollarScreenState extends State<CollarScreen> {
               if (n?.movedAt != null) row(tr('Ostatni ruch psa'), collarAge(n!.movedAt)),
               if (n?.lastPacketAt != null) row(tr('Ostatni pakiet od psa'), collarAge(n!.lastPacketAt)),
             ],
+            if (c.valkor != null) ...[
+              head(tr('Firmware Valkor Track (bezpośredni GPS)')),
+              for (final r in c.valkor!.rows()) row(r.$1, r.$2),
+            ],
             head(tr('GPS telefonu')),
             row(tr('GPS telefonu: szacowany błąd'), phone?.accuracyM == null ? '–' : '~${phone!.accuracyM!.round()} m'),
             row(tr('Wiek pozycji telefonu'), phone == null ? '–' : collarAge(phone.at)),
@@ -414,7 +419,8 @@ class _CollarScreenState extends State<CollarScreen> {
             head(tr('Podkład mapy')),
             row(tr('Kafle wczytane / błędy'), '${TileHealth.instance.loaded} / ${TileHealth.instance.errors}'),
             if (TileHealth.instance.lastError != null) row(tr('Ostatni błąd mapy'), TileHealth.instance.lastError!),
-            _fastMode(row, head),
+            // Z firmware Valkor tracker wysyła każdy pomiar sam – eksperyment z ustawieniami Meshtastic niepotrzebny.
+            if (c.valkor == null) _fastMode(row, head),
             const SizedBox(height: 8),
             Align(
               alignment: Alignment.centerLeft,
