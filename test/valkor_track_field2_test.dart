@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:k9_coach/collar/collar_link.dart';
 import 'package:k9_coach/collar/dog_alerts.dart';
 import 'package:k9_coach/collar/mesh_proto.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:k9_coach/gps/phone_location.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -228,9 +230,16 @@ void main() {
     final a = DogAlerts.instance..onAlert = got.add;
     await a.save(AlertSettings(enabled: true, leashM: 10, lowBattery: null));
     final now = DateTime.now();
+    await PhoneLocation.instance.resetForTest();
     for (var s = -30; s <= 0; s++) {
-      HandlerTrack.instance.add(HandlerFix(now.add(Duration(seconds: s)), 50, 20, accuracyM: 4));
+      final t = now.add(Duration(seconds: s));
+      PhoneLocation.instance.onPosition(
+          Position(latitude: 50, longitude: 20, timestamp: t, accuracy: 4, altitude: 0, altitudeAccuracy: 0, heading: 0,
+              headingAccuracy: 0, speed: 0, speedAccuracy: 0),
+          now: t);
     }
+    // Pierwszy pomiar trackera ustala pozycję (stabilizacja), kolejne dwa poza smyczą.
+    c.handleEvents([ev(north(60), 20, now.subtract(const Duration(seconds: 15)), 9)], now: now.subtract(const Duration(seconds: 14)));
     c.handleEvents([ev(north(60), 20, now.subtract(const Duration(seconds: 10)), 1)], now: now.subtract(const Duration(seconds: 9)));
     a.check(now: now.subtract(const Duration(seconds: 8)));
     c.handleEvents([ev(north(61), 20, now.subtract(const Duration(seconds: 5)), 2)], now: now.subtract(const Duration(seconds: 4)));

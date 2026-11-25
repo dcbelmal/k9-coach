@@ -147,7 +147,8 @@ void main() {
       for (var s = 130; s <= 140; s++) {
         phone(north(0.5 * noise(s, 1)), s);
       }
-      c.handleEvents([ev(north(1), at(138), 1)], now: at(140));
+      c.handleEvents([ev(north(1), at(133), 1)], now: at(134));
+      c.handleEvents([ev(north(1), at(138), 2)], now: at(140));
       final v = DistanceView.of(c, CollarLink.activeDog(), now: at(140));
       expect(v.hasDistance, isTrue);
       expect(v.state, DistanceState.nearby);
@@ -270,7 +271,8 @@ void main() {
         c.handleEvents([ev(north(i * 10.0), at(50 + i * 5), 100 + i)], now: at(201));
       }
       expect(c.diag.historical, 3);
-      expect(c.dog!.fix!.historical, isTrue);
+      expect(c.dog!.lastHistorical!.historical, isTrue);
+      expect(c.dog!.fix, isNull); // zaległe pomiary nie są pozycją na żywo
       expect(c.status(now: at(201)), isNot(DogLink.live));
       expect(c.diag.lags, isEmpty); // opóźnienia z kolejki nie psują statystyki
       // Pierwszy pomiar na żywo.

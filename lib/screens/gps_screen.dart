@@ -88,9 +88,13 @@ class GpsScreen extends StatefulWidget {
 }
 
 class _GpsScreenState extends State<GpsScreen> {
-  final map = MapController();
+  /// Osobne kontrolery mapy przed startem i podczas spaceru: jeden
+  /// kontroler podpięty pod dwie kolejne mapy przenosił stary widok (np. skalę
+  /// całego kraju sprzed ustalenia pozycji) i stan „gotowa” na nową mapę.
+  final setupMap = MapController();
+  final liveMap = MapController();
+  bool setupReady = false, liveReady = false;
   bool follow = true;
-  bool mapReady = false;
   String? permError;
   bool checking = true;
   LatLng? here;
@@ -129,8 +133,12 @@ class _GpsScreenState extends State<GpsScreen> {
   void _onRec() {
     if (!mounted) return;
     final p = _rec.last;
-    if (follow && mapReady && p != null) {
-      map.move(LatLng(p.latitude, p.longitude), map.camera.zoom < 14 ? 16 : map.camera.zoom);
+    if (follow && liveReady && p != null) {
+      try {
+        liveMap.move(LatLng(p.latitude, p.longitude), liveMap.camera.zoom < 14 ? 16 : liveMap.camera.zoom);
+      } catch (_) {
+        // Mapa jeszcze nie narysowana – przesunie się przy następnej pozycji.
+      }
     }
   }
 
@@ -159,7 +167,7 @@ class _GpsScreenState extends State<GpsScreen> {
     if (!mounted) return;
     if (p != null) {
       setState(() => here = LatLng(p.latitude, p.longitude));
-      if (mapReady) map.move(here!, 15);
+      if (setupReady) setupMap.move(here!, 15);
       if (c.weather == true) {
         final w = await GpsServices.weather(p.latitude, p.longitude);
         if (mounted) setState(() => weather = w);
@@ -353,7 +361,11 @@ class _GpsScreenState extends State<GpsScreen> {
     );
   }
 
-  Widget _map({double height = 220}) {
+  Widget _map({double height = 220, bool live = false}) {
+    final map = live ? liveMap : setupMap;
+    // Podczas spaceru nie wracamy do skali sprzed ustalenia pozycji (5,5).
+    final cam = live ? _liveCam : _setupCam;
+    final camOk = cam != null && (!live || cam.zoom >= 10);
     final pts = _rec.allPoints;
     final p = _rec.last;
     final pos = p == null ? here : LatLng(p.latitude, p.longitude);
@@ -364,15 +376,19 @@ class _GpsScreenState extends State<GpsScreen> {
         child: Stack(
           children: [
             FlutterMap(
-              key: const ValueKey('walk-map'),
+              key: ValueKey(live ? 'walk-map' : 'setup-map'),
               mapController: map,
               options: MapOptions(
-                initialCenter: (follow ? pos : null) ?? _cam?.center ?? pos ?? const LatLng(52.07, 19.48),
-                initialZoom: _cam?.zoom ?? (pos == null ? 5.5 : 15.5),
+                initialCenter: (follow ? pos : null) ?? (camOk ? cam.center : null) ?? pos ?? const LatLng(52.07, 19.48),
+                initialZoom: camOk ? cam.zoom : (pos == null ? 5.5 : (live ? 16 : 15.5)),
                 backgroundColor: K9.cardHi,
-                onMapReady: () => mapReady = true,
+                onMapReady: () => live ? liveReady = true : setupReady = true,
                 onPositionChanged: (c, hasGesture) {
-                  _cam = c;
+                  if (live) {
+                    _liveCam = c;
+                  } else {
+                    _setupCam = c;
+                  }
                   if (hasGesture && follow) setState(() => follow = false);
                 },
               ),
@@ -410,6 +426,11 @@ class _GpsScreenState extends State<GpsScreen> {
                 const OsmCredit(),
               ],
             ),
+            // Brak podkładu: trasa i znaczniki są nadal rysowane, tylko bez tła.
+            TileNotice(
+              consent: OnlineConsent.instance.map == true,
+              onEnable: () => OnlineConsent.instance.set(map: true).catchError((_) {}),
+            ),
             if (!follow && pos != null)
               Positioned(
                 right: 10,
@@ -443,7 +464,7 @@ class _GpsScreenState extends State<GpsScreen> {
   /// Ostatni widok mapy – mapa zbudowana od nowa (np. gdy nad nią pojawi
   /// się lub zniknie karta przy ponownym łączeniu Bluetooth) wraca do tej
   /// samej skali zamiast do domyślnej.
-  static MapCamera? _cam;
+  static MapCamera? _setupCam, _liveCam;
 
   /// Niebieski znacznik = pozycja na żywo, szary = ostatnia znana.
   Marker _dogMarker(LatLng p) {
@@ -516,7 +537,7 @@ class _GpsScreenState extends State<GpsScreen> {
                   dv.state == DistanceState.noDog && f != null ? tr('Pies: pozycja {0}', [collarAge(f.fixAt)]) : dv.sentence,
                   style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
-                if (dv.state == DistanceState.nearby || dv.state == DistanceState.waitingPhone)
+                if (dv.state == DistanceState.nearby || dv.state == DistanceState.waitingPhone || dv.state == DistanceState.stabilizing)
                   Text(dv.note ?? '', style: const TextStyle(color: K9.muted, fontSize: 12)),
                 Text(
                   [
@@ -1012,7 +1033,7 @@ class _GpsScreenState extends State<GpsScreen> {
               ),
               if (gps && (CollarLink.instance.paired || _rec.dogLast != null)) ...[gap12, _dogLive()],
               if (gps && CollarLink.instance.dogCoarse) ...[gap12, const CollarCoarseWarning()],
-              if (gps) ...[gap12, KeyedSubtree(key: const ValueKey('walk-map-box'), child: _map(height: 300))],
+              if (gps) ...[gap12, KeyedSubtree(key: const ValueKey('walk-map-box'), child: _map(height: 300, live: true))],
             ],
           ),
         ),

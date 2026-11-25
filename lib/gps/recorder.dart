@@ -184,6 +184,11 @@ class TrackRecorder extends ChangeNotifier {
     await Notifications.instance.requestPermission();
     if (useGps) {
       _listen();
+      // Start treningu: gdy pozycja telefonu nie jest jeszcze wiarygodna,
+      // punkty i dystans liczą się dopiero po jej ustaleniu (bez sztywnego
+      // czekania, gdy już jest wiarygodna).
+      _phoneEpoch = PhoneLocation.instance.trust.stabilizations;
+      _dogWasTrusted = true;
       _dogSub?.cancel();
       _dogSub = TrackerDrivers.active.fixes.listen(onDogFix);
     }
@@ -224,6 +229,9 @@ class TrackRecorder extends ChangeNotifier {
     }
   }
 
+  int _phoneEpoch = -1;
+  bool _dogWasTrusted = true;
+
   /// Prędkość starsza niż tyle sekund nie jest już „bieżąca”.
   static const speedMaxAgeSec = 5;
   DateTime? _speedAt;
@@ -250,6 +258,24 @@ class TrackRecorder extends ChangeNotifier {
     if (p.accuracy > (seg.isEmpty ? 40 : 25)) {
       notifyListeners();
       return; // za słaby sygnał
+    }
+    // Stabilizacja: niewiarygodnych pozycji (start, wyjście z budynku,
+    // powrót GPS po przerwie) nie zapisujemy i nie liczymy z nich dystansu.
+    final trust = PhoneLocation.instance.trust;
+    if (!trust.stable) {
+      last = p;
+      notifyListeners();
+      return;
+    }
+    // Pozycja ustalona od nowa (po skoku lub przerwie): nowy odcinek trasy,
+    // bez dystansu „przez skok”.
+    if (trust.stabilizations != _phoneEpoch) {
+      _phoneEpoch = trust.stabilizations;
+      if (seg.isNotEmpty) {
+        segments.add([]);
+        onPosition(p);
+        return;
+      }
     }
     final t = seconds;
     if (seg.isNotEmpty) {
@@ -284,7 +310,22 @@ class TrackRecorder extends ChangeNotifier {
     // Źródło ustalone na starcie; gdy tracker nie był jeszcze znany – pierwszy pies.
     dogNode ??= TrackerDrivers.active.dogNode;
     if (f.node != dogNode) return;
-    dogLast = f;
+    // Pomiar sprzed startu treningu (np. zaległy z kolejki) nie należy do
+    // tej trasy ani dystansu.
+    final st = startedAt;
+    if (st != null && f.fixAt.isBefore(st)) return;
+    if (!f.historical) dogLast = f;
+    // Niewiarygodna pozycja (stabilizacja trackera): bez punktu i dystansu;
+    // po ustaleniu pozycji – nowy odcinek.
+    if (!f.trusted) {
+      _dogWasTrusted = false;
+      notifyListeners();
+      return;
+    }
+    if (!_dogWasTrusted) {
+      _dogWasTrusted = true;
+      if (dogSegments.isNotEmpty && dogSegments.last.isNotEmpty) dogSegments.add([]);
+    }
     if (state != RecState.running) {
       notifyListeners();
       return;

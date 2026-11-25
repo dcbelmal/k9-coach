@@ -7,7 +7,10 @@ import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../storage/safe_prefs.dart';
+import 'tile_health.dart';
 import 'weather.dart';
+
+export 'tile_health.dart';
 
 /// Zgody na usługi online przy treningu GPS – osobne od zgody systemowej
 /// na lokalizację. Nagrywanie trasy działa lokalnie bez nich.
@@ -106,19 +109,29 @@ class GpsServices {
               ),
       );
 
-  static Widget _topoTiles() => TileLayer(
-        urlTemplate: 'https://tile.opentopomap.org/{z}/{x}/{y}.png',
-        tileProvider: _cached(),
+  static Widget _topoTiles() => tileLayer('https://tile.opentopomap.org/{z}/{x}/{y}.png', 17, _cached());
+
+  static Widget _osmTiles() => tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', 19, _cached());
+
+  /// Warstwa kafli z pamięcią podręczną, obsługą błędów i kontrolowanym
+  /// ponawianiem ([TileHealth]). Błędne kafle są usuwane, gdy wyjdą poza
+  /// ekran, więc przy powrocie wczytują się ponownie.
+  static TileLayer tileLayer(String url, int maxZoom, TileProvider provider) => TileLayer(
+        urlTemplate: url,
+        tileProvider: provider,
         userAgentPackageName: 'pl.k9coach.app',
-        maxZoom: 17,
+        maxZoom: maxZoom.toDouble(),
+        errorTileCallback: TileHealth.instance.onError,
+        tileBuilder: _watch,
+        evictErrorTileStrategy: EvictErrorTileStrategy.notVisibleRespectMargin,
+        reset: TileHealth.instance.resetStream,
       );
 
-  static Widget _osmTiles() => TileLayer(
-        urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-        tileProvider: _cached(),
-        userAgentPackageName: 'pl.k9coach.app',
-        maxZoom: 19,
-      );
+  /// Liczy wczytane kafle (stan podkładu) – obraz kafla bez zmian.
+  static Widget _watch(BuildContext context, Widget tile, TileImage image) {
+    TileHealth.instance.onLoaded(image);
+    return tile;
+  }
 
   @visibleForTesting
   static void reset() {

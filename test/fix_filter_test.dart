@@ -28,9 +28,14 @@ void main() {
       expect(v.fix!.lagSec, 20);
     });
 
-    test('zły zegar trackera (różnica > 10 min) – używamy chwili odbioru', () {
-      final v = f.check(pos(0, time: -5000), at(0));
+    test('zły zegar trackera („z przyszłości” > 10 min) – używamy chwili odbioru', () {
+      final v = f.check(pos(0, time: 5000), at(0));
       expect(v.fix!.fixAt, at(0));
+      expect(v.fix!.timeIsFix, isFalse);
+    });
+
+    test('pomiar sprzed ponad 15 min to stary pakiet, nie zły zegar', () {
+      expect(f.check(pos(0, time: -5000), at(0)).reject, FixReject.previousSession);
     });
 
     test('pomiar „z przyszłości” przycięty do chwili odbioru', () {

@@ -11,6 +11,7 @@ import '../collar/mesh_proto.dart';
 import '../collar/tracker_driver.dart';
 import '../dogs/dog_profiles.dart';
 import '../gps/phone_location.dart';
+import '../gps/tile_health.dart';
 import '../l10n/l10n.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
@@ -233,6 +234,66 @@ class _CollarScreenState extends State<CollarScreen> {
       ]);
 
   /// Diagnostyka: liczniki pakietów, odrzuconych pomiarów i połączeń.
+  List<String> _csvExtra() => [
+        ...PhoneLocation.instance.csvLines(),
+        ...TileHealth.instance.csvLines(),
+        ...c.fast.csvLines(),
+      ];
+
+  /// Eksperyment: tracker co 5 s (odniesienie), 2 s i 1 s (test).
+  Widget _fastMode(Widget Function(String, String) row, Widget Function(String) head) {
+    final f = c.fast;
+    return ListenableBuilder(
+      listenable: f,
+      builder: (context, _) {
+        final busy = f.phase == FastPhase.applying || f.phase == FastPhase.measuring || f.phase == FastPhase.restoring;
+        final phase = switch (f.phase) {
+          FastPhase.idle => tr('nie uruchomiono'),
+          FastPhase.applying => tr('zapisywanie ustawień w trackerze…'),
+          FastPhase.measuring => tr('pomiar: {0} z {1} odstępów', [f.fixIntervals.length, FastModeExperiment.wantIntervals]),
+          FastPhase.done => tr('zakończony'),
+          FastPhase.restoring => tr('przywracanie ustawień 5 s…'),
+          FastPhase.failed => tr('błąd'),
+        };
+        Future<void> run(int sec) async {
+          final err = await f.start(sec);
+          if (err != null && context.mounted) toast(context, err);
+        }
+
+        return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          head(tr('Tryb szybkiego śledzenia (eksperyment)')),
+          Text(
+            tr('Test zmienia ustawienia trackera (nie firmware). 5 s to ustawienie odniesienia. Gdy tracker nie przyspieszy, aplikacja sama wróci do 5 s.'),
+            style: const TextStyle(color: K9.muted, fontSize: 12),
+          ),
+          row(tr('Etap'), phase),
+          if (f.testSettingsActive) row(tr('Uwaga'), tr('tracker ma ustawienia testowe – po teście wróć do 5 s')),
+          for (final r in f.rates()) row(r.$1, r.$2),
+          for (final r in f.results)
+            row(tr('Wynik dla {0} s', [r.$1]), r.$2 == null ? '–' : tr('~{0} s', [r.$2!.toStringAsFixed(1).replaceAll('.', ',')])),
+          if (f.message != null) row(tr('Wniosek'), f.message!),
+          const SizedBox(height: 6),
+          Wrap(spacing: 8, runSpacing: 6, children: [
+            for (final sec in const [5, 2, 1])
+              OutlinedButton(
+                key: ValueKey('fast-$sec'),
+                style: OutlinedButton.styleFrom(minimumSize: const Size(0, 40)),
+                onPressed: busy ? null : () => run(sec),
+                child: Text(sec == 5 ? tr('5 s (odniesienie)') : tr('{0} s (test)', [sec])),
+              ),
+            if (f.testSettingsActive || busy)
+              FilledButton.tonal(
+                key: const ValueKey('fast-restore'),
+                style: FilledButton.styleFrom(minimumSize: const Size(0, 40)),
+                onPressed: f.phase == FastPhase.restoring || f.phase == FastPhase.applying ? null : () => f.restore(),
+                child: Text(tr('Wróć do 5 s')),
+              ),
+          ]),
+        ]);
+      },
+    );
+  }
+
   Widget _diagnostics() {
     final d = c.diag;
     final m = d.medianInterval;
@@ -247,6 +308,7 @@ class _CollarScreenState extends State<CollarScreen> {
       FixReject.stale => tr('nieaktualne'),
       FixReject.duplicate => tr('ten sam pakiet drugi raz'),
       FixReject.repeated => tr('ten sam pomiar GPS w nowym pakiecie'),
+      FixReject.previousSession => tr('pakiet z poprzedniej sesji (stary)'),
       FixReject.outOfOrder => tr('w złej kolejności'),
       FixReject.weak => tr('słaby sygnał GPS'),
       FixReject.jump => tr('niemożliwy skok'),
@@ -337,6 +399,22 @@ class _CollarScreenState extends State<CollarScreen> {
             row(tr('Ponowne połączenia'), '${d.reconnects}'),
             if (d.lastPacketAt != null) row(tr('Ostatni pakiet'), collarAge(d.lastPacketAt)),
             if (d.lastError != null) row(tr('Ostatni błąd'), d.lastError!),
+            head(tr('Stabilizacja pozycji GPS')),
+            row(tr('Telefon'), loc.trust.why ?? tr('wiarygodna')),
+            row(tr('Tracker'), n == null ? '–' : (n.trust.why ?? tr('wiarygodna'))),
+            if (loc.trust.lastStabilizeSec != null) row(tr('Ostatnia stabilizacja telefonu'), tr('{0} s', [loc.trust.lastStabilizeSec!.round()])),
+            if (n?.trust.lastStabilizeSec != null) row(tr('Ostatnia stabilizacja trackera'), tr('{0} s', [n!.trust.lastStabilizeSec!.round()])),
+            row(tr('Odrzucone skoki pozycji telefon / tracker'), '${loc.trust.jumps} / ${n?.trust.jumps ?? 0}'),
+            row(tr('Przerwy telefonu: przy starcie / w trakcie'),
+                tr('{0} s / {1} s', [loc.maxGapInitSec.toStringAsFixed(1).replaceAll('.', ','), loc.maxGapTrackingSec.toStringAsFixed(1).replaceAll('.', ',')])),
+            if (loc.lastRestartLatencySec != null)
+              row(tr('Pierwszy pomiar po restarcie GPS'), tr('po {0} s', [loc.lastRestartLatencySec!.toStringAsFixed(1).replaceAll('.', ',')])),
+            row(tr('Różnica zegarów telefon – tracker'), d.clockSamples.isEmpty ? '–' : tr('{0} s', [d.clockOffsetSec.toStringAsFixed(1).replaceAll('.', ',')])),
+            row(tr('Pakiety z poprzedniej sesji (pominięte)'), '${d.previousSession}'),
+            head(tr('Podkład mapy')),
+            row(tr('Kafle wczytane / błędy'), '${TileHealth.instance.loaded} / ${TileHealth.instance.errors}'),
+            if (TileHealth.instance.lastError != null) row(tr('Ostatni błąd mapy'), TileHealth.instance.lastError!),
+            _fastMode(row, head),
             const SizedBox(height: 8),
             Align(
               alignment: Alignment.centerLeft,
@@ -345,7 +423,7 @@ class _CollarScreenState extends State<CollarScreen> {
                 onPressed: d.log.isEmpty
                     ? null
                     : () async {
-                        await Clipboard.setData(ClipboardData(text: d.csv(extra: PhoneLocation.instance.csvLines())));
+                        await Clipboard.setData(ClipboardData(text: d.csv(extra: _csvExtra())));
                         if (mounted) {
                           toast(context, tr('Skopiowano {0} wierszy CSV. Wklej je do e-maila albo arkusza.', [d.log.length]));
                         }
@@ -365,7 +443,7 @@ class _CollarScreenState extends State<CollarScreen> {
                         final t = DateTime.now();
                         String two(int v) => v.toString().padLeft(2, '0');
                         final name = 'valkor-track-${t.year}${two(t.month)}${two(t.day)}-${two(t.hour)}${two(t.minute)}.csv';
-                        final path = await saveCsvFile(name, d.csv(extra: PhoneLocation.instance.csvLines()));
+                        final path = await saveCsvFile(name, d.csv(extra: _csvExtra()));
                         if (!mounted) return;
                         toast(context, path == null
                             ? tr('Nie udało się zapisać pliku. Użyj kopiowania do schowka.')

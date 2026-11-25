@@ -5,6 +5,7 @@ import 'package:flutter/widgets.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../collar/collar_link.dart' show FixTrust, TrustEvent, HandlerTrack;
 import '../collar/dog_alerts.dart';
 import '../l10n/l10n.dart';
 import 'online_services.dart';
@@ -59,7 +60,16 @@ class PhoneLocation extends ChangeNotifier with WidgetsBindingObserver {
   static const staleSec = 5.0;
 
   /// Po tylu sekundach bez pomiaru uruchamiamy subskrypcję od nowa.
-  static const restartAfterSec = 12.0;
+  /// (W 0.25.0 było 12 s; przerwa widziana w teście = ten próg + do 1 s
+  /// sprawdzania + czas od restartu do pierwszego pomiaru, razem ~15 s.)
+  static const restartAfterSec = 8.0;
+
+  /// Przerwa krótsza niż tyle sekund nie trafia na listę przerw.
+  static const gapLogSec = 3.0;
+
+  /// Przez tyle sekund po starcie / restarcie subskrypcji przerwy liczymy
+  /// jako „inicjalizację”, a nie przerwy w aktywnym śledzeniu.
+  static const initWindowSec = 30.0;
 
   /// Najkrótsza przerwa między restartami (s); rośnie do [restartMaxSec].
   static const restartBackoffSec = 15.0;
@@ -105,6 +115,26 @@ class PhoneLocation extends ChangeNotifier with WidgetsBindingObserver {
   String? lastRestartReason;
   final List<double> intervals = [];
   double maxGapSec = 0;
+
+  /// Najdłuższa przerwa osobno: przy uruchamianiu / ustalaniu pozycji
+  /// i w aktywnym śledzeniu (pozycja już wiarygodna).
+  double maxGapInitSec = 0, maxGapTrackingSec = 0;
+
+  /// Przerwy dłuższe niż [gapLogSec] (ostatnie 50).
+  final List<PhoneGap> gaps = [];
+
+  /// Czas od ostatniego restartu subskrypcji do pierwszego pomiaru (s).
+  double? lastRestartLatencySec;
+  bool _awaitFirstAfterRestart = false;
+
+  /// Stabilizacja pozycji telefonu (seria spójnych, dokładnych pomiarów).
+  final trust = FixTrust.phone();
+
+  /// Pozycję telefonu trzeba ustalić od nowa (np. start treningu).
+  void restabilize(String why) {
+    trust.reset(why, clock());
+    notifyListeners();
+  }
   DateTime? startedAt;
   double _backoff = restartBackoffSec;
   DateTime? _subAt;
@@ -156,6 +186,7 @@ class PhoneLocation extends ChangeNotifier with WidgetsBindingObserver {
   /// Zgłasza potrzebę lokalizacji. [background] = ma działać przy wygaszonym
   /// ekranie (usługa pierwszoplanowa z powiadomieniem [title] / [text]).
   Future<void> acquire(String id, {bool background = true, String? title, String? text}) async {
+    if (!active) trust.reset(tr('uruchomienie lokalizacji'), clock());
     _clients[id] = _Client(background, title, text);
     _observe();
     await _serial(_apply);
@@ -301,6 +332,7 @@ class PhoneLocation extends ChangeNotifier with WidgetsBindingObserver {
     final t = now ?? clock();
     restarts++;
     lastRestartAt = t;
+    _awaitFirstAfterRestart = true;
     lastRestartReason = why;
     _backoff = (_backoff * 2).clamp(restartBackoffSec, restartMaxSec);
     await _serial(() async {
@@ -327,13 +359,28 @@ class PhoneLocation extends ChangeNotifier with WidgetsBindingObserver {
   void _onPosition(Position p, {DateTime? now}) {
     final t = now ?? clock();
     final prev = lastAt;
+    final sa = _subAt;
+    final init = !trust.stable || (sa != null && t.difference(sa).inMilliseconds / 1000 <= initWindowSec);
     if (prev != null) {
       final gap = t.difference(prev).inMilliseconds / 1000;
       if (gap > 0) {
         intervals.add(gap);
         if (intervals.length > 120) intervals.removeAt(0);
         if (gap > maxGapSec) maxGapSec = gap;
+        if (init) {
+          if (gap > maxGapInitSec) maxGapInitSec = gap;
+        } else if (gap > maxGapTrackingSec) {
+          maxGapTrackingSec = gap;
+        }
+        if (gap >= gapLogSec) {
+          gaps.add(PhoneGap(t, gap, init, _awaitFirstAfterRestart));
+          if (gaps.length > 50) gaps.removeAt(0);
+        }
       }
+    }
+    if (_awaitFirstAfterRestart && lastRestartAt != null) {
+      lastRestartLatencySec = t.difference(lastRestartAt!).inMilliseconds / 1000;
+      _awaitFirstAfterRestart = false;
     }
     updates++;
     last = p;
@@ -341,6 +388,13 @@ class PhoneLocation extends ChangeNotifier with WidgetsBindingObserver {
     _backoff = restartBackoffSec;
     final good = p.accuracy > 0 && p.accuracy <= maxAccuracyM;
     state = good ? PhoneGps.ok : PhoneGps.inaccurate;
+    // Wiarygodność: seria spójnych pomiarów (czas pomiaru z GPS, gdy rozsądny).
+    final ft = p.timestamp.toLocal();
+    final fixT = ft.isAfter(t) || t.difference(ft).inSeconds > 600 ? t : ft;
+    final ev = trust.add(LatLng(p.latitude, p.longitude), fixT, accuracyM: p.accuracy, speedMs: p.speed >= 0 ? p.speed : null);
+    // Skok albo nowa seria: filtr pozycji telefonu zaczyna od nowa w nowym
+    // miejscu (zamiast wlec się ~25 s za starą, błędną pozycją).
+    if (ev == TrustEvent.jump || ev == TrustEvent.start) HandlerTrack.instance.resetFilter();
     if (good) {
       lastGood = p;
       // Historia pozycji telefonu do porównań z psem – z prawdziwym czasem pomiaru.
@@ -390,6 +444,13 @@ class PhoneLocation extends ChangeNotifier with WidgetsBindingObserver {
       'gps_telefonu;pomiary;$updates',
       'gps_telefonu;odstep_mediana_s;${n(medianInterval)}',
       'gps_telefonu;najdluzsza_przerwa_s;${n(maxGapSec)}',
+      'gps_telefonu;najdluzsza_przerwa_inicjalizacja_s;${n(maxGapInitSec)}',
+      'gps_telefonu;najdluzsza_przerwa_sledzenie_s;${n(maxGapTrackingSec)}',
+      'gps_telefonu;czas_od_restartu_do_pomiaru_s;${n(lastRestartLatencySec)}',
+      'gps_telefonu;pozycja_wiarygodna;${trust.stable ? 1 : 0};${trust.why ?? ''}',
+      'gps_telefonu;stabilizacje;${trust.stabilizations};skoki;${trust.jumps}',
+      for (final g in gaps)
+        'gps_telefonu;przerwa;${g.endAt.toIso8601String()};${n(g.sec)};${g.init ? 'inicjalizacja' : 'sledzenie'};${g.afterRestart ? 'po_restarcie' : ''}',
       'gps_telefonu;restarty_subskrypcji;$restarts',
       'gps_telefonu;ostatni_restart;${lastRestartAt?.toIso8601String() ?? ''};${lastRestartReason ?? ''}',
       'gps_telefonu;stan;${state.name};${reason(now) ?? ''}',
@@ -407,7 +468,11 @@ class PhoneLocation extends ChangeNotifier with WidgetsBindingObserver {
     state = PhoneGps.off;
     updates = restarts = 0;
     intervals.clear();
-    maxGapSec = 0;
+    maxGapSec = maxGapInitSec = maxGapTrackingSec = 0;
+    gaps.clear();
+    lastRestartLatencySec = null;
+    _awaitFirstAfterRestart = false;
+    trust.reset('');
     _backoff = restartBackoffSec;
     streamFactory = (s) => Geolocator.getPositionStream(locationSettings: s);
     clock = DateTime.now;
@@ -418,4 +483,17 @@ class _Client {
   final bool background;
   final String? title, text;
   const _Client(this.background, this.title, this.text);
+}
+
+/// Przerwa w pomiarach GPS telefonu (do diagnostyki).
+class PhoneGap {
+  final DateTime endAt;
+  final double sec;
+
+  /// true = przy uruchamianiu / ustalaniu pozycji, false = w aktywnym śledzeniu.
+  final bool init;
+
+  /// Przerwę zakończył restart subskrypcji.
+  final bool afterRestart;
+  const PhoneGap(this.endAt, this.sec, this.init, this.afterRestart);
 }
