@@ -428,6 +428,8 @@ class _ValkorTrackScreenState extends State<ValkorTrackScreen> {
                 if (mapOn) _credit(),
               ],
             ),
+            // Kafle nie wczytują się (brak sieci, błąd serwera): pozycje i trasa dalej widoczne.
+            if (mapOn) const TileNotice(consent: true),
             if (!mapOn)
               Positioned(
                 left: 16,
@@ -498,7 +500,7 @@ class _ValkorTrackScreenState extends State<ValkorTrackScreen> {
         Text(
           v.text,
           textAlign: TextAlign.center,
-          style: TextStyle(fontSize: v.state == DistanceState.waitingPhone ? 22 : 34, fontWeight: FontWeight.w800),
+          style: TextStyle(fontSize: v.state == DistanceState.waitingPhone || v.state == DistanceState.stabilizing ? 22 : 34, fontWeight: FontWeight.w800),
         ),
         if (v.note != null)
           Text(v.note!, textAlign: TextAlign.center, style: const TextStyle(color: K9.muted, fontSize: 12)),

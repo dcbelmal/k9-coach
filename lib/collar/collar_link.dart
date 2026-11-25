@@ -12,14 +12,18 @@ import '../models.dart' show jsonInt;
 import '../storage/safe_prefs.dart';
 import '../l10n/l10n.dart';
 import 'dog_distance.dart';
+import 'fast_mode.dart';
 import 'fix_filter.dart';
+import 'fix_trust.dart';
 import 'mesh_proto.dart';
 import 'pos_filter.dart';
 import 'tracker_config.dart';
 
 export 'dog_distance.dart';
-export 'fix_filter.dart' show CollarFix, FixReject, CollarDiagnostics, FixLogEntry, Spread, BleEvent;
+export 'fast_mode.dart';
+export 'fix_filter.dart' show CollarFix, FixReject, FixVerdict, CollarDiagnostics, FixLogEntry, Spread, BleEvent;
 export 'pos_filter.dart';
+export 'fix_trust.dart';
 export 'tracker_config.dart';
 
 /// UUID usługi i charakterystyk Bluetooth urządzeń Meshtastic.
@@ -55,6 +59,12 @@ class CollarNode {
   /// Filtr adaptacyjny – pozycja do wyświetlania i odległości (trasa i
   /// dystans liczą się z surowych pomiarów).
   final smooth = PosFilter();
+
+  /// Stabilizacja: czy pozycji trackera można już ufać.
+  final trust = FixTrust.dog();
+
+  /// Ostatni zaległy pomiar (z kolejki po połączeniu) – nie „na żywo”.
+  CollarFix? lastHistorical;
 
   /// Pozycja do pokazania na mapie: po filtrze, a bez niego surowa.
   LatLng? get displayLl => fix == null ? null : (smooth.position ?? fix!.ll);
@@ -402,6 +412,13 @@ class CollarLink extends ChangeNotifier {
   /// Liczniki do ekranu diagnostyki.
   final diag = CollarDiagnostics();
 
+  /// Eksperymentalny tryb szybkiego śledzenia (diagnostyka).
+  late final fast = FastModeExperiment(this);
+
+  /// Początek śledzenia w tej sesji aplikacji (pierwsze łączenie). Pomiary
+  /// starsze to poprzednia sesja – nie trafiają do pozycji ani trasy.
+  DateTime? sessionStart;
+
   /// Przez tyle sekund po połączeniu opóźnione pakiety traktujemy jako
   /// zaległą kolejkę trackera (pomiary historyczne).
   static const backlogWindowSec = 30;
@@ -657,6 +674,11 @@ class CollarLink extends ChangeNotifier {
 
   Future<void> _openInner(String id) async {
     _retry?.cancel();
+    sessionStart ??= DateTime.now();
+    // Po połączeniu pozycję trackera ustalamy od nowa (seria spójnych pomiarów).
+    for (final n in nodes.values) {
+      n.trust.reset(tr('połączenie trackera'), DateTime.now());
+    }
     state = CollarState.connecting;
     error = null;
     notifyListeners();
@@ -935,18 +957,44 @@ class CollarLink extends ChangeNotifier {
           // Tuż po (ponownym) połączeniu tracker oddaje zaległą kolejkę pakietów.
           final opened = _openedAt;
           final afterConnect = opened != null && t.difference(opened).inSeconds.abs() <= backlogWindowSec;
-          final v = n.filter.check(e.position, t, packetId: e.packetId, afterConnect: afterConnect);
-          if (v.accepted) n.smooth.update(v.fix!.ll, v.fix!.fixAt, accuracyM: v.fix!.accuracyM, speedMs: v.fix!.speedMs);
-          _log(e, t, v, reply, n);
+          // Zegar: czas wysłania z trackera (zegar GPS) a chwila odbioru.
+          if (isDog) diag.addClock(t, e.position.sentTime);
+          var v = n.filter.check(e.position, t,
+              packetId: e.packetId,
+              afterConnect: afterConnect,
+              clockOffsetSec: diag.clockOffsetSec,
+              sessionStart: sessionStart,
+              refUnconfirmed: !n.trust.stable);
           if (!v.accepted) {
+            _log(e, t, v, reply, n);
             diag.reject(v.reject!);
+            if (v.reject == FixReject.previousSession) diag.previousSession++;
             // Zaokrąglona pozycja: pokazujemy ostrzeżenie, ale nie traktujemy jej jako pomiaru.
             if (v.reject == FixReject.coarse) n.position = e.position;
             break;
           }
-          final f = v.fix!;
-          if (f.historical) diag.historical++;
-          if (isDog && f.timeIsFix && !f.historical) diag.addLag(f.lagSec);
+          var f = v.fix!;
+          if (f.historical) {
+            // Zaległy pomiar z tej sesji: do trasy i ostatniej znanej pozycji,
+            // ale nie do pozycji na żywo, filtra Kalmana ani oceny wiarygodności.
+            _log(e, t, v, reply, n);
+            diag.historical++;
+            diag.accepted++;
+            n.lastHistorical = f;
+            _rememberLast(e.node, f, t);
+            _fixes.add(f);
+            break;
+          }
+          // Stabilizacja: seria spójnych pomiarów; po skoku albo przerwie
+          // filtr Kalmana zaczyna od nowa w nowym miejscu (bez wleczenia się
+          // za starą, błędną pozycją).
+          final ev = n.trust.add(f.ll, f.fixAt, accuracyM: f.accuracyM, hdop: f.hdop, sats: f.sats, speedMs: f.speedMs);
+          if (ev == TrustEvent.jump || ev == TrustEvent.start) n.smooth.reset();
+          f = f.withTrust(n.trust.stable);
+          v = FixVerdict.ok(f);
+          n.smooth.update(f.ll, f.fixAt, accuracyM: f.accuracyM, speedMs: f.speedMs);
+          _log(e, t, v, reply, n);
+          if (isDog && f.timeIsFix) diag.addLag(f.lagSec);
           if (isDog && n.fix != null) {
             diag.addInterval(f.fixAt.difference(n.fix!.fixAt).inMilliseconds / 1000);
           }
@@ -961,6 +1009,7 @@ class CollarLink extends ChangeNotifier {
           if (!f.moved) diag.still++;
           _rememberLast(e.node, f, t);
           _fixes.add(f);
+          if (isDog) fast.onLiveFix(f, t);
         case MeshBattery():
           final n = nodes.putIfAbsent(e.node, () => CollarNode(e.node));
           n.battery = e.level;
@@ -1014,6 +1063,8 @@ class CollarLink extends ChangeNotifier {
       reply: reply,
       verdict: f == null ? v.reject!.name : (f.moved ? 'ok' : 'postoj'),
       historical: f?.historical ?? false,
+      trusted: f?.trusted,
+      clockOffsetSec: diag.clockOffsetSec,
       noDistanceReason: f == null || dd?.matchedM != null ? null : DogDistance.whyNot(f, HandlerTrack.instance, now: t),
     ));
   }
@@ -1106,8 +1157,10 @@ class CollarLink extends ChangeNotifier {
     applyError = null;
     _appliedAt = null;
     _verify?.cancel();
+    fast.reset();
     _requestIds.clear();
     _openedAt = null;
+    sessionStart = null;
     writeOverride = null;
     _verifyPending = false;
     _expectReboot = false;

@@ -216,7 +216,7 @@ void main() {
       expect(f.last!.fixAt, at(10));
     });
 
-    test('zegar trackera bez GPS (różnica > 10 min) – czas odbioru, oznaczony jako nieznany', () {
+    test('zegar trackera bez GPS (rok 2000) – czas odbioru, oznaczony jako nieznany', () {
       final f = FixFilter(1).check(pos(50, 20, DateTime(2000)), at(5)).fix!;
       expect(f.fixAt, at(5));
       expect(f.timeIsFix, isFalse);

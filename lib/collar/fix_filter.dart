@@ -35,9 +35,16 @@ class CollarFix {
   final int? packetId;
 
   /// Pomiar zaległy (historyczny): odebrany z dużym opóźnieniem – zwykle
-  /// z kolejki trackera po ponownym połączeniu Bluetooth. Uzupełnia trasę,
+  /// z kolejki trackera po (ponownym) połączeniu Bluetooth. Uzupełnia trasę,
   /// ale nie jest pozycją „na żywo” i nie uruchamia alarmów oddalenia.
   final bool historical;
+
+  /// Pozycja wiarygodna (po stabilizacji – patrz FixTrust). Niewiarygodne
+  /// pomiary nie trafiają do trasy, dystansu ani alarmów.
+  final bool trusted;
+
+  /// Czas pomiaru dokładnie tak, jak przyszedł z trackera (zegar GPS).
+  final DateTime? rawFixAt;
 
   const CollarFix(this.node, this.lat, this.lng, this.fixAt,
       {DateTime? receivedAt,
@@ -50,10 +57,28 @@ class CollarFix {
       this.hdop,
       this.seq,
       this.packetId,
-      this.historical = false})
+      this.historical = false,
+      this.trusted = true,
+      this.rawFixAt})
       : receivedAt = receivedAt ?? fixAt;
 
   LatLng get ll => LatLng(lat, lng);
+
+  /// Ten sam pomiar z oceną wiarygodności.
+  CollarFix withTrust(bool t) => CollarFix(node, lat, lng, fixAt,
+      receivedAt: receivedAt,
+      speedMs: speedMs,
+      accuracyM: accuracyM,
+      sats: sats,
+      moved: moved,
+      timeIsFix: timeIsFix,
+      courseDeg: courseDeg,
+      hdop: hdop,
+      seq: seq,
+      packetId: packetId,
+      historical: historical,
+      trusted: t,
+      rawFixAt: rawFixAt);
 
   /// Opóźnienie pomiaru (s) w chwili odbioru.
   double get lagSec => receivedAt.difference(fixAt).inMilliseconds / 1000;
@@ -85,6 +110,11 @@ enum FixReject {
   /// Nowy pakiet, ale ten sam pomiar GPS (ten sam czas pomiaru) – tracker
   /// wysłał pozycję, zanim GPS zmierzył nową. Nie odświeża aktualności.
   repeated,
+
+  /// Pomiar z poprzedniej sesji (sprzed uruchomienia śledzenia w tej sesji
+  /// albo starszy niż [FixFilter.maxHistorySec]) – np. pakiety sprzed kilku
+  /// godzin z kolejki trackera. Zostaje tylko w diagnostyce.
+  previousSession,
 }
 
 /// Wynik sprawdzenia pomiaru: przyjęty [fix] albo powód odrzucenia.
@@ -115,9 +145,16 @@ class FixFilter {
   /// Zaległe pomiary po połączeniu przyjmujemy do trasy do tylu sekund wstecz.
   static const maxHistorySec = 900.0;
 
-  /// Różnica zegara trackera i telefonu, powyżej której nie ufamy czasowi
-  /// z pakietu (np. tracker jeszcze bez czasu z GPS).
+  /// Czas pomiaru „z przyszłości” większy niż tyle sekund = zły zegar
+  /// trackera (np. jeszcze bez czasu z GPS) – nie ufamy czasowi z pakietu.
+  /// Czas z PRZESZŁOŚCI nigdy nie jest uznawany za zły zegar: to stary
+  /// pomiar (wcześniej pakiety sprzed 5 godzin dostawały czas odbioru
+  /// i udawały świeże).
   static const clockSkewSec = 600.0;
+
+  /// Tolerancja różnicy zegarów telefon–tracker (s): pomiar „z przyszłości”
+  /// o tyle traktujemy jako bieżący (wiek 0).
+  static const clockToleranceSec = 2.0;
 
   /// Najwyższa wiarygodna prędkość psa (m/s) – ok. 65 km/h.
   static const maxSpeedMs = 18.0;
@@ -136,6 +173,7 @@ class FixFilter {
 
   CollarFix? _last; // ostatni przyjęty (także „bez ruchu”)
   CollarFix? _lastMoved; // ostatni, od którego liczymy przesunięcie
+  (LatLng, DateTime)? _jumpCand; // ostatni pomiar odrzucony jako skok
 
   CollarFix? get last => _last;
 
@@ -145,6 +183,7 @@ class FixFilter {
   void reset() {
     _last = null;
     _lastMoved = null;
+    _jumpCand = null;
     _packets.clear();
   }
 
@@ -157,7 +196,14 @@ class FixFilter {
   /// [afterConnect] = pakiet przyszedł tuż po (ponownym) połączeniu
   /// Bluetooth – wtedy opóźnione pomiary to zaległa kolejka trackera:
   /// przyjmujemy je do historii (do [maxHistorySec]) jako [CollarFix.historical].
-  FixVerdict check(MeshPosition p, DateTime receivedAt, {int? packetId, bool afterConnect = false}) {
+  ///
+  /// [clockOffsetSec] – szacowana różnica zegarów (telefon − tracker, s, ≤ 0
+  /// gdy telefon się spóźnia): czas z trackera przeliczamy na zegar telefonu
+  /// do oceny aktualności; surowy czas zostaje w [CollarFix.rawFixAt].
+  /// [sessionStart] – początek śledzenia w tej sesji aplikacji: starsze
+  /// pomiary to poprzednia sesja.
+  FixVerdict check(MeshPosition p, DateTime receivedAt,
+      {int? packetId, bool afterConnect = false, double clockOffsetSec = 0, DateTime? sessionStart, bool refUnconfirmed = false}) {
     if (packetId != null && packetId != 0) {
       if (_packets.contains(packetId)) return const FixVerdict.no(FixReject.duplicate);
       _packets.add(packetId);
@@ -165,19 +211,29 @@ class FixFilter {
     }
     if (p.coarse) return const FixVerdict.no(FixReject.coarse);
 
-    // Czas pomiaru: z pakietu, chyba że zegar trackera jest wyraźnie zły.
+    // Czas pomiaru: z pakietu (przeliczony na zegar telefonu), chyba że jest
+    // wyraźnie „z przyszłości” – wtedy zegar trackera jest zły.
     var fixAt = receivedAt;
     var timeIsFix = false;
     final t = p.time;
     if (t != null) {
-      final skew = receivedAt.difference(t).inMilliseconds / 1000;
-      if (skew.abs() <= clockSkewSec) {
-        // Pomiar „z przyszłości” o kilka sekund to różnica zegarów – przycinamy.
-        fixAt = skew < 0 ? receivedAt : t;
-        timeIsFix = p.timeIsFix;
+      final local = t.add(Duration(milliseconds: (clockOffsetSec * 1000).round()));
+      final skew = receivedAt.difference(local).inMilliseconds / 1000;
+      // Zegar bez czasu z GPS (rok sprzed 2024) – czas z pakietu bezużyteczny.
+      final unset = t.year < 2024;
+      if (!unset && skew >= -clockSkewSec) {
+        // Kilka sekund „z przyszłości” to różnica zegarów – wiek 0.
+        fixAt = skew < 0 ? receivedAt : local;
+        timeIsFix = p.timeIsFix && skew >= -clockToleranceSec;
       }
     }
     final lag = receivedAt.difference(fixAt).inMilliseconds / 1000;
+    // Stary pomiar: z poprzedniej sesji albo starszy niż historia, jaką
+    // przyjmujemy – tylko do diagnostyki.
+    final ss = sessionStart;
+    if (t != null && timeIsFix == p.timeIsFix && t.year >= 2024 && (lag > maxHistorySec || (ss != null && fixAt.isBefore(ss.subtract(const Duration(seconds: 120)))))) {
+      return const FixVerdict.no(FixReject.previousSession);
+    }
     if (lag > (afterConnect && timeIsFix ? maxHistorySec : maxAgeSec)) {
       return const FixVerdict.no(FixReject.stale);
     }
@@ -206,13 +262,30 @@ class FixFilter {
 
     final ref = _lastMoved;
     var moved = true;
+    final ll = LatLng(p.lat, p.lng);
     if (ref != null) {
-      final d = _dist(ref.ll, LatLng(p.lat, p.lng));
+      final d = _dist(ref.ll, ll);
       final dt = fixAt.difference(ref.fixAt).inMilliseconds / 1000;
-      if (dt > 0 && d / dt > maxSpeedMs) return const FixVerdict.no(FixReject.jump);
-      if (dt <= 0 && d > 20) return const FixVerdict.no(FixReject.jump);
-      moved = !isDrift(d, p.accuracyM, p.speedMs);
+      final impossible = (dt > 0 && d / dt > maxSpeedMs) || (dt <= 0 && d > 20);
+      // Skok odrzucamy tylko względem pozycji już ustalonej. W czasie
+      // stabilizacji ([refUnconfirmed]) błędny bywa właśnie punkt odniesienia
+      // (np. pierwszy pomiar 113 m obok) – wtedy decyduje ocena serii
+      // (FixTrust), a nie odrzucanie poprawnych pomiarów przez kolejne sekundy.
+      if (impossible && !refUnconfirmed) {
+        // Dwa kolejne pomiary zgodne ze sobą, a daleko od odniesienia:
+        // to odniesienie było błędne – przyjmujemy nowe miejsce.
+        final c = _jumpCand;
+        final cdt = c == null ? 0.0 : fixAt.difference(c.$2).inMilliseconds / 1000;
+        final cd = c == null ? 0.0 : _dist(c.$1, ll);
+        final consistent = c != null && ((cdt > 0 && cd / cdt <= maxSpeedMs) || (cdt <= 0 && cd <= 20));
+        if (!consistent) {
+          _jumpCand = (ll, fixAt);
+          return const FixVerdict.no(FixReject.jump);
+        }
+      }
+      moved = impossible || !isDrift(d, p.accuracyM, p.speedMs);
     }
+    _jumpCand = null;
 
     final fix = CollarFix(node, p.lat, p.lng, fixAt,
         receivedAt: receivedAt,
@@ -225,7 +298,8 @@ class FixFilter {
         hdop: p.hdop,
         seq: p.seq,
         packetId: packetId,
-        historical: historical);
+        historical: historical,
+        rawFixAt: t);
     _last = fix;
     if (moved) _lastMoved = fix;
     return FixVerdict.ok(fix);
@@ -284,6 +358,12 @@ class FixLogEntry {
   /// Dlaczego odległość nie została policzona (null = policzona).
   final String? noDistanceReason;
 
+  /// Pozycja wiarygodna po stabilizacji (null = nie oceniano).
+  final bool? trusted;
+
+  /// Szacowana różnica zegarów telefon − tracker w chwili odbioru (s).
+  final double? clockOffsetSec;
+
   /// „ok”, „postoj” albo nazwa powodu odrzucenia (duplicate = ten sam
   /// pakiet, repeated = ten sam pomiar GPS w nowym pakiecie).
   final String verdict;
@@ -315,6 +395,8 @@ class FixLogEntry {
     required this.verdict,
     this.historical = false,
     this.noDistanceReason,
+    this.trusted,
+    this.clockOffsetSec,
   });
 
   /// Opóźnienie: od pomiaru GPS do odbioru w telefonie (s) = wiek pozycji
@@ -324,7 +406,7 @@ class FixLogEntry {
   static const csvHeader = 'odebrano;pomiar_gps;wyslano;wiek_pozycji_psa_s;wezel;pakiet;lat;lng;dokladnosc_m;hdop;satelity;'
       'seq;predkosc_m_s;kierunek;lora_rssi;snr;ble_rssi;dokladnosc_telefonu_m;wiek_pozycji_telefonu_s;'
       'roznica_czasu_porownania_s;odleglosc_surowa_m;odleglosc_filtr_m;niepewnosc_m;odpowiedz;wynik;historyczny;'
-      'brak_odleglosci';
+      'brak_odleglosci;wiarygodna;roznica_zegarow_s';
 
   String toCsv() {
     String n(num? v, [int digits = 1]) => v == null ? '' : (v is int ? '$v' : v.toStringAsFixed(digits));
@@ -357,6 +439,8 @@ class FixLogEntry {
       verdict,
       historical ? '1' : '0',
       (noDistanceReason ?? '').replaceAll(';', ','),
+      trusted == null ? '' : (trusted! ? '1' : '0'),
+      n(clockOffsetSec),
     ].join(';');
   }
 }
@@ -413,6 +497,33 @@ class CollarDiagnostics {
   /// Pomiary zaległe (z kolejki trackera po ponownym połączeniu).
   int historical = 0;
 
+  /// Pomiary z poprzedniej sesji (np. sprzed kilku godzin) – tylko w dzienniku.
+  int previousSession = 0;
+
+  /// Różnica „odbiór − wysłanie” (s) z ostatnich pakietów: czas wysłania
+  /// pochodzi z zegara GPS trackera (pełne sekundy), odbiór – z zegara
+  /// telefonu. Ujemna = zegar telefonu spóźnia się względem GPS.
+  final List<double> clockSamples = [];
+
+  void addClock(DateTime rx, DateTime? sent) {
+    if (sent == null) return;
+    final d = rx.difference(sent).inMilliseconds / 1000;
+    // Pakiet sprzed wielu minut nic nie mówi o zegarze (zaległy).
+    if (d.abs() > 60) return;
+    clockSamples.add(d);
+    if (clockSamples.length > 30) clockSamples.removeAt(0);
+  }
+
+  /// Szacowana różnica zegarów telefon − tracker (s): ≤ 0. Najmniejsza
+  /// różnica „odbiór − wysłanie” to opóźnienie przesyłu + różnica zegarów;
+  /// gdy jest ujemna, zegar telefonu na pewno spóźnia się co najmniej tyle.
+  /// Dodatniej różnicy nie da się oddzielić od opóźnienia – wtedy 0.
+  double get clockOffsetSec {
+    if (clockSamples.isEmpty) return 0;
+    final m = clockSamples.reduce(math.min);
+    return m < 0 ? m : 0;
+  }
+
   /// Odstępy (s) między kolejnymi pakietami z pozycją psa wg chwili odbioru
   /// w telefonie – niezależnie od czasu pomiaru GPS (ostatnie 100).
   final List<double> rxIntervals = [];
@@ -452,7 +563,7 @@ class CollarDiagnostics {
   }
 
   void addLag(double s) {
-    if (s < 0 || s > 600) return;
+    if (s < -5 || s > 600) return;
     lags.add(s);
     if (lags.length > 50) lags.removeAt(0);
   }
@@ -570,6 +681,8 @@ class CollarDiagnostics {
       '',
       'podsumowanie;nazwa;wartosc',
       'bluetooth;pakiety_historyczne;$historical',
+      'bluetooth;pakiety_poprzedniej_sesji;$previousSession',
+      'zegar;roznica_telefon_tracker_s;${clockOffsetSec.toStringAsFixed(2)}',
       'bluetooth;odstep_odbioru_min_sr_max_s;${n(rx?.min)};${n(rx?.avg)};${n(rx?.max)}',
       'bluetooth;ponowne_polaczenia;$reconnects',
       'bluetooth;bledy_wg_kodu;${bleErrorCodes.entries.map((e) => '${e.key}=${e.value}').join(',')}',
@@ -596,6 +709,8 @@ class CollarDiagnostics {
     bleErrorsWhileDown = 0;
     lastBleErrorAt = null;
     historical = 0;
+    previousSession = 0;
+    clockSamples.clear();
     lags.clear();
     log.clear();
     lastError = null;

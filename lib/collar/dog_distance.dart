@@ -141,6 +141,10 @@ class HandlerTrack {
     _fixes.clear();
     _filter.reset();
   }
+
+  /// Filtr zaczyna od nowa przy następnym pomiarze (skok pozycji, nowa
+  /// seria po przerwie) – historia pomiarów zostaje.
+  void resetFilter() => _filter.reset();
 }
 
 /// Odległość pies–przewodnik z niepewnością.

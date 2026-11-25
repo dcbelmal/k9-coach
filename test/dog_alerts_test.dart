@@ -6,6 +6,7 @@ import 'package:k9_coach/collar/collar_link.dart';
 import 'package:k9_coach/collar/dog_alerts.dart';
 import 'package:k9_coach/collar/mesh_proto.dart';
 import 'package:k9_coach/gps/online_services.dart';
+import 'package:k9_coach/gps/phone_location.dart';
 import 'package:k9_coach/screens/dog_radar.dart';
 import 'package:k9_coach/screens/valkor_track_screen.dart';
 import 'package:k9_coach/theme.dart';
@@ -254,12 +255,24 @@ void main() {
       c.deviceId = 'x';
       c.state = CollarState.connected;
       final now = DateTime.now();
-      a.setHandler(home);
+      await PhoneLocation.instance.resetForTest();
+      // Pozycja telefonu ustalona (seria spójnych pomiarów).
+      for (var i = -3; i <= 0; i++) {
+        final t = now.add(Duration(seconds: i));
+        PhoneLocation.instance.onPosition(
+            Position(latitude: home.latitude, longitude: home.longitude, timestamp: t, accuracy: 4, altitude: 0,
+                altitudeAccuracy: 0, heading: 0, headingAccuracy: 0, speed: 0, speedAccuracy: 0),
+            now: t);
+      }
+      // Tracker: pierwszy pomiar ustala pozycję (bez alarmu), dwa kolejne poza smyczą.
       c.handleEvents([const MeshMyInfo(4), MeshPositionEvent(4, MeshPosition(50.002, 20, time: now))], now: now);
       a.check(now: now);
       c.handleEvents([MeshPositionEvent(4, MeshPosition(50.0021, 20, time: now.add(const Duration(seconds: 5))))],
           now: now.add(const Duration(seconds: 5)));
       a.check(now: now.add(const Duration(seconds: 5)));
+      c.handleEvents([MeshPositionEvent(4, MeshPosition(50.0021, 20, time: now.add(const Duration(seconds: 10))))],
+          now: now.add(const Duration(seconds: 10)));
+      a.check(now: now.add(const Duration(seconds: 10)));
       expect(got.single.kind, AlertKind.leash);
       expect(a.history, hasLength(1));
       a.onAlert = null;

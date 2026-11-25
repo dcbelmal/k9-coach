@@ -12,6 +12,7 @@ import '../models.dart' show jsonInt;
 import '../notifications.dart';
 import '../storage/safe_prefs.dart';
 import 'collar_link.dart';
+import 'distance_view.dart' show unstableReason;
 
 /// Bezpieczna strefa: okrąg na mapie. Wyjście psa poza nią to alarm.
 class SafeZone {
@@ -165,7 +166,8 @@ class AlertEngine {
 
     // Smycz i strefy: tylko nowy pomiar na żywo (nie zaległy z kolejki).
     final f = i.fix;
-    final newFix = f != null && f.fixAt != _lastFixAt && !f.historical;
+    // …i wiarygodny (po stabilizacji): błędny pierwszy pomiar nie alarmuje.
+    final newFix = f != null && f.fixAt != _lastFixAt && !f.historical && f.trusted;
     if (live && newFix) {
       _lastFixAt = f.fixAt;
       final acc = (f.accuracyM ?? 10).clamp(5, 50).toDouble();
@@ -334,7 +336,8 @@ class DogAlerts extends ChangeNotifier {
       fix: c.dog?.fix,
       handler: h,
       battery: c.dog?.battery,
-      distance: c.distanceTo(CollarLink.activeDog(), now: t),
+      // Odległość tylko, gdy obie pozycje są wiarygodne (po stabilizacji).
+      distance: unstableReason(c, CollarLink.activeDog()) == null ? c.distanceTo(CollarLink.activeDog(), now: t) : null,
     ));
     for (final a in out) {
       _emit(a);
