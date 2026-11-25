@@ -310,7 +310,10 @@ class MeshPositionEvent extends MeshEvent {
 
   /// Identyfikator pakietu i – dla odpowiedzi – identyfikator zapytania.
   final int? packetId, requestId;
-  const MeshPositionEvent(this.node, this.position, {this.rssi, this.snr, this.packetId, this.requestId});
+
+  /// Pozycja z kanału Valkor Track (bezpośrednio z GNSS trackera), nie z Meshtastic.
+  final bool valkor;
+  const MeshPositionEvent(this.node, this.position, {this.rssi, this.snr, this.packetId, this.requestId, this.valkor = false});
 }
 
 /// Ustawienia urządzenia (Config) – z pobierania stanu po połączeniu albo
