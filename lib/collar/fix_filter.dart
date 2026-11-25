@@ -2,7 +2,25 @@ import 'dart:math' as math;
 
 import 'package:latlong2/latlong.dart';
 
+import '../app_version.dart';
+import 'app_state.dart';
 import 'mesh_proto.dart';
+
+/// Skąd przyszedł pomiar psa.
+enum FixSource {
+  /// Kanał Valkor BLE na żywo (każdy pomiar GNSS trackera).
+  valkor,
+
+  /// Pamięć trackera Valkor odzyskana po ponownym połączeniu.
+  valkorHistory,
+
+  /// Moduł pozycji Meshtastic (zwykłe firmware albo tryb awaryjny przy
+  /// niemym kanale Valkor).
+  meshtastic;
+
+  /// Nazwa do CSV.
+  String get csv => switch (this) { valkor => 'valkor', valkorHistory => 'valkor_historia', meshtastic => 'meshtastic' };
+}
 
 /// Pozycja psa z trackera, po sprawdzeniu jakości.
 class CollarFix {
@@ -46,6 +64,12 @@ class CollarFix {
   /// Czas pomiaru dokładnie tak, jak przyszedł z trackera (zegar GPS).
   final DateTime? rawFixAt;
 
+  /// Źródło pomiaru.
+  final FixSource source;
+
+  /// Numer pomiaru GNSS w trackerze (Valkor 1.1), jeśli podany.
+  final int? fixId;
+
   const CollarFix(this.node, this.lat, this.lng, this.fixAt,
       {DateTime? receivedAt,
       this.speedMs,
@@ -59,7 +83,9 @@ class CollarFix {
       this.packetId,
       this.historical = false,
       this.trusted = true,
-      this.rawFixAt})
+      this.rawFixAt,
+      this.source = FixSource.meshtastic,
+      this.fixId})
       : receivedAt = receivedAt ?? fixAt;
 
   LatLng get ll => LatLng(lat, lng);
@@ -78,7 +104,9 @@ class CollarFix {
       packetId: packetId,
       historical: historical,
       trusted: t,
-      rawFixAt: rawFixAt);
+      rawFixAt: rawFixAt,
+      source: source,
+      fixId: fixId);
 
   /// Opóźnienie pomiaru (s) w chwili odbioru.
   double get lagSec => receivedAt.difference(fixAt).inMilliseconds / 1000;
@@ -115,6 +143,9 @@ enum FixReject {
   /// albo starszy niż [FixFilter.maxHistorySec]) – np. pakiety sprzed kilku
   /// godzin z kolejki trackera. Zostaje tylko w diagnostyce.
   previousSession,
+
+  /// Tracker oznaczył pomiar jako nieprawidłowy (brak fixu, jakość 0).
+  invalid,
 }
 
 /// Wynik sprawdzenia pomiaru: przyjęty [fix] albo powód odrzucenia.
@@ -203,7 +234,13 @@ class FixFilter {
   /// [sessionStart] – początek śledzenia w tej sesji aplikacji: starsze
   /// pomiary to poprzednia sesja.
   FixVerdict check(MeshPosition p, DateTime receivedAt,
-      {int? packetId, bool afterConnect = false, double clockOffsetSec = 0, DateTime? sessionStart, bool refUnconfirmed = false}) {
+      {int? packetId,
+      bool afterConnect = false,
+      double clockOffsetSec = 0,
+      DateTime? sessionStart,
+      bool refUnconfirmed = false,
+      FixSource source = FixSource.meshtastic}) {
+    if (!p.fixValid || p.fixQuality == 0) return const FixVerdict.no(FixReject.invalid);
     if (packetId != null && packetId != 0) {
       if (_packets.contains(packetId)) return const FixVerdict.no(FixReject.duplicate);
       _packets.add(packetId);
@@ -240,13 +277,17 @@ class FixFilter {
     final historical = timeIsFix && (lag > maxAgeSec || (afterConnect && lag > backlogLagSec));
 
     final prev = _last;
+    // Ten sam numer pomiaru GNSS z trackera = ten sam pomiar (np. drugi pakiet).
+    if (prev != null && p.fixId != null && prev.fixId == p.fixId && fixAt.isAtSameMomentAs(prev.fixAt)) {
+      return const FixVerdict.no(FixReject.repeated);
+    }
     if (prev != null) {
       final same = (prev.lat - p.lat).abs() < 1e-7 && (prev.lng - p.lng).abs() < 1e-7;
       // Ten sam numer kolejny i to samo miejsce = ten sam pakiet odczytany drugi raz.
       if (timeIsFix && prev.timeIsFix) {
         if (fixAt.isBefore(prev.fixAt)) return const FixVerdict.no(FixReject.outOfOrder);
-        if (fixAt == prev.fixAt) return const FixVerdict.no(FixReject.repeated);
-      } else if (t != null && fixAt == prev.fixAt && same) {
+        if (fixAt.isAtSameMomentAs(prev.fixAt)) return const FixVerdict.no(FixReject.repeated);
+      } else if (t != null && fixAt.isAtSameMomentAs(prev.fixAt) && same) {
         // Bez czasu pomiaru: ten sam czas i miejsce = ten sam pakiet.
         return const FixVerdict.no(FixReject.duplicate);
       } else if (t != null && fixAt.isBefore(prev.fixAt)) {
@@ -299,7 +340,9 @@ class FixFilter {
         seq: p.seq,
         packetId: packetId,
         historical: historical,
-        rawFixAt: t);
+        rawFixAt: t,
+        source: source,
+        fixId: p.fixId);
     _last = fix;
     if (moved) _lastMoved = fix;
     return FixVerdict.ok(fix);
@@ -368,6 +411,35 @@ class FixLogEntry {
   /// pakiet, repeated = ten sam pomiar GPS w nowym pakiecie).
   final String verdict;
 
+  /// Źródło pomiaru: valkor, valkor_historia, meshtastic.
+  final String? source;
+
+  /// Numer kolejny pakietu Valkor i numer pomiaru GNSS (fixId).
+  final int? valkorSeq, fixId;
+
+  /// Czas pomiaru GNSS w UTC dokładnie jak w pakiecie (null = tracker nie podał).
+  final DateTime? gnssUtc;
+
+  /// Skąd czas pomiaru: „gnss” (z odbiornika) albo „odbior” (nieznany –
+  /// przyjęto chwilę odbioru, wyraźnie oznaczone).
+  final String? timeSource;
+
+  /// Wiek pozycji w chwili odbioru po korekcie zegara telefon–tracker (s).
+  final double? correctedAgeSec;
+
+  /// Opóźnienie GNSS → wysłanie przez Bluetooth zmierzone w trackerze (ms).
+  final int? gnssToBleMs;
+
+  /// Odstęp od poprzedniej pozycji Valkor na żywo (s) – przerwa w transmisji.
+  final double? rxGapSec;
+
+  /// MTU połączenia, RSSI trackera (z Diag), bateria, jakość fixu, flaga postoju.
+  final int? mtu, trackerRssi, batteryPct, batteryMv, fixQuality;
+  final bool? stationaryFlag;
+
+  /// Stan aplikacji w chwili odbioru: pierwszy_plan / tlo.
+  final String? appState;
+
   const FixLogEntry({
     required this.receivedAt,
     required this.node,
@@ -397,6 +469,21 @@ class FixLogEntry {
     this.noDistanceReason,
     this.trusted,
     this.clockOffsetSec,
+    this.source,
+    this.valkorSeq,
+    this.fixId,
+    this.gnssUtc,
+    this.timeSource,
+    this.correctedAgeSec,
+    this.gnssToBleMs,
+    this.rxGapSec,
+    this.mtu,
+    this.trackerRssi,
+    this.batteryPct,
+    this.batteryMv,
+    this.fixQuality,
+    this.stationaryFlag,
+    this.appState,
   });
 
   /// Opóźnienie: od pomiaru GPS do odbioru w telefonie (s) = wiek pozycji
@@ -406,7 +493,9 @@ class FixLogEntry {
   static const csvHeader = 'odebrano;pomiar_gps;wyslano;wiek_pozycji_psa_s;wezel;pakiet;lat;lng;dokladnosc_m;hdop;satelity;'
       'seq;predkosc_m_s;kierunek;lora_rssi;snr;ble_rssi;dokladnosc_telefonu_m;wiek_pozycji_telefonu_s;'
       'roznica_czasu_porownania_s;odleglosc_surowa_m;odleglosc_filtr_m;niepewnosc_m;odpowiedz;wynik;historyczny;'
-      'brak_odleglosci;wiarygodna;roznica_zegarow_s';
+      'brak_odleglosci;wiarygodna;roznica_zegarow_s;zrodlo;valkor_seq;fix_id;gnss_utc;odebrano_utc;czas_pomiaru_zrodlo;'
+      'wiek_skorygowany_s;opoznienie_gnss_ble_ms;przerwa_odbioru_s;mtu;rssi_tracker;bateria_proc;bateria_mv;jakosc_fix;'
+      'postoj_tracker;stan_aplikacji';
 
   String toCsv() {
     String n(num? v, [int digits = 1]) => v == null ? '' : (v is int ? '$v' : v.toStringAsFixed(digits));
@@ -441,6 +530,22 @@ class FixLogEntry {
       (noDistanceReason ?? '').replaceAll(';', ','),
       trusted == null ? '' : (trusted! ? '1' : '0'),
       n(clockOffsetSec),
+      source ?? '',
+      n(valkorSeq),
+      n(fixId),
+      gnssUtc?.toUtc().toIso8601String() ?? '',
+      receivedAt.toUtc().toIso8601String(),
+      timeSource ?? '',
+      n(correctedAgeSec, 2),
+      n(gnssToBleMs),
+      n(rxGapSec, 2),
+      n(mtu),
+      n(trackerRssi),
+      n(batteryPct),
+      n(batteryMv),
+      n(fixQuality),
+      stationaryFlag == null ? '' : (stationaryFlag! ? '1' : '0'),
+      appState ?? '',
     ].join(';');
   }
 }
@@ -496,6 +601,16 @@ class CollarDiagnostics {
 
   /// Pomiary zaległe (z kolejki trackera po ponownym połączeniu).
   int historical = 0;
+
+  /// MTU: rzeczywista wynegocjowana wartość (null = nieznana), kiedy,
+  /// liczba prób i ostatni błąd negocjacji.
+  int? mtu;
+  DateTime? mtuAt;
+  int mtuAttempts = 0;
+  String? mtuError;
+
+  /// MTU wystarcza na pakiety Valkor (null = nieznane).
+  bool? get mtuOk => mtu == null ? null : mtu! >= 67;
 
   /// Pomiary z poprzedniej sesji (np. sprzed kilku godzin) – tylko w dzienniku.
   int previousSession = 0;
@@ -680,6 +795,13 @@ class CollarDiagnostics {
       for (final e in bleEvents) '${e.kind};${e.at.toIso8601String()};${(e.detail ?? '').replaceAll(';', ',').replaceAll('\n', ' ')}',
       '',
       'podsumowanie;nazwa;wartosc',
+      'aplikacja;wersja;$appVersion',
+      'aplikacja;kompilacja;$appBuildId',
+      'bluetooth;mtu;${mtu ?? ''}',
+      'bluetooth;mtu_wymagane_valkor;67',
+      'bluetooth;mtu_negocjacja_udana;${mtuOk == null ? '' : (mtuOk! ? 1 : 0)}',
+      'bluetooth;mtu_proby;$mtuAttempts',
+      if (mtuError != null) 'bluetooth;mtu_blad;${mtuError!.replaceAll(';', ',')}',
       'bluetooth;pakiety_historyczne;$historical',
       'bluetooth;pakiety_poprzedniej_sesji;$previousSession',
       'zegar;roznica_telefon_tracker_s;${clockOffsetSec.toStringAsFixed(2)}',
@@ -710,6 +832,10 @@ class CollarDiagnostics {
     lastBleErrorAt = null;
     historical = 0;
     previousSession = 0;
+    mtu = null;
+    mtuAt = null;
+    mtuAttempts = 0;
+    mtuError = null;
     clockSamples.clear();
     lags.clear();
     log.clear();
@@ -722,6 +848,7 @@ class BleEvent {
   static const lost = 'utrata';
   static const connected = 'polaczono';
   static const failed = 'blad_polaczenia';
+  static const valkorReinit = 'valkor_ponowienie';
 
   final DateTime at;
   final String kind;

@@ -14,16 +14,20 @@ import '../l10n/l10n.dart';
 import 'dog_distance.dart';
 import 'fast_mode.dart';
 import 'fix_filter.dart';
+import 'app_state.dart';
 import 'fix_trust.dart';
+import 'freshness.dart';
 import 'mesh_proto.dart';
 import 'pos_filter.dart';
 import 'tracker_config.dart';
 import 'valkor_proto.dart';
 import 'valkor_session.dart';
 
+export 'app_state.dart';
 export 'dog_distance.dart';
 export 'fast_mode.dart';
-export 'fix_filter.dart' show CollarFix, FixReject, FixVerdict, CollarDiagnostics, FixLogEntry, Spread, BleEvent;
+export 'fix_filter.dart' show CollarFix, FixSource, FixReject, FixVerdict, CollarDiagnostics, FixLogEntry, Spread, BleEvent;
+export 'freshness.dart';
 export 'pos_filter.dart';
 export 'fix_trust.dart';
 export 'tracker_config.dart';
@@ -202,6 +206,43 @@ enum DogLink {
 
   /// Pozycja na żywo.
   live,
+
+  /// Pozycja z opóźnieniem (np. SPORT: 3–5 s) – jeszcze pokazywana, z ostrzeżeniem.
+  delayed,
+
+  /// Od dłuższego czasu brak nowych danych (np. SPORT: ponad 10 s) – wyraźne ostrzeżenie.
+  noData,
+
+  /// Bluetooth połączony, ale kanał Valkor nie dostarcza pakietów.
+  valkorSilent,
+
+  /// Tracker zgłasza brak sygnału GNSS (szuka satelitów albo zgubił fix).
+  gnssLost;
+
+  /// Pozycja aktualna albo lekko opóźniona – można ją pokazać jako bieżącą
+  /// (z ostrzeżeniem dla [delayed]). Alarmy odległości działają tylko dla [live].
+  bool get current => this == live || this == delayed;
+}
+
+/// Poziom wskaźnika łączności.
+enum IndicatorLevel { ok, warn, bad, na }
+
+/// Stan GPS telefonu do wskaźników łączności.
+class PhoneGpsSnapshot {
+  /// Brak aktualnej lokalizacji – przyczyna (null = jest).
+  final String? problem;
+  final bool trusted;
+  final String? why;
+  final double? accuracyM;
+  const PhoneGpsSnapshot({this.problem, required this.trusted, this.why, this.accuracyM});
+}
+
+/// Jeden wskaźnik łączności (Bluetooth, Valkor BLE, GNSS trackera, GPS telefonu, LoRa).
+class ConnIndicator {
+  final String name;
+  final IndicatorLevel level;
+  final String text;
+  const ConnIndicator(this.name, this.level, this.text);
 }
 
 /// Połączenie z obrożą GPS SenseCAP T1000-E (oprogramowanie Meshtastic)
@@ -442,8 +483,27 @@ class CollarLink extends ChangeNotifier {
   ValkorSession? valkor;
   StreamSubscription<Uint8List>? _valkorSub;
 
-  /// Pozycja psa przychodzi bezpośrednim kanałem Valkor (co 1–30 s wg trybu).
+  /// Kanał Valkor potwierdzony w tym połączeniu (przyszedł poprawny pakiet).
   bool get valkorActive => valkor?.confirmed == true && state == CollarState.connected;
+
+  /// Progi aktualności dla trybu ustawionego w trackerze (a gdy nieznany – w aplikacji).
+  FreshnessLimits get valkorLimits => FreshnessLimits.of(valkor?.deviceMode ?? valkorModeFor(mode));
+
+  /// Kanał Valkor dostarcza pakiety teraz: potwierdzony, Bluetooth połączony
+  /// i ostatni pakiet nie starszy niż próg ciszy dla trybu. Gdy kanał
+  /// zamilknie, pozycje Meshtastic tego trackera są przyjmowane (tryb
+  /// awaryjny), a po powrocie pakietów Valkor – znowu pomijane.
+  bool valkorDelivering(DateTime t) {
+    final v = valkor, rx = v?.lastRx;
+    if (v == null || rx == null || state != CollarState.connected) return false;
+    return t.difference(rx).inMilliseconds / 1000 <= valkorLimits.channelSilentSec;
+  }
+
+  /// Po tylu sekundach od subskrypcji bez żadnego pakietu Valkor (albo od
+  /// ostatniego pakietu – patrz [FreshnessLimits.channelSilentSec]) aplikacja
+  /// ponawia inicjalizację kanału; najwyżej [valkorMaxReinit] razy na połączenie.
+  static const valkorFirstPacketSec = 6;
+  static const valkorMaxReinit = 3;
 
   /// Zamiast zapisu komend Valkor przez Bluetooth (testy).
   @visibleForTesting
@@ -587,6 +647,7 @@ class CollarLink extends ChangeNotifier {
   Future<void> load() async {
     if (_loaded) return;
     _loaded = true;
+    AppState.instance.observe();
     try {
       final p = await SharedPreferences.getInstance();
       final raw = p.getString(_key);
@@ -736,9 +797,7 @@ class CollarLink extends ChangeNotifier {
         } catch (_) {
           // Część urządzeń paruje się dopiero przy pierwszym odczycie.
         }
-        try {
-          await UniversalBle.requestMtu(id, 512);
-        } catch (_) {}
+        await _negotiateMtu(id);
       }
       await _notifySub?.cancel();
       _notifySub = UniversalBle.characteristicValueStream(id, MeshBle.fromNum).listen((_) => _drain());
@@ -777,6 +836,36 @@ class CollarLink extends ChangeNotifier {
     }
   }
 
+  /// Żądane MTU i wymagane przez protokół Valkor.
+  static const mtuRequest = 512;
+
+  /// Negocjacja MTU (Android): zapamiętuje rzeczywistą wartość. Gdy jest
+  /// mniejsza niż wymaga protokół Valkor ([ValkorBle.minMtu]) – jedna
+  /// ponowna próba po chwili.
+  Future<void> _negotiateMtu(String id) async {
+    for (var attempt = 0; attempt < 2; attempt++) {
+      diag.mtuAttempts++;
+      try {
+        final m = await bleOp(() => UniversalBle.requestMtu(id, mtuRequest), retries: 0);
+        noteMtu(m, at: DateTime.now());
+        if (m >= ValkorBle.minMtu) return;
+      } catch (e) {
+        diag.mtuError = CollarDiagnostics.bleErrorText(e);
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+    }
+  }
+
+  /// Wynik negocjacji MTU (także z testów).
+  @visibleForTesting
+  void noteMtu(int mtu, {DateTime? at}) {
+    diag.mtu = mtu;
+    diag.mtuAt = at ?? DateTime.now();
+    diag.mtuError = null;
+    valkor?.mtu = mtu;
+    notifyListeners();
+  }
+
   String _message(Object e) {
     final s = e.toString();
     if (s.contains('Meshtastic')) return s.replaceFirst('Exception: ', '');
@@ -787,6 +876,7 @@ class CollarLink extends ChangeNotifier {
     _poll?.cancel();
     _poll = null;
     valkor?.stats.resetLink();
+    valkor?.onDisconnected();
     if (state == CollarState.connected) {
       diag.addBleEvent(DateTime.now(), BleEvent.lost, why ?? error);
     }
@@ -900,6 +990,8 @@ class CollarLink extends ChangeNotifier {
     // Odczyt kolejki co [TrackMode.readSec] s (powiadomienia i tak budzą odczyt od razu).
     if (tick % mode.readSec == 0) _drain();
     final now = DateTime.now();
+    final why = valkorReinitDue(now);
+    if (why != null) unawaited(_reinitValkor(why));
     // Sygnał Bluetooth co 10 s.
     final id = deviceId;
     // Przez kolejkę – odczyt sygnału równolegle z odczytem danych daje błędy GATT.
@@ -931,7 +1023,7 @@ class CollarLink extends ChangeNotifier {
     final target = dogNode, me = myNode, opened = _openedAt;
     if (target == null || me == null || opened == null) return null;
     // Kanał Valkor podaje pozycję sam – zapytanie Meshtastic wymusza tylko nadawanie LoRa.
-    if (valkorActive && target == me) return null;
+    if (valkorDelivering(now) && target == me) return null;
     final f = dog?.fix;
     final need = f == null ? now.difference(opened).inSeconds >= 3 : f.ageSec(now) >= requestThrottleSec;
     final last = diag.lastRequestAt;
@@ -991,14 +1083,21 @@ class CollarLink extends ChangeNotifier {
           if (e.position != null && n.position == null) n.position = e.position;
         case MeshPositionEvent():
           // Tracker z firmware Valkor: pozycje tego trackera bierzemy z kanału Valkor
-          // (każdy pomiar GNSS), a kopie z modułu pozycji Meshtastic pomijamy.
-          if (!e.valkor && valkorActive && e.node == myNode) {
+          // (każdy pomiar GNSS), a kopie z modułu pozycji Meshtastic pomijamy – ale
+          // tylko dopóki kanał Valkor dostarcza pakiety. Gdy zamilknie przy
+          // działającym Bluetooth, pozycje Meshtastic są trybem awaryjnym
+          // (oznaczone jako źródło „meshtastic”, osobne statystyki).
+          final fromValkorTracker = !e.valkor && valkor != null && e.node == myNode;
+          if (fromValkorTracker && valkorDelivering(t)) {
             valkor!.meshIgnored++;
             break;
           }
           final n = nodes.putIfAbsent(e.node, () => CollarNode(e.node));
-          n.lastHeard = t;
+          // Aktywność LoRa tylko z pakietów Meshtastic (kanał Valkor to Bluetooth).
+          if (!e.valkor) n.lastHeard = t;
           n.lastPacketAt = t;
+          final source = e.valkor ? FixSource.valkor : FixSource.meshtastic;
+          if (fromValkorTracker) valkor!.meshFallback++;
           n.rssi = e.rssi ?? n.rssi;
           diag.positions++;
           final isDog = e.node == dogNode;
@@ -1016,7 +1115,8 @@ class CollarLink extends ChangeNotifier {
               afterConnect: afterConnect,
               clockOffsetSec: diag.clockOffsetSec,
               sessionStart: sessionStart,
-              refUnconfirmed: !n.trust.stable);
+              refUnconfirmed: !n.trust.stable,
+              source: source);
           if (!v.accepted) {
             _log(e, t, v, reply, n);
             diag.reject(v.reject!);
@@ -1047,7 +1147,9 @@ class CollarLink extends ChangeNotifier {
           n.smooth.update(f.ll, f.fixAt, accuracyM: f.accuracyM, speedMs: f.speedMs);
           _log(e, t, v, reply, n);
           if (isDog && f.timeIsFix) diag.addLag(f.lagSec);
-          if (isDog && n.fix != null) {
+          // Odstęp tylko między pomiarami z tego samego źródła: statystyki
+          // Valkor 1 Hz i Meshtastic się nie mieszają.
+          if (isDog && n.fix != null && n.fix!.source == f.source) {
             diag.addInterval(f.fixAt.difference(n.fix!.fixAt).inMilliseconds / 1000);
           }
           if (f.moved) {
@@ -1089,22 +1191,84 @@ class CollarLink extends ChangeNotifier {
       return;
     }
     // Ta sama sesja po ponownym połączeniu (liczniki zostają), nowa po zmianie urządzenia.
-    valkor ??= ValkorSession(DateTime.now());
+    final v = valkor ??= ValkorSession(DateTime.now());
+    v.onDetected(DateTime.now(), mtu: diag.mtu);
     _valkorSub = UniversalBle.characteristicValueStream(id, ValkorBle.data).listen((b) => handleValkor(b));
+    await _subscribeValkor(id);
+  }
+
+  Future<void> _subscribeValkor(String id) async {
+    final v = valkor;
+    if (v == null) return;
     try {
       await bleOp(() => UniversalBle.subscribeNotifications(id, ValkorBle.service, ValkorBle.data));
+      v.onSubscribed(DateTime.now());
     } catch (e) {
+      v.onSubscribeError(DateTime.now(), CollarDiagnostics.bleErrorText(e));
       diag.lastError = tr('Kanał Valkor: {0}', [CollarDiagnostics.bleErrorText(e)]);
     }
   }
 
+  /// Czy ponowić inicjalizację kanału Valkor teraz (powód) – kanał wykryty,
+  /// Bluetooth działa, ale pakiety nie przychodzą (brak pierwszego pakietu po
+  /// subskrypcji albo cisza dłuższa niż próg dla trybu). Ponowienia co
+  /// 10 / 20 / 40 s, najwyżej [valkorMaxReinit] na połączenie.
+  @visibleForTesting
+  String? valkorReinitDue(DateTime now) {
+    final v = valkor;
+    if (v == null || state != CollarState.connected || _expectReboot || _reiniting) return null;
+    if (v.reinitThisConnection >= valkorMaxReinit) return null;
+    final last = v.lastReinitAt;
+    if (last != null && now.difference(last).inSeconds < 10 * (1 << v.reinitThisConnection)) return null;
+    final since = v.subscribedAt ?? v.detectedThisConnectionAt;
+    if (since == null) return null;
+    final rx = v.lastRxThisConnection;
+    if (rx == null) {
+      if (now.difference(since).inMilliseconds / 1000 >= valkorFirstPacketSec) {
+        return v.subscribedAt == null ? tr('subskrypcja nieudana') : tr('brak pierwszego pakietu po subskrypcji');
+      }
+      return null;
+    }
+    final silent = now.difference(rx).inMilliseconds / 1000;
+    if (silent >= valkorLimits.channelSilentSec + 3) return tr('brak pakietów od {0} s', [silent.round()]);
+    return null;
+  }
+
+  bool _reiniting = false;
+
+  /// Kontrolowane ponowienie inicjalizacji kanału Valkor: MTU (gdy za małe),
+  /// ponowna subskrypcja powiadomień, GetInfo i tryb.
+  Future<void> _reinitValkor(String why) async {
+    final v = valkor, id = deviceId;
+    if (v == null || id == null || _reiniting) return;
+    _reiniting = true;
+    v.onReinit(DateTime.now(), why);
+    diag.addBleEvent(DateTime.now(), BleEvent.valkorReinit, why);
+    notifyListeners();
+    try {
+      final m = diag.mtu;
+      if (defaultTargetPlatform == TargetPlatform.android && m != null && m < ValkorBle.minMtu) await _negotiateMtu(id);
+      try {
+        await bleOp(() => UniversalBle.unsubscribe(id, ValkorBle.service, ValkorBle.data), retries: 0);
+      } catch (_) {}
+      await _subscribeValkor(id);
+      await _startValkor(sync: false);
+    } finally {
+      _reiniting = false;
+      notifyListeners();
+    }
+  }
+
   /// Po połączeniu: odczyt informacji, tryb z aplikacji i pobranie historii z trackera.
-  Future<void> _startValkor() async {
+  Future<void> _startValkor({bool sync = true}) async {
     if (valkor == null) return;
     try {
       await _writeValkor(valkorCommand(ValkorCmd.getInfo, token: 1));
       await _writeValkor(valkorCommand(ValkorCmd.setMode, token: 2, arg: valkorModeFor(mode).code));
-      await _writeValkor(valkorCommand(ValkorCmd.syncHistory, token: 3));
+      if (sync) {
+        valkor!.historySyncRequestedAt = DateTime.now();
+        await _writeValkor(valkorCommand(ValkorCmd.syncHistory, token: 3));
+      }
     } catch (e) {
       diag.lastError = tr('Kanał Valkor: {0}', [CollarDiagnostics.bleErrorText(e)]);
     }
@@ -1134,6 +1298,8 @@ class CollarLink extends ChangeNotifier {
       ValkorInfo i => i.h,
       ValkorDiag d => d.h,
       ValkorAck a => a.h,
+      ValkorPerf p => p.h,
+      ValkorBuildInfo b => b.h,
       ValkorUnknown u => u.h,
       _ => null,
     };
@@ -1141,33 +1307,42 @@ class CollarLink extends ChangeNotifier {
       notifyListeners();
       return;
     }
-    v.lastRx = t;
+    v.onPacket(t);
     v.firmware = h.firmware;
     v.deviceMode = ValkorMode.fromCode(h.mode) ?? v.deviceMode;
     v.insecure = h.insecure;
+    v.lastSeq = h.seq;
     diag.packets++;
     diag.lastPacketAt = t;
     final node = myNode ?? h.deviceId;
+    // Pakiet przez Bluetooth: odświeża „ostatni pakiet”, ale nie aktywność LoRa.
+    nodes.putIfAbsent(node, () => CollarNode(node)).lastPacketAt = t;
     switch (pkt) {
       case ValkorPosition p when !p.h.historical:
         v.stats.liveRx(t);
-        if (p.batteryPct != null) nodes.putIfAbsent(node, () => CollarNode(node)).battery = p.batteryPct;
-        handleEvents([MeshPositionEvent(node, valkorToMesh(p), valkor: true)], now: t);
+        v.lastPosition = p;
+        v.lastPositionAt = t;
+        if (p.batteryPct != null) nodes[node]!.battery = p.batteryPct;
+        if (p.batteryMv != null) v.batteryMv = p.batteryMv;
+        handleEvents([MeshPositionEvent(node, valkorToMesh(p), valkor: true, valkorPacket: p)], now: t);
         return; // handleEvents powiadamia słuchaczy
       case ValkorPosition p:
         v.stats.historical++;
         _valkorHistorical(node, p, t);
       case ValkorStatus s:
         v.status = s;
+        v.statusAt = t;
         v.stats.status++;
-        final n = nodes.putIfAbsent(node, () => CollarNode(node));
-        if (s.batteryPct != null) n.battery = s.batteryPct;
-        n.lastHeard = t;
-        n.lastPacketAt = t;
+        if (s.batteryPct != null) nodes[node]!.battery = s.batteryPct;
+        if (s.batteryMv != null) v.batteryMv = s.batteryMv;
       case ValkorInfo i:
         v.info = i;
       case ValkorDiag d:
-        v.diag = d;
+        v.onDiag(d);
+      case ValkorPerf p:
+        v.perf = p;
+      case ValkorBuildInfo b:
+        v.buildInfo = b;
       case ValkorAck a:
         v.lastAck = a;
     }
@@ -1175,46 +1350,75 @@ class CollarLink extends ChangeNotifier {
   }
 
   /// Pomiar zapisany w trackerze, gdy telefon był poza zasięgiem. Nigdy nie
-  /// jest pozycją na żywo ani nie uruchamia alarmów. Do trasy trafia tylko
-  /// wtedy, gdy nie jest starszy od ostatniej pozycji na żywo (wstawianie
-  /// w środek trasy – wersja 0.2); pozostałe są w dzienniku CSV.
+  /// jest pozycją na żywo, nie zmienia bieżącej pozycji, prędkości ani
+  /// znacznika na mapie i nie uruchamia alarmów. Po sprawdzeniu (prawidłowy
+  /// fix, czas GNSS, satelity, HDOP, dokładność) i usunięciu duplikatów trafia
+  /// do trasy aktywnego treningu – w swoje miejsce w czasie (TrackRecorder).
   void _valkorHistorical(int node, ValkorPosition p, DateTime t) {
     final at = p.fixTime;
     final v = valkor!;
-    if (at == null) return;
+    final reason = historyRejectReason(p);
+    final n = nodes.putIfAbsent(node, () => CollarNode(node));
+    final e = MeshPositionEvent(node, valkorToMesh(p), valkor: true, valkorPacket: p);
+    if (reason != null || at == null) {
+      v.historyRejected++;
+      diag.reject(reason ?? FixReject.invalid);
+      _log(e, t, FixVerdict.no(reason ?? FixReject.invalid), false, n, source: FixSource.valkorHistory);
+      return;
+    }
     final ss = sessionStart;
     if (ss != null && at.isBefore(ss.subtract(const Duration(seconds: 120)))) {
       diag.previousSession++;
+      v.historyRejected++;
+      _log(e, t, const FixVerdict.no(FixReject.previousSession), false, n, source: FixSource.valkorHistory);
       return;
     }
-    final n = nodes.putIfAbsent(node, () => CollarNode(node));
+    if (!v.historySeen.add(at.millisecondsSinceEpoch)) {
+      v.historyDuplicates++;
+      _log(e, t, const FixVerdict.no(FixReject.duplicate), false, n, source: FixSource.valkorHistory);
+      return;
+    }
     final local = at.toLocal();
     final f = CollarFix(node, p.lat, p.lng, local,
         receivedAt: t,
         speedMs: p.speedMs,
-        accuracyM: p.accuracyM,
+        accuracyM: p.accuracyM ?? (p.hdop > 0 ? p.hdop * 3 : null),
         sats: p.sats,
         courseDeg: p.courseDeg,
         hdop: p.hdop > 0 ? p.hdop : null,
         historical: true,
-        rawFixAt: at);
-    final e = MeshPositionEvent(node, valkorToMesh(p), valkor: true);
-    _log(e, t, FixVerdict.ok(f), false, n);
+        rawFixAt: at,
+        source: FixSource.valkorHistory,
+        fixId: p.fixId);
+    _log(e, t, FixVerdict.ok(f), false, n, source: FixSource.valkorHistory);
     diag.historical++;
     diag.accepted++;
+    v.historyRecovered++;
+    final live = n.fix?.fixAt;
+    if (live != null && !local.isAfter(live)) v.historyBeforeLive++;
     n.lastHistorical = f;
     _rememberLast(node, f, t);
-    final live = n.fix?.fixAt;
-    if (live == null || local.isAfter(live)) {
-      _fixes.add(f);
-    } else {
-      v.historyOutsideTrack++;
-    }
+    _fixes.add(f);
   }
 
-  void _log(MeshPositionEvent e, DateTime t, FixVerdict v, bool reply, CollarNode n) {
+  /// Powód odrzucenia pomiaru historycznego (null = poprawny).
+  static FixReject? historyRejectReason(ValkorPosition p) {
+    if (!p.fixValid || p.fixQuality == 0) return FixReject.invalid;
+    if (p.fixTime == null) return FixReject.invalid;
+    if (p.sats > 0 && p.sats < FixFilter.minSats) return FixReject.weak;
+    if (p.hdop > 5) return FixReject.weak;
+    final a = p.accuracyM;
+    if (a != null && a > FixFilter.maxAccuracyM) return FixReject.weak;
+    if (p.lat.abs() > 90 || p.lng.abs() > 180 || (p.lat == 0 && p.lng == 0)) return FixReject.invalid;
+    return null;
+  }
+
+  void _log(MeshPositionEvent e, DateTime t, FixVerdict v, bool reply, CollarNode n, {FixSource? source}) {
     final p = e.position;
     final f = v.fix;
+    final vp = e.valkorPacket;
+    final src = source ?? f?.source ?? (e.valkor ? FixSource.valkor : FixSource.meshtastic);
+    final vs = valkor;
     final at = f?.fixAt ?? (p.timeIsFix ? p.time : null);
     final h = at == null ? null : HandlerTrack.instance.at(at);
     final dd = f == null
@@ -1250,6 +1454,21 @@ class CollarLink extends ChangeNotifier {
       trusted: f?.trusted,
       clockOffsetSec: diag.clockOffsetSec,
       noDistanceReason: f == null || dd?.matchedM != null ? null : DogDistance.whyNot(f, HandlerTrack.instance, now: t),
+      source: src.csv,
+      valkorSeq: vp?.h.seq,
+      fixId: p.fixId,
+      gnssUtc: vp?.fixTime ?? (p.timeIsFix ? p.time?.toUtc() : null),
+      timeSource: f == null ? null : (f.timeIsFix ? 'gnss' : 'odbior'),
+      correctedAgeSec: f == null ? null : t.difference(f.fixAt).inMilliseconds / 1000,
+      gnssToBleMs: vp?.ageMs,
+      rxGapSec: e.valkor && !(vp?.h.historical ?? false) ? vs?.stats.lastLiveIntervalSec : null,
+      mtu: diag.mtu,
+      trackerRssi: vs?.diag?.rssi == 0 ? null : vs?.diag?.rssi,
+      batteryPct: vp?.batteryPct ?? n.battery,
+      batteryMv: vp?.batteryMv,
+      fixQuality: p.fixQuality,
+      stationaryFlag: vp?.stationary,
+      appState: AppState.instance.csv,
     ));
   }
 
@@ -1270,7 +1489,8 @@ class CollarLink extends ChangeNotifier {
     final f = n?.fix;
     if (f == null) return null;
     final m = diag.medianInterval;
-    final limit = math.max(15.0, (m ?? 7.5) * 2);
+    // Kanał Valkor: prędkość tylko z pomiaru aktualnego wg trybu (SPORT: do 3 s).
+    final limit = valkor?.confirmed == true && f.source != FixSource.meshtastic ? valkorLimits.liveSec : math.max(15.0, (m ?? 7.5) * 2);
     if (f.ageSec(t) > limit) return null;
     return n!.speedMs;
   }
@@ -1284,14 +1504,30 @@ class CollarLink extends ChangeNotifier {
     return d?.fix == null ? null : d;
   }
 
-  /// Po ilu sekundach pomiar przestaje być „na żywo”: 3 × rzeczywisty odstęp
-  /// między pomiarami, co najmniej 45 s.
-  double get liveLimitSec {
+  /// Po ilu sekundach pomiar przestaje być „na żywo”. Kanał Valkor: próg
+  /// trybu trackera (SPORT 3 s, WALK 8 s, ECO 35 s). Zwykły Meshtastic:
+  /// 3 × rzeczywisty odstęp między pomiarami, co najmniej 45 s.
+  double get liveLimitSec => valkor?.confirmed == true ? valkorLimits.liveSec : meshLiveLimitSec;
+
+  double get meshLiveLimitSec {
     final m = diag.medianInterval;
     return m == null ? 45 : (m * 3).clamp(45, 600).toDouble();
   }
 
-  /// Stan łączności z psem: osobno Bluetooth, LoRa i GPS.
+  /// Progi aktualności dla pomiaru [f]: Valkor – wg trybu trackera,
+  /// Meshtastic (także tryb awaryjny) – wg rzeczywistego odstępu.
+  FreshnessLimits limitsFor(CollarFix f) =>
+      f.source == FixSource.meshtastic || valkor?.confirmed != true ? FreshnessLimits.mesh(meshLiveLimitSec) : valkorLimits;
+
+  /// Ocena wieku pozycji psa (null = brak pomiaru na żywo).
+  Freshness? freshness({DateTime? now, String? dogId}) {
+    final f = (dogId == null ? dog : nodeOf(dogId))?.fix;
+    if (f == null || f.historical) return null;
+    return limitsFor(f).classify(f.ageSec(now ?? DateTime.now()));
+  }
+
+  /// Stan łączności z psem: osobno Bluetooth, kanał Valkor, LoRa, GNSS trackera
+  /// i wiek pozycji (aktualna / opóźniona / nieaktualna / brak danych).
   DogLink status({DateTime? now, String? dogId}) {
     final t = now ?? DateTime.now();
     if (deviceId == null) return DogLink.none;
@@ -1310,13 +1546,116 @@ class CollarLink extends ChangeNotifier {
       case CollarState.connected:
         break;
     }
+    final f = d?.fix;
+    // Pomiar zaległy (historyczny) nigdy nie jest „na żywo”.
+    final fr = f == null || f.historical ? null : limitsFor(f).classify(f.ageSec(t));
+    if (fr == Freshness.live) return DogLink.live;
+    if (fr == Freshness.delayed) return DogLink.delayed;
+    final v = valkor;
+    if (direct && v != null) {
+      // Kanał Valkor wykryty, a pakiety nie przychodzą (przy działającym Bluetooth).
+      if (!valkorDelivering(t)) {
+        final since = v.lastRxThisConnection ?? v.subscribedAt ?? v.detectedThisConnectionAt;
+        final silent = since == null ? 0.0 : t.difference(since).inMilliseconds / 1000;
+        if (v.lastRxThisConnection != null || silent >= valkorFirstPacketSec) return DogLink.valkorSilent;
+      }
+      // Tracker sam zgłasza, że nie ma fixu GNSS (Status nowszy niż ostatni pomiar).
+      final s = v.status, sAt = v.statusAt;
+      if (s != null && sAt != null && (s.gnss == ValkorGnss.searching || s.gnss == ValkorGnss.lost) &&
+          (f == null || sAt.isAfter(f.receivedAt))) {
+        return DogLink.gnssLost;
+      }
+    }
     final heardAge = d?.lastHeard == null ? null : t.difference(d!.lastHeard!).inSeconds;
     final loraSilent = !direct && (heardAge == null || heardAge > loraSilentSec);
-    final f = d?.fix;
     if (f == null) return loraSilent ? DogLink.loraSilent : DogLink.waitingGps;
-    // Pomiar zaległy (z kolejki po połączeniu) nigdy nie jest „na żywo”.
-    if (f.ageSec(t) <= liveLimitSec && !f.historical) return DogLink.live;
-    return loraSilent ? DogLink.loraSilent : DogLink.stale;
+    if (loraSilent) return DogLink.loraSilent;
+    return fr == Freshness.noData ? DogLink.noData : DogLink.stale;
+  }
+
+  /// Wskaźniki łączności – osobno: Bluetooth, kanał Valkor, GNSS trackera,
+  /// GPS telefonu i LoRa. Pakiety z kanału Valkor nie świadczą o LoRa.
+  List<ConnIndicator> indicators({DateTime? now, PhoneGpsSnapshot? phone}) {
+    final t = now ?? DateTime.now();
+    String s1(double v) => v.toStringAsFixed(1).replaceAll('.', ',');
+    final bt = switch (state) {
+      CollarState.connected => ConnIndicator(tr('Bluetooth'), IndicatorLevel.ok, tr('połączony')),
+      CollarState.connecting => ConnIndicator(tr('Bluetooth'), IndicatorLevel.warn, tr('łączenie…')),
+      CollarState.lost => ConnIndicator(tr('Bluetooth'), IndicatorLevel.bad, tr('utracony – ponawiam')),
+      CollarState.off => ConnIndicator(tr('Bluetooth'), paired ? IndicatorLevel.bad : IndicatorLevel.na, paired ? tr('rozłączony') : tr('brak trackera')),
+    };
+    final v = valkor;
+    ConnIndicator valkorInd() {
+      final name = tr('Valkor BLE');
+      if (v == null) return ConnIndicator(name, IndicatorLevel.na, tr('brak usługi Valkor (zwykły Meshtastic)'));
+      if (state != CollarState.connected) return ConnIndicator(name, IndicatorLevel.bad, tr('Bluetooth rozłączony'));
+      final m = diag.mtu;
+      if (m != null && m < ValkorBle.minMtu) {
+        return ConnIndicator(name, IndicatorLevel.bad, tr('za małe MTU: {0} (wymagane {1})', [m, ValkorBle.minMtu]));
+      }
+      switch (v.channel(t, delivering: valkorDelivering(t))) {
+        case ValkorChannel.detected:
+          return ConnIndicator(name, IndicatorLevel.warn,
+              v.subscribeError == null ? tr('usługa wykryta') : tr('błąd subskrypcji: {0}', [v.subscribeError!]));
+        case ValkorChannel.subscribed:
+          return ConnIndicator(name, IndicatorLevel.warn, tr('subskrypcja – czekam na pierwszy pakiet'));
+        case ValkorChannel.silent:
+          final rx = v.lastRxThisConnection;
+          return ConnIndicator(name, IndicatorLevel.bad,
+              rx == null ? tr('brak pakietów po subskrypcji') : tr('brak nowych pakietów od {0} s', [t.difference(rx).inSeconds]));
+        case ValkorChannel.confirmed:
+          return ConnIndicator(name, IndicatorLevel.warn, tr('protokół potwierdzony – brak pozycji'));
+        case ValkorChannel.receiving:
+          final med = v.stats.medianLiveInterval;
+          return ConnIndicator(name, IndicatorLevel.ok,
+              med == null ? tr('odbiór pozycji') : tr('odbiór pozycji co ~{0} s', [s1(med)]));
+      }
+    }
+
+    ConnIndicator gnssInd() {
+      final name = tr('GNSS trackera');
+      final f = dog?.fix;
+      final s = v?.status, sAt = v?.statusAt;
+      final statusNewer = s != null && sAt != null && (f == null || sAt.isAfter(f.receivedAt));
+      if (statusNewer && s.gnss == ValkorGnss.lost) return ConnIndicator(name, IndicatorLevel.bad, tr('tracker zgubił sygnał GNSS'));
+      if (statusNewer && s.gnss == ValkorGnss.searching) return ConnIndicator(name, IndicatorLevel.warn, tr('tracker szuka satelitów'));
+      if (f == null || f.historical) return ConnIndicator(name, IndicatorLevel.na, tr('brak pomiaru'));
+      final fr = limitsFor(f).classify(f.ageSec(t));
+      final detail = [
+        if (f.sats != null) tr('{0} sat.', [f.sats!]),
+        if (f.hdop != null) 'HDOP ${f.hdop!.toStringAsFixed(2).replaceAll('.', ',')}',
+        if (f.accuracyM != null) '±${s1(f.accuracyM!)} m',
+      ].join(' · ');
+      return switch (fr) {
+        Freshness.live => ConnIndicator(name, IndicatorLevel.ok, detail.isEmpty ? tr('fix') : detail),
+        Freshness.delayed => ConnIndicator(name, IndicatorLevel.warn, tr('pomiar opóźniony ({0} s)', [f.ageSec(t).round()])),
+        _ => ConnIndicator(name, IndicatorLevel.bad, tr('brak nowego pomiaru od {0} s', [f.ageSec(t).round()])),
+      };
+    }
+
+    ConnIndicator phoneInd() {
+      final name = tr('GPS telefonu');
+      final p = phone;
+      if (p == null) return ConnIndicator(name, IndicatorLevel.na, tr('nieużywany'));
+      if (p.problem != null) return ConnIndicator(name, IndicatorLevel.bad, p.problem!);
+      if (!p.trusted) return ConnIndicator(name, IndicatorLevel.warn, p.why ?? tr('ustalanie pozycji'));
+      return ConnIndicator(name, IndicatorLevel.ok, p.accuracyM == null ? tr('wiarygodna') : '±${p.accuracyM!.round()} m');
+    }
+
+    ConnIndicator loraInd() {
+      final name = tr('LoRa');
+      final dn = dogNode;
+      if (dn == null || dn == myNode) {
+        return ConnIndicator(name, IndicatorLevel.na, tr('nie dotyczy – telefon połączony z trackerem bezpośrednio przez Bluetooth'));
+      }
+      final d = nodes[dn];
+      final heard = d?.lastHeard == null ? null : t.difference(d!.lastHeard!).inSeconds;
+      if (heard == null || heard > loraSilentSec) return ConnIndicator(name, IndicatorLevel.bad, tr('brak sygnału LoRa od psa'));
+      return ConnIndicator(name, IndicatorLevel.ok,
+          d?.rssi == null ? tr('słyszany {0} s temu', [heard]) : tr('słyszany {0} s temu, {1} dBm', [heard, d!.rssi!]));
+    }
+
+    return [bt, valkorInd(), gnssInd(), phoneInd(), loraInd()];
   }
 
   /// Udaje otwarte połączenie od chwili [t] (testy zapytań o pozycję).

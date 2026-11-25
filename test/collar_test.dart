@@ -279,7 +279,8 @@ void main() {
       final size = tester.getSize(label);
       expect(size.width, greaterThan(size.height * 3));
       expect(find.textContaining('Device disconnected while reading'), findsOneWidget);
-      expect(find.text('GPS telefonu'), findsOneWidget);
+      // Sekcja GPS telefonu + wskaźnik łączności o tej samej nazwie (0.27.1).
+      expect(find.text('GPS telefonu'), findsAtLeastNWidgets(1));
       expect(find.text('Restarty subskrypcji GPS'), findsOneWidget);
       await tester.pumpWidget(const SizedBox());
       c.state = CollarState.off;

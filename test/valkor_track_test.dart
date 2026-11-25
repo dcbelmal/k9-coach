@@ -130,7 +130,7 @@ void main() {
       await tester.pump();
       expect(find.text('Valkor Track'), findsOneWidget);
       expect(find.text('Włącz mapę'), findsOneWidget);
-      expect(find.text('GPS psa'), findsOneWidget);
+      expect(find.text('GNSS trackera'), findsOneWidget);
       expect(find.textContaining('na żywo'), findsOneWidget);
       // Pomiar postarzały: już nie „na żywo”.
       c.nodes[4]!.fix = CollarFix(4, 50, 20, old);

@@ -15,6 +15,7 @@ import '../gps/tile_health.dart';
 import '../l10n/l10n.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import 'field_test_screen.dart';
 import 'valkor_track_screen.dart';
 
 void openCollar(BuildContext context) =>
@@ -55,7 +56,8 @@ String collarStatusText(CollarLink c) {
 /// Opis łączności z psem: Bluetooth / LoRa / GPS / na żywo.
 String dogLinkText(CollarLink c, {DateTime? now, String? dogId}) {
   final f = (dogId == null ? c.dog : c.nodeOf(dogId))?.fix;
-  switch (c.status(now: now, dogId: dogId)) {
+  final link = c.status(now: now, dogId: dogId);
+  switch (link) {
     case DogLink.none:
       return tr('brak trackera');
     case DogLink.bluetoothOff:
@@ -67,17 +69,30 @@ String dogLinkText(CollarLink c, {DateTime? now, String? dogId}) {
     case DogLink.waitingGps:
       return tr('czekam na GPS psa');
     case DogLink.stale:
+    case DogLink.noData:
       // Bluetooth działa, ale nowego pomiaru GPS nie ma – to nie to samo co postój.
       final heard = (dogId == null ? c.dog : c.nodeOf(dogId))?.lastPacketAt;
+      final age = f == null ? null : (now ?? DateTime.now()).difference(f.fixAt).inSeconds;
       return [
-        if (f != null) tr('brak nowego pomiaru GPS od {0} s', [(now ?? DateTime.now()).difference(f.fixAt).inSeconds]),
+        if (age != null)
+          link == DogLink.noData ? tr('BRAK NOWYCH DANYCH od {0} s', [age]) : tr('brak aktualnej pozycji – pomiar sprzed {0} s', [age]),
         if (heard != null) tr('ostatni pakiet {0}', [collarAge(heard, now: now)]),
       ].join(' · ');
+    case DogLink.valkorSilent:
+      final rx = c.valkor?.lastRxThisConnection;
+      return rx == null
+          ? tr('Bluetooth połączony, ale kanał Valkor nie przysyła pakietów')
+          : tr('Bluetooth połączony, brak nowych pakietów Valkor od {0} s', [(now ?? DateTime.now()).difference(rx).inSeconds]);
+    case DogLink.gnssLost:
+      return c.valkor?.status?.gnss == ValkorGnss.lost ? tr('tracker zgubił sygnał GPS') : tr('tracker szuka satelitów GPS');
+    case DogLink.delayed:
+      return tr('pozycja opóźniona – pomiar sprzed {0} s', [f == null ? 0 : (now ?? DateTime.now()).difference(f.fixAt).inSeconds]);
     case DogLink.live:
       final m = c.diag.medianInterval;
       return [
         tr('na żywo {0}', [collarAge(f?.fixAt, now: now)]),
-        if (m != null) tr('pomiar co ~{0} s', [m.round()]),
+        if (m != null) tr('pomiar co ~{0} s', [m < 2 ? m.toStringAsFixed(1).replaceAll('.', ',') : m.round()]),
+        if (f?.source == FixSource.meshtastic && c.valkor != null) tr('tryb awaryjny: Meshtastic'),
       ].join(' · ');
   }
 }
@@ -313,6 +328,7 @@ class _CollarScreenState extends State<CollarScreen> {
       FixReject.outOfOrder => tr('w złej kolejności'),
       FixReject.weak => tr('słaby sygnał GPS'),
       FixReject.jump => tr('niemożliwy skok'),
+      FixReject.invalid => tr('tracker: pomiar nieprawidłowy (brak fixu)'),
     };
     // Długa wartość (np. treść błędu) idzie pod etykietą i się zawija –
     // wcześniej ściskała etykietę do jednej litery w wierszu (pionowy napis).
@@ -352,6 +368,10 @@ class _CollarScreenState extends State<CollarScreen> {
           title: Text(tr('Diagnostyka'), style: const TextStyle(fontWeight: FontWeight.w600)),
           children: [
             row(tr('Stan psa'), dogLinkText(c)),
+            for (final i in c.indicators(now: now, phone: loc.snapshot(now))) row(i.name, i.text),
+            row(tr('MTU Bluetooth (rzeczywiste / wymagane Valkor)'),
+                '${d.mtu ?? tr('nieznane')} / ${ValkorBle.minMtu}${d.mtuOk == false ? ' – ${tr('za małe')}' : ''}'),
+            if (d.mtuError != null) row(tr('Błąd negocjacji MTU'), d.mtuError!),
             row(tr('Pakiety z urządzenia'), '${d.packets}'),
             row(tr('Pozycje odebrane'), '${d.positions}'),
             row(tr('Pozycje przyjęte'), '${d.accepted}'),
@@ -422,6 +442,17 @@ class _CollarScreenState extends State<CollarScreen> {
             // Z firmware Valkor tracker wysyła każdy pomiar sam – eksperyment z ustawieniami Meshtastic niepotrzebny.
             if (c.valkor == null) _fastMode(row, head),
             const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                key: const ValueKey('open-field-tests'),
+                style: OutlinedButton.styleFrom(minimumSize: const Size(0, 40)),
+                onPressed: () => openFieldTests(context),
+                icon: const Icon(Icons.science_outlined, size: 18),
+                label: Text(tr('Testy terenowe (panel deweloperski)')),
+              ),
+            ),
+            const SizedBox(height: 6),
             Align(
               alignment: Alignment.centerLeft,
               child: OutlinedButton.icon(

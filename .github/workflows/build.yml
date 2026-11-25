@@ -49,7 +49,9 @@ jobs:
         env:
           TZ: Europe/Warsaw
       - name: Kompilacja testowa (debug, bez klucza wydania)
-        run: flutter build apk --debug --dart-define=VALKOR_FLAVOR=beta
+        run: flutter build apk --debug --dart-define=VALKOR_FLAVOR=beta --dart-define=VALKOR_COMMIT=${COMMIT::7}
+        env:
+          COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
 
   release:
     name: Wydanie (podpisany APK)
@@ -98,7 +100,7 @@ jobs:
       - name: Zbuduj APK (beta)
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-        run: flutter build apk --release --dart-define=VALKOR_FLAVOR=beta
+        run: flutter build apk --release --dart-define=VALKOR_FLAVOR=beta --dart-define=VALKOR_COMMIT=${GITHUB_SHA::7}
       - name: Sprawdź, że APK ma ten sam podpis co poprzednie wersje
         run: python3 tool/apk_cert.py build/app/outputs/flutter-apk/app-release.apk "$(cat android/app/release-cert.sha256)"
       - name: Usuń plik klucza

@@ -5,7 +5,7 @@ import 'package:flutter/widgets.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
-import '../collar/collar_link.dart' show FixTrust, TrustEvent, HandlerTrack;
+import '../collar/collar_link.dart' show FixTrust, TrustEvent, HandlerTrack, PhoneGpsSnapshot;
 import '../collar/dog_alerts.dart';
 import '../l10n/l10n.dart';
 import 'online_services.dart';
@@ -181,6 +181,17 @@ class PhoneLocation extends ChangeNotifier with WidgetsBindingObserver {
       case PhoneGps.ok:
         return fresh(now) ? null : tr('brak nowego pomiaru GPS telefonu od {0} s', [(ageSec(now) ?? 0).round()]);
     }
+  }
+
+  /// Stan do wskaźnika „GPS telefonu” (null = lokalizacja nieużywana).
+  PhoneGpsSnapshot? snapshot([DateTime? now]) {
+    if (state == PhoneGps.off) return null;
+    return PhoneGpsSnapshot(
+      problem: reason(now),
+      trusted: trust.stable,
+      why: trust.why,
+      accuracyM: last?.accuracy,
+    );
   }
 
   /// Zgłasza potrzebę lokalizacji. [background] = ma działać przy wygaszonym

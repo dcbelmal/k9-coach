@@ -107,7 +107,7 @@ class DistanceView {
     final LatLng? dogLl = node?.displayLl ?? last?.ll;
     if (dogLl == null) return const DistanceView(DistanceState.noDog, reason: 'brak pozycji psa');
     final track = HandlerTrack.instance;
-    if (link == DogLink.live) {
+    if (link.current) {
       final dd = c.distanceTo(dogId, now: now);
       final m = dd?.bestM;
       if (dd == null || m == null) {
