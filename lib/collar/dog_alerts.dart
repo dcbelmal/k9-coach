@@ -12,7 +12,7 @@ import '../models.dart' show jsonInt;
 import '../notifications.dart';
 import '../storage/safe_prefs.dart';
 import 'collar_link.dart';
-import 'distance_view.dart' show unstableReason;
+import 'distance_view.dart' show DistanceView, DistanceState;
 
 /// Bezpieczna strefa: okrąg na mapie. Wyjście psa poza nią to alarm.
 class SafeZone {
@@ -339,12 +339,20 @@ class DogAlerts extends ChangeNotifier {
       fix: c.dog?.fix,
       handler: h,
       battery: c.dog?.battery,
-      // Odległość tylko, gdy obie pozycje są wiarygodne (po stabilizacji).
-      distance: unstableReason(c, CollarLink.activeDog()) == null ? c.distanceTo(CollarLink.activeDog(), now: t) : null,
+      // Odległość tylko, gdy jest wiarygodna (po stabilizacji, bez korekty GPS,
+      // bez sprzeczności GPS–Bluetooth, z dobrą dokładnością). Niewiarygodna
+      // pozycja nigdy nie uruchamia alarmu oddalenia; ostrzeżenia o utracie
+      // Bluetooth i aktualnej pozycji działają niezależnie.
+      distance: _reliable(c, t) ? c.distanceTo(CollarLink.activeDog(), now: t) : null,
     ));
     for (final a in out) {
       _emit(a);
     }
+  }
+
+  static bool _reliable(CollarLink c, DateTime t) {
+    final s = DistanceView.of(c, CollarLink.activeDog(), now: t).state;
+    return s == DistanceState.estimate || s == DistanceState.nearby;
   }
 
   void _emit(DogAlert a) {

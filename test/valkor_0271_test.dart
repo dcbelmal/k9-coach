@@ -539,7 +539,7 @@ void main() {
       expect(csv, contains('test;rodzaj;postoj'));
       expect(csv, contains('test;warunki;park, słonecznie'));
       expect(csv, contains('podsumowanie_testu;swieze_pozycje;10'));
-      expect(csv, contains('aplikacja;wersja;0.27.1'));
+      expect(csv, contains('aplikacja;wersja;0.27.2'));
       // Drugi test – niezależny.
       FieldTests.instance.start(FieldTestKind.walk, now: at(40));
       live(41, 45, startM: 60);
@@ -565,7 +565,7 @@ void main() {
       expect(csv, contains('valkor_sesja;gnss_pomiary_wszystkie;10'));
       expect(csv, contains('valkor_sesja;gnss_pomiary_odrzucone;1'));
       expect(csv, isNot(contains('gnss_pomiary_odrzucone;886;')));
-      expect(csv, contains('aplikacja;kompilacja;0.27.1+42'));
+      expect(csv, contains('aplikacja;kompilacja;0.27.2+43'));
     });
 
     test('stan aplikacji (pierwszy plan / tło) w dzienniku pomiarów', () {

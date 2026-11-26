@@ -100,8 +100,34 @@ class ValkorSession {
     return d == null || d.gnssIntervalAvgMs == 0 ? null : d.gnssIntervalAvgMs / 1000;
   }
 
+  /// Protokół 1.2 (firmware 0.1.2+): surowe dane odbiornika dla ostatnich
+  /// pozycji (wg fixId), liczniki NMEA i czy aplikacja poprosiła o szczegóły
+  /// w tym połączeniu. Firmware 0.1.1 tego nie ma – wtedy wszystko null.
+  final Map<int, ValkorFixDetail> details = {};
+  ValkorFixDetail? lastDetail;
+  ValkorGnssStats? gnssStats;
+  bool detailRequested = false;
+  int detailPackets = 0;
+
+  /// Tracker obsługuje pakiety FixDetail / GnssStats.
+  bool get supportsDetail => ((info?.capabilities ?? 0) & ValkorCap.fixDetail) != 0;
+
+  void addDetail(ValkorFixDetail d) {
+    detailPackets++;
+    lastDetail = d;
+    details[d.fixId] = d;
+    while (details.length > 16) {
+      details.remove(details.keys.first);
+    }
+  }
+
+  /// Szczegóły dla pomiaru [fixId]; gdy jeszcze nie dotarły (FixDetail
+  /// przychodzi tuż po pozycji) – ostatnie znane (błąd GST zmienia się powoli).
+  ValkorFixDetail? detailFor(int? fixId) => (fixId == null ? null : details[fixId]) ?? lastDetail;
+
   void onDetected(DateTime t, {int? mtu}) {
     detectedThisConnectionAt = t;
+    detailRequested = false;
     subscribedAt = null;
     subscribeError = null;
     lastRxThisConnection = null;

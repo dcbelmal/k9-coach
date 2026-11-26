@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:k9_coach/collar/collar_link.dart';
 import 'package:k9_coach/collar/dog_alerts.dart';
+import 'package:k9_coach/collar/distance_view.dart';
 import 'package:k9_coach/collar/mesh_proto.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:k9_coach/gps/phone_location.dart';
@@ -87,7 +88,10 @@ void main() {
     expect(alerts, isEmpty);
   });
 
-  test('pogorszenie dokładności telefonu – rośnie niepewność, nadal „w pobliżu”, a nie fałszywe metry', () {
+  // 0.27.2: przy dokładności telefonu 25 m „w pobliżu” nie jest uzasadnione
+  // (spec. 10: tylko gdy niepewność na to pozwala) – zamiast tego „Niska
+  // dokładność lokalizacji”, nadal bez fałszywych metrów.
+  test('pogorszenie dokładności telefonu – rośnie niepewność, „niska dokładność”, a nie fałszywe metry', () {
     for (var s = 0; s <= 30; s++) {
       HandlerTrack.instance.add(HandlerFix(at(s), north(noise(s, s < 15 ? 3 : 15)), 20, accuracyM: s < 15 ? 4 : 25));
     }
@@ -96,7 +100,14 @@ void main() {
     c.handleEvents([ev(north(1), 20, at(28), 2)], now: at(29));
     final bad = c.distanceTo(CollarLink.activeDog(), now: at(29))!;
     expect(bad.matchedUncertaintyM!, greaterThan(good.matchedUncertaintyM!));
-    expect(bad.withinError, isTrue);
+    expect(good.withinError, isTrue);
+    expect(bad.withinError, isFalse);
+    final v = DistanceView.of(c, CollarLink.activeDog(), now: at(29));
+    // Dopiero 2. pomiar psa – może to być jeszcze „Stabilizacja GPS”; ważne,
+    // że bez „w pobliżu” i bez liczby metrów.
+    expect(v.state, anyOf(DistanceState.lowAccuracy, DistanceState.stabilizing));
+    expect(v.hasDistance, isFalse);
+    expect(v.text, isNot(matches(RegExp(r"\d+ m"))));
   });
 
   test('odległość nie jest przycinana do smyczy ani zerowana – pies naprawdę 40 m dalej', () {

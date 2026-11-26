@@ -537,7 +537,7 @@ class _GpsScreenState extends State<GpsScreen> {
                   dv.state == DistanceState.noDog && f != null ? tr('Pies: pozycja {0}', [collarAge(f.fixAt)]) : dv.sentence,
                   style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
-                if (dv.state == DistanceState.nearby || dv.state == DistanceState.waitingPhone || dv.state == DistanceState.stabilizing)
+                if (dv.state != DistanceState.estimate && dv.state != DistanceState.noDog && dv.state != DistanceState.lastKnown && dv.note != null)
                   Text(dv.note ?? '', style: const TextStyle(color: K9.muted, fontSize: 12)),
                 Text(
                   [

@@ -12,11 +12,14 @@ import '../models.dart' show jsonInt;
 import '../storage/safe_prefs.dart';
 import '../l10n/l10n.dart';
 import 'dog_distance.dart';
+import 'distance_view.dart';
+import '../gps/phone_location.dart';
 import 'fast_mode.dart';
 import 'fix_filter.dart';
 import 'app_state.dart';
 import 'fix_trust.dart';
 import 'freshness.dart';
+import 'gnss_quality.dart';
 import 'mesh_proto.dart';
 import 'pos_filter.dart';
 import 'tracker_config.dart';
@@ -28,6 +31,7 @@ export 'dog_distance.dart';
 export 'fast_mode.dart';
 export 'fix_filter.dart' show CollarFix, FixSource, FixReject, FixVerdict, CollarDiagnostics, FixLogEntry, Spread, BleEvent;
 export 'freshness.dart';
+export 'gnss_quality.dart';
 export 'pos_filter.dart';
 export 'fix_trust.dart';
 export 'tracker_config.dart';
@@ -71,6 +75,14 @@ class CollarNode {
   /// Stabilizacja: czy pozycji trackera można już ufać.
   final trust = FixTrust.dog();
 
+  /// Ocena jakości GNSS (0.27.2): osobno dla kanału Valkor (1 Hz) i Meshtastic.
+  final qValkor = GnssQuality.valkor(), qMesh = GnssQuality.mesh();
+  GnssQuality quality = GnssQuality.valkor();
+  GnssQuality qualityFor(FixSource s) => s == FixSource.meshtastic ? qMesh : qValkor;
+
+  /// Ostatnia ocena pomiaru na żywo.
+  GnssAssessment? get assessment => quality.lastAssessment;
+
   /// Ostatni zaległy pomiar (z kolejki po połączeniu) – nie „na żywo”.
   CollarFix? lastHistorical;
 
@@ -81,9 +93,9 @@ class CollarNode {
   double? get displayAccM {
     final f = fix;
     if (f == null) return null;
-    final raw = f.accuracyM ?? DogDistance.unknownDogAccM;
+    final raw = f.uncertaintyM ?? DogDistance.unknownDogAccM;
     final a = smooth.accuracyM;
-    return a == null ? raw : math.max(a, raw * 0.5);
+    return a == null ? raw : math.max(a, raw);
   }
 
   /// Chwila ostatniego pomiaru z ruchem (null = brak).
@@ -1141,11 +1153,24 @@ class CollarLink extends ChangeNotifier {
           // filtr Kalmana zaczyna od nowa w nowym miejscu (bez wleczenia się
           // za starą, błędną pozycją).
           final ev = n.trust.add(f.ll, f.fixAt, accuracyM: f.accuracyM, hdop: f.hdop, sats: f.sats, speedMs: f.speedMs);
-          if (ev == TrustEvent.jump || ev == TrustEvent.start) n.smooth.reset();
-          f = f.withTrust(n.trust.stable);
+          // Jakość GNSS (0.27.2): realistyczna niepewność, korekty, odzyskanie
+          // sygnału, pozycja zatrzymana. Spójność serii (FixTrust) nie wystarcza.
+          final q = n.qualityFor(f.source);
+          n.quality = q;
+          final vp = e.valkorPacket;
+          final a = q.add(f.ll, f.fixAt,
+              accuracyM: f.accuracyM,
+              hdop: f.hdop,
+              sats: f.sats,
+              speedMs: f.speedMs,
+              detail: f.source == FixSource.valkor ? valkor?.detailFor(f.fixId) : null,
+              accFromHdop: vp?.accuracyEstimated ?? true);
+          if (ev == TrustEvent.jump || ev == TrustEvent.start || a.correction) n.smooth.reset();
+          // Trasa: pomiar spójny (FixTrust) i bez korekty. Odległość i alarmy
+          // wymagają dodatkowo końca stabilizacji GNSS (unstableReason).
+          f = f.withTrust(n.trust.stable && a.state != GnssState.suspect, a: a);
           v = FixVerdict.ok(f);
-          n.smooth.update(f.ll, f.fixAt, accuracyM: f.accuracyM, speedMs: f.speedMs);
-          _log(e, t, v, reply, n);
+          n.smooth.update(f.ll, f.fixAt, accuracyM: f.uncertaintyM, speedMs: f.weak ? null : f.speedMs);
           if (isDog && f.timeIsFix) diag.addLag(f.lagSec);
           // Odstęp tylko między pomiarami z tego samego źródła: statystyki
           // Valkor 1 Hz i Meshtastic się nie mieszają.
@@ -1163,6 +1188,7 @@ class CollarLink extends ChangeNotifier {
           if (!f.moved) diag.still++;
           _rememberLast(e.node, f, t);
           _fixes.add(f);
+          _log(e, t, v, reply, n);
           if (isDog) fast.onLiveFix(f, t);
         case MeshBattery():
           final n = nodes.putIfAbsent(e.node, () => CollarNode(e.node));
@@ -1300,6 +1326,8 @@ class CollarLink extends ChangeNotifier {
       ValkorAck a => a.h,
       ValkorPerf p => p.h,
       ValkorBuildInfo b => b.h,
+      ValkorFixDetail d => d.h,
+      ValkorGnssStats g => g.h,
       ValkorUnknown u => u.h,
       _ => null,
     };
@@ -1333,10 +1361,28 @@ class CollarLink extends ChangeNotifier {
         v.status = s;
         v.statusAt = t;
         v.stats.status++;
+        // Brak fixu w trackerze: jakość „brak sygnału / wyszukiwanie” – osobno od Bluetooth.
+        if (s.gnss == ValkorGnss.searching || s.gnss == ValkorGnss.lost) {
+          nodes[node]!.qValkor.noFix(everHadFix: s.lastFixAgeMs != null);
+        }
         if (s.batteryPct != null) nodes[node]!.battery = s.batteryPct;
         if (s.batteryMv != null) v.batteryMv = s.batteryMv;
       case ValkorInfo i:
         v.info = i;
+        // Firmware 0.1.2+: prośba o surowe dane odbiornika (raz na połączenie).
+        // Firmware 0.1.1 nie ma tej możliwości – nic nie wysyłamy.
+        if (v.supportsDetail && !v.detailRequested) {
+          v.detailRequested = true;
+          unawaited(_writeValkor(valkorCommand(ValkorCmd.setDetail, token: 4, arg: 1)).catchError((Object err) {
+            v.detailRequested = false;
+            diag.lastError = tr('Kanał Valkor: {0}', [CollarDiagnostics.bleErrorText(err)]);
+          }));
+        }
+      case ValkorFixDetail d:
+        v.addDetail(d);
+        diag.attachDetail(d);
+      case ValkorGnssStats g:
+        v.gnssStats = g;
       case ValkorDiag d:
         v.onDiag(d);
       case ValkorPerf p:
@@ -1425,6 +1471,13 @@ class CollarLink extends ChangeNotifier {
         ? null
         : DogDistance.of(f, HandlerTrack.instance, now: t, dogFiltered: n.smooth.position, dogFilteredAccM: n.smooth.accuracyM);
     final phone = HandlerTrack.instance.last;
+    final isLiveAccepted = f != null && !f.historical && identical(n.fix, f);
+    final a = isLiveAccepted ? n.assessment : null;
+    final dogId = isLiveAccepted && e.node == dogNode ? CollarLink.activeDog() : null;
+    final dv = dogId == null ? null : DistanceView.of(this, dogId, now: t);
+    final pl = PhoneLocation.instance;
+    final phoneSrc = pl.last == null ? null : (pl.last!.isMocked ? 'symulowana' : 'fused_android');
+    final phoneTrusted = pl.last == null ? null : pl.trust.stable;
     diag.addLog(FixLogEntry(
       receivedAt: t,
       node: e.node,
@@ -1469,7 +1522,45 @@ class CollarLink extends ChangeNotifier {
       fixQuality: p.fixQuality,
       stationaryFlag: vp?.stationary,
       appState: AppState.instance.csv,
+      filteredLat: f == null ? null : n.smooth.position?.latitude,
+      filteredLng: f == null ? null : n.smooth.position?.longitude,
+      phoneRawLat: phone?.lat,
+      phoneRawLng: phone?.lng,
+      phoneUsedLat: h?.best.latitude,
+      phoneUsedLng: h?.best.longitude,
+      phoneFixAt: phone?.at,
+      phoneSource: phoneSrc,
+      phoneTrusted: phoneTrusted,
+      dogSigmaM: dd?.dogSigmaM ?? f?.uncertaintyM,
+      phoneSigmaM: dd?.phoneSigmaM,
+      sigmaSource: a?.sigmaSource,
+      gnssState: f?.gnssState?.csv,
+      gnssChange: a?.changeReason,
+      correction: a?.correction,
+      frozen: a?.frozen,
+      recovering: a?.recovering,
+      sameRun: a?.sameRun,
+      jumpM: a?.jumpM,
+      gapSec: a?.gapSec,
+      bleConflict: dv?.bleConflict,
+      shownState: dv?.csv,
+      shownText: dv?.text,
+      suspectSource: f == null ? null : _suspect(f, dv, phoneTrusted, h),
+      detail: vp == null ? null : vs?.details[vp.fixId],
     ));
+  }
+
+  /// Które urządzenie najpewniej odpowiada za błąd odległości (heurystyka do CSV).
+  static String _suspect(CollarFix f, DistanceView? dv, bool? phoneTrusted, HandlerFix? h) {
+    final dogBad = f.gnssState != null && f.gnssState != GnssState.reliable || f.correction;
+    final phoneBad = phoneTrusted == false ||
+        (h?.accuracyM ?? 0) > PhoneLocation.weakAccuracyM ||
+        (h?.gapSec ?? 0) > 2;
+    if (dogBad && phoneBad) return 'oba';
+    if (dogBad) return 'tracker';
+    if (phoneBad) return 'telefon';
+    if (dv?.bleConflict ?? false) return 'nieznane';
+    return '';
   }
 
   /// Odległość psa od przewodnika z dopasowaniem czasu i niepewnością.

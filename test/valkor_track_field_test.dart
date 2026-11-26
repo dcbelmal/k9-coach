@@ -134,7 +134,8 @@ void main() {
       expect(d.currentM, closeTo(28, 0.5));
       // 20 s × co najmniej 1,5 m/s – pies mógł być w innym miejscu.
       expect(d.currentUncertaintyM, greaterThan(30));
-      expect(d.withinError, isTrue);
+      // 0.27.2: przy niepewności > 30 m nie twierdzimy „w pobliżu”.
+      expect(d.withinError, isFalse);
     });
 
     test('przerwa w pomiarach telefonu: pozycja nie jest „trzymana” minutami', () {

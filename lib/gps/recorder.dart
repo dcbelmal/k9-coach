@@ -399,7 +399,12 @@ class TrackRecorder extends ChangeNotifier {
     // Pomiar na żywo w czasie pauzy: bez punktu (i przerwa w odcinku).
     final t = live && state != RecState.running ? null : secondsAt(f.fixAt);
     dogTrack.add(DogSample(f.fixAt, t, _spanOf(f.fixAt), f.lat, f.lng,
-        speedMs: f.speedMs, accuracyM: f.accuracyM, source: f.source, trusted: f.trusted));
+        speedMs: f.speedMs,
+        accuracyM: f.uncertaintyM,
+        source: f.source,
+        trusted: f.trusted,
+        weak: f.weak,
+        correction: f.correction));
     notifyListeners();
   }
 

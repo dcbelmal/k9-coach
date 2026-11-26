@@ -4,6 +4,8 @@ import 'package:latlong2/latlong.dart';
 
 import '../app_version.dart';
 import 'app_state.dart';
+import 'gnss_quality.dart';
+import 'valkor_proto.dart' show ValkorFixDetail, ValkorDetailFlags;
 import 'mesh_proto.dart';
 
 /// Skąd przyszedł pomiar psa.
@@ -70,6 +72,16 @@ class CollarFix {
   /// Numer pomiaru GNSS w trackerze (Valkor 1.1), jeśli podany.
   final int? fixId;
 
+  /// Realistyczna niepewność pozycji (m) z oceny jakości GNSS (0.27.2) –
+  /// nie mniejsza niż granica; null = nie oceniano (użyj [accuracyM]).
+  final double? sigmaM;
+
+  /// Stan jakości GNSS w chwili pomiaru (null = nie oceniano).
+  final GnssState? gnssState;
+
+  /// Korekta pozycji (skok niewytłumaczalny ruchem): nie łączyć z poprzednim punktem trasy.
+  final bool correction;
+
   const CollarFix(this.node, this.lat, this.lng, this.fixAt,
       {DateTime? receivedAt,
       this.speedMs,
@@ -85,13 +97,22 @@ class CollarFix {
       this.trusted = true,
       this.rawFixAt,
       this.source = FixSource.meshtastic,
-      this.fixId})
+      this.fixId,
+      this.sigmaM,
+      this.gnssState,
+      this.correction = false})
       : receivedAt = receivedAt ?? fixAt;
+
+  /// Niepewność do obliczeń: realistyczna, a bez oceny – deklarowana.
+  double? get uncertaintyM => sigmaM ?? accuracyM;
+
+  /// Słaba jakość GNSS – prędkość z odbiornika niewiarygodna (np. w budynku).
+  bool get weak => gnssState == GnssState.weak;
 
   LatLng get ll => LatLng(lat, lng);
 
   /// Ten sam pomiar z oceną wiarygodności.
-  CollarFix withTrust(bool t) => CollarFix(node, lat, lng, fixAt,
+  CollarFix withTrust(bool t, {GnssAssessment? a}) => CollarFix(node, lat, lng, fixAt,
       receivedAt: receivedAt,
       speedMs: speedMs,
       accuracyM: accuracyM,
@@ -106,7 +127,10 @@ class CollarFix {
       trusted: t,
       rawFixAt: rawFixAt,
       source: source,
-      fixId: fixId);
+      fixId: fixId,
+      sigmaM: a?.sigmaM ?? sigmaM,
+      gnssState: a?.state ?? gnssState,
+      correction: a?.correction ?? correction);
 
   /// Opóźnienie pomiaru (s) w chwili odbioru.
   double get lagSec => receivedAt.difference(fixAt).inMilliseconds / 1000;
@@ -352,9 +376,11 @@ class FixFilter {
   /// w miejscu. Promień dryfu = szacowany błąd pozycji (co najmniej
   /// [minMoveM], bez danych 8 m). Prędkość z trackera (m/s) rozstrzyga,
   /// gdy jest: poniżej 0,5 m/s pies stoi (do 2 × promień), od 1,5 m/s idzie.
-  static bool isDrift(double d, double? accuracyM, double? speedMs) {
-    final r = math.max(minMoveM, accuracyM ?? 8);
-    final v = speedMs;
+  static bool isDrift(double d, double? accuracyM, double? speedMs, {bool weak = false}) {
+    // Słaba jakość (np. w budynku): prędkość z odbiornika bywa fałszywa (test C:
+    // do 2,95 m/s w miejscu) – nie rozstrzyga, a promień dryfu jest podwójny.
+    final r = math.max(minMoveM, accuracyM ?? 8) * (weak ? 2 : 1);
+    final v = weak ? null : speedMs;
     if (v != null && v >= 1.5 && d >= minMoveM) return false;
     if (v != null && v < 0.5) return d < r * 2;
     return d < r;
@@ -440,7 +466,71 @@ class FixLogEntry {
   /// Stan aplikacji w chwili odbioru: pierwszy_plan / tlo.
   final String? appState;
 
-  const FixLogEntry({
+  // --- 0.27.2: rozdzielenie surowych i przetworzonych danych ---
+
+  /// Pozycja psa po filtrze aplikacji (do wyświetlania).
+  final double? filteredLat, filteredLng;
+
+  /// Surowa pozycja telefonu (ostatni pomiar) i pozycja telefonu użyta do
+  /// porównania (z chwili pomiaru psa, interpolowana / po filtrze), czas
+  /// pomiaru telefonu i źródło lokalizacji telefonu.
+  final double? phoneRawLat, phoneRawLng, phoneUsedLat, phoneUsedLng;
+  final DateTime? phoneFixAt;
+  final String? phoneSource;
+
+  /// Stan pozycji telefonu (wiarygodna / stabilizacja) i jej opis.
+  final bool? phoneTrusted;
+
+  /// Niepewność psa i telefonu użyta do odległości (m) i źródło niepewności psa.
+  final double? dogSigmaM, phoneSigmaM;
+  final String? sigmaSource;
+
+  /// Ocena jakości GNSS psa, przyczyna zmiany oceny, korekta, pozycja
+  /// zatrzymana (długość ciągu identycznych współrzędnych), okno odzyskania,
+  /// przesunięcie od poprzedniego pomiaru (m) i odstęp (s).
+  final String? gnssState, gnssChange;
+  final bool? correction, frozen, recovering;
+  final int? sameRun;
+  final double? jumpM, gapSec;
+
+  /// Niezgodność GPS–Bluetooth i co zobaczył użytkownik (stan + tekst).
+  final bool? bleConflict;
+  final String? shownState, shownText;
+
+  /// Które urządzenie najpewniej odpowiada za błąd odległości:
+  /// tracker / telefon / oba / nieznane.
+  final String? suspectSource;
+
+  /// Surowe dane odbiornika z firmware 0.1.2 (pakiet FixDetail, ten sam
+  /// fixId) – dopisywane, gdy dotrą (zwykle kilka ms po pozycji).
+  ValkorFixDetail? detail;
+
+  FixLogEntry({
+    this.filteredLat,
+    this.filteredLng,
+    this.phoneRawLat,
+    this.phoneRawLng,
+    this.phoneUsedLat,
+    this.phoneUsedLng,
+    this.phoneFixAt,
+    this.phoneSource,
+    this.phoneTrusted,
+    this.dogSigmaM,
+    this.phoneSigmaM,
+    this.sigmaSource,
+    this.gnssState,
+    this.gnssChange,
+    this.correction,
+    this.frozen,
+    this.recovering,
+    this.sameRun,
+    this.jumpM,
+    this.gapSec,
+    this.bleConflict,
+    this.shownState,
+    this.shownText,
+    this.suspectSource,
+    this.detail,
     required this.receivedAt,
     required this.node,
     this.packetId,
@@ -495,7 +585,18 @@ class FixLogEntry {
       'roznica_czasu_porownania_s;odleglosc_surowa_m;odleglosc_filtr_m;niepewnosc_m;odpowiedz;wynik;historyczny;'
       'brak_odleglosci;wiarygodna;roznica_zegarow_s;zrodlo;valkor_seq;fix_id;gnss_utc;odebrano_utc;czas_pomiaru_zrodlo;'
       'wiek_skorygowany_s;opoznienie_gnss_ble_ms;przerwa_odbioru_s;mtu;rssi_tracker;bateria_proc;bateria_mv;jakosc_fix;'
-      'postoj_tracker;stan_aplikacji';
+      'postoj_tracker;stan_aplikacji;'
+      // 0.27.2
+      'lat_filtr_aplikacji;lng_filtr_aplikacji;telefon_lat_surowa;telefon_lng_surowa;telefon_lat_porownanie;'
+      'telefon_lng_porownanie;telefon_czas_pomiaru;telefon_zrodlo;telefon_wiarygodny;niepewnosc_psa_m;'
+      'niepewnosc_telefonu_m;zrodlo_niepewnosci_psa;stan_gnss_psa;przyczyna_zmiany_oceny;korekta_pozycji;'
+      'pozycja_zatrzymana;identyczne_z_rzedu;odzyskiwanie_gnss;przesuniecie_m;odstep_pomiaru_s;'
+      'niespojnosc_gnss_ble;wyswietlony_stan;wyswietlona_odleglosc;podejrzane_urzadzenie;'
+      // firmware 0.1.2 (FixDetail)
+      'fw_lat_przed_filtracja;fw_lng_przed_filtracja;fw_wspolrzedne_zgodne;fw_identyczne_surowe;fw_jakosc_gga;'
+      'fw_status_rmc;fw_gst_lat_m;fw_gst_lng_m;fw_skok_podejrzany;fw_odzyskiwanie;fw_wiek_odzyskania_s;'
+      'fw_przerwa_ms;fw_skok_m;fw_prog_nawigacji_statycznej;fw_tryb_nawigacji;fw_satelity_surowe;'
+      'fw_hdop_surowy;fw_predkosc_surowa_m_s;cn0';
 
   String toCsv() {
     String n(num? v, [int digits = 1]) => v == null ? '' : (v is int ? '$v' : v.toStringAsFixed(digits));
@@ -546,7 +647,62 @@ class FixLogEntry {
       n(fixQuality),
       stationaryFlag == null ? '' : (stationaryFlag! ? '1' : '0'),
       appState ?? '',
+      _c(filteredLat, 6),
+      _c(filteredLng, 6),
+      _c(phoneRawLat, 6),
+      _c(phoneRawLng, 6),
+      _c(phoneUsedLat, 6),
+      _c(phoneUsedLng, 6),
+      d(phoneFixAt),
+      phoneSource ?? '',
+      _b(phoneTrusted),
+      n(dogSigmaM),
+      n(phoneSigmaM),
+      sigmaSource ?? '',
+      gnssState ?? '',
+      gnssChange ?? '',
+      _b(correction),
+      _b(frozen),
+      n(sameRun),
+      _b(recovering),
+      n(jumpM),
+      n(gapSec, 2),
+      _b(bleConflict),
+      shownState ?? '',
+      (shownText ?? '').replaceAll(';', ','),
+      suspectSource ?? '',
+      ..._detailCsv(),
     ].join(';');
+  }
+
+  static String _c(double? v, int digits) => v == null ? '' : v.toStringAsFixed(digits);
+  static String _b(bool? v) => v == null ? '' : (v ? '1' : '0');
+
+  List<String> _detailCsv() {
+    final x = detail;
+    if (x == null) return List.filled(19, '');
+    String cfg(int? v) => v == null ? '' : (v < 0 ? 'nieobslugiwane' : '$v');
+    return [
+      _c(x.rawLat, 7),
+      _c(x.rawLng, 7),
+      _b(x.has(ValkorDetailFlags.rawAvailable) ? x.has(ValkorDetailFlags.rawMatches) : null),
+      '${x.sameRawRun}',
+      x.ggaQuality?.toString() ?? '',
+      x.rmcStatus ?? '',
+      _c(x.gstLatM, 2),
+      _c(x.gstLonM, 2),
+      _b(x.has(ValkorDetailFlags.jumpSuspect)),
+      _b(x.has(ValkorDetailFlags.recovering)),
+      x.recoverAgeS?.toString() ?? '',
+      '${x.gapMs}',
+      (x.jumpCm / 100).toStringAsFixed(2),
+      cfg(x.staticThr),
+      cfg(x.navMode),
+      '${x.rawSats}',
+      _c(x.rawHdop, 2),
+      _c(x.rawSpeedMs, 2),
+      '', // C/N0: firmware 0.1.2 go nie podaje (wymagałoby włączenia GSV – zob. raport)
+    ];
   }
 }
 
@@ -767,6 +923,17 @@ class CollarDiagnostics {
   void addLog(FixLogEntry e) {
     log.add(e);
     if (log.length > logMax) log.removeAt(0);
+  }
+
+  /// Surowe dane odbiornika (FixDetail) dopisane do wpisu pozycji o tym samym fixId.
+  void attachDetail(ValkorFixDetail d) {
+    for (var i = log.length - 1; i >= 0 && i >= log.length - 20; i--) {
+      final e = log[i];
+      if (e.fixId == d.fixId && e.source == 'valkor') {
+        e.detail = d;
+        return;
+      }
+    }
   }
 
   /// Rzeczywisty odstęp między pomiarami (mediana), null = za mało danych.

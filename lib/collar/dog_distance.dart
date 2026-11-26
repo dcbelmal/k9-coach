@@ -77,9 +77,10 @@ class HandlerTrack {
         accuracyM: f.accuracyM,
         speedMs: f.speedMs,
         filtered: p,
-        // Błędy GPS są skorelowane w czasie – nie ufamy uśrednieniu bardziej
-        // niż połowie błędu pojedynczego pomiaru.
-        filteredAccM: acc == null ? null : math.max(acc, (f.accuracyM ?? DogDistance.unknownPhoneAccM) * 0.5)));
+        // Błędy GPS są skorelowane w czasie (stabilnie zła pozycja, test D),
+        // więc uśrednienie NIE zmniejsza niepewności poniżej błędu pojedynczego
+        // pomiaru (do 0.27.1: połowa – stąd „183 m ± 2 m”).
+        filteredAccM: acc == null ? null : math.max(acc, DogDistance.phoneSigma(f.accuracyM))));
     final cut = f.at.subtract(const Duration(seconds: keepSec));
     while (_fixes.isNotEmpty && _fixes.first.at.isBefore(cut)) {
       _fixes.removeAt(0);
@@ -116,6 +117,8 @@ class HandlerTrack {
     for (var i = 1; i < _fixes.length; i++) {
       final a = _fixes[i - 1], b = _fixes[i];
       if (t.isAfter(b.at)) continue;
+      // Pomiar dokładnie w chwili [t] – bez mieszania z gorszym poprzednim.
+      if (t.isAtSameMomentAs(b.at)) return b;
       final dt = gap(b.at, a.at);
       if (dt > maxGapSec * 2) {
         // Przerwa w pomiarach telefonu: tylko tuż przy pomiarze.
@@ -173,8 +176,14 @@ class DogDistance {
 
   /// Wiek bieżącej pozycji telefonu (s), null = brak.
   final double? phoneAgeSec;
+
+  /// Niepewność użyta dla psa i telefonu (m) – do CSV: które urządzenie
+  /// odpowiada za niepewność odległości.
+  final double? dogSigmaM, phoneSigmaM;
   const DogDistance({
     this.phoneAgeSec,
+    this.dogSigmaM,
+    this.phoneSigmaM,
     this.matchedM,
     this.matchedUncertaintyM,
     this.rawM,
@@ -199,9 +208,20 @@ class DogDistance {
   static const unknownTimeM = 5.0;
 
   /// Dokładność z Androida to promień ~68%. Do „pies w pobliżu” bierzemy
-  /// ok. 95% (× 1,6) i nie mniej niż [nearbyMinM].
-  static const nearbyFactor = 1.6;
+  /// ok. 95% (× 2) i nie mniej niż [nearbyMinM].
+  static const nearbyFactor = 2.0;
   static const nearbyMinM = 5.0;
+
+  /// „Pies w pobliżu” tylko, gdy łączna niepewność nie przekracza tylu metrów –
+  /// przy większej mówimy „Niska dokładność lokalizacji”, a nie „w pobliżu”.
+  static const nearbyMaxUncertaintyM = 12.0;
+
+  /// Najmniejsza niepewność GPS telefonu (m): Android potrafi podać 1–2 m,
+  /// ale rzeczywisty błąd w terenie rzadko jest mniejszy niż ~3 m.
+  static const phoneFloorM = 3.0;
+
+  /// Realistyczna niepewność telefonu z deklarowanej dokładności.
+  static double phoneSigma(double? accuracyM) => math.max(accuracyM ?? unknownPhoneAccM, phoneFloorM);
 
   double? get bestM => matchedM ?? currentM;
   double? get bestUncertaintyM => matchedM != null ? matchedUncertaintyM : currentUncertaintyM;
@@ -211,7 +231,7 @@ class DogDistance {
   bool get withinError {
     final m = bestM, u = bestUncertaintyM;
     if (m == null || u == null) return false;
-    return m <= math.max(nearbyMinM, u * nearbyFactor);
+    return u <= nearbyMaxUncertaintyM && m <= math.max(nearbyMinM, u * nearbyFactor);
   }
 
   /// Promień, w którym pies „jest w pobliżu” (m).
@@ -223,17 +243,20 @@ class DogDistance {
       {required DateTime now, LatLng? dogFiltered, double? dogFilteredAccM}) {
     if (dog == null) return null;
     final age = math.max(0.0, dog.ageSec(now));
-    final dogAcc = dog.accuracyM ?? unknownDogAccM;
+    // Realistyczna niepewność psa (ocena jakości GNSS), filtr jej nie zmniejsza.
+    final dogAcc = dog.uncertaintyM ?? unknownDogAccM;
     final dogBest = dogFiltered ?? dog.ll;
-    final dogBestAcc = dogFiltered == null ? dogAcc : math.max(dogFilteredAccM ?? dogAcc, dogAcc * 0.5);
+    final dogBestAcc = dogFiltered == null ? dogAcc : math.max(dogFilteredAccM ?? dogAcc, dogAcc);
     final timePad = dog.timeIsFix ? 0.0 : unknownTimeM;
 
-    double? matched, matchedUnc, raw, dt;
+    double? matched, matchedUnc, raw, dt, phoneSig;
     final h = track.at(dog.fixAt);
     if (h != null) {
       raw = _d(h.ll, dog.ll);
       matched = _d(h.best, dogBest);
-      final phoneAcc = h.filtered != null ? (h.filteredAccM ?? unknownPhoneAccM) : (h.accuracyM ?? unknownPhoneAccM);
+      final phoneAcc = math.max(
+          h.filtered != null ? (h.filteredAccM ?? unknownPhoneAccM) : (h.accuracyM ?? unknownPhoneAccM), phoneFloorM);
+      phoneSig = phoneAcc;
       matchedUnc = math.sqrt(dogBestAcc * dogBestAcc + phoneAcc * phoneAcc) + timePad;
       // Prawdziwa różnica czasu: od najbliższego pomiaru telefonu, nie od
       // pozycji „trzymanej” (ta zawsze miałaby 0 s).
@@ -245,8 +268,9 @@ class DogDistance {
     if (me != null) phoneAge = math.max(0.0, now.difference(me.at).inMilliseconds / 1000);
     if (me != null && phoneAge! <= phoneFreshSec) {
       current = _d(me.best, dogBest);
-      final phoneAcc = (me.filteredAccM ?? me.accuracyM ?? unknownPhoneAccM) +
+      final phoneAcc = math.max(me.filteredAccM ?? me.accuracyM ?? unknownPhoneAccM, phoneFloorM) +
           math.max(me.speedMs ?? HandlerTrack.assumedWalkMs, 0.5) * phoneAge;
+      phoneSig ??= phoneAcc;
       // Pies mógł przejść od pomiaru co najmniej tyle, ile szedł (min. 1,5 m/s).
       final v = math.max(dog.speedMs ?? 0, 1.5);
       currentUnc = math.sqrt(dogBestAcc * dogBestAcc + phoneAcc * phoneAcc) + timePad + v * age;
@@ -262,6 +286,8 @@ class DogDistance {
       ageSec: age,
       lagSec: dog.lagSec,
       phoneAgeSec: phoneAge,
+      dogSigmaM: dogBestAcc,
+      phoneSigmaM: phoneSig,
     );
   }
 
