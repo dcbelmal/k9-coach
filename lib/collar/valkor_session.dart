@@ -23,6 +23,9 @@ enum ValkorChannel {
   silent,
 }
 
+/// Pobieranie historii z pamięci trackera.
+enum HistorySync { idle, requested, receiving, done }
+
 class ValkorSession {
   /// Usługa Valkor znaleziona w urządzeniu.
   final DateTime detectedAt;
@@ -79,6 +82,81 @@ class ValkorSession {
   final Set<int> historySeen = {};
   DateTime? historySyncRequestedAt;
 
+  /// Czasy pomiarów odebranych na żywo (ostatnie [_liveSeenMax]) – historia
+  /// z tym samym czasem to duplikat (firmware 0.1.2 ponawia pozycje wysłane
+  /// tuż przed zerwaniem połączenia).
+  final Set<int> liveSeen = {};
+  final List<int> _liveOrder = [];
+  static const _liveSeenMax = 1200;
+
+  /// Przyczyny odrzucenia pozycji historycznych (nazwa → liczba).
+  final Map<String, int> historyRejectReasons = {};
+
+  /// Pobieranie historii: stan, ile tracker zapowiedział (Ack, 255 = 255 lub
+  /// więcej), ile przyszło w tym pobraniu, ostatni pakiet, koniec.
+  HistorySync historySync = HistorySync.idle;
+  int? historyExpected;
+  int historyReceivedThisSync = 0;
+  DateTime? historyLastAt, historyDoneAt;
+  int historySyncs = 0;
+
+  void noteLive(DateTime? fixTime) {
+    if (fixTime == null) return;
+    final ms = fixTime.millisecondsSinceEpoch;
+    if (liveSeen.add(ms)) {
+      _liveOrder.add(ms);
+      if (_liveOrder.length > _liveSeenMax) liveSeen.remove(_liveOrder.removeAt(0));
+    }
+  }
+
+  void noteHistoryReject(String why) => historyRejectReasons[why] = (historyRejectReasons[why] ?? 0) + 1;
+
+  void onHistoryRequested(DateTime t) {
+    historySyncRequestedAt = t;
+    historySync = HistorySync.requested;
+    historyExpected = null;
+    historyReceivedThisSync = 0;
+    historyLastAt = null;
+    historySyncs++;
+  }
+
+  void onHistoryAck(int count, DateTime t) {
+    historyExpected = count;
+    if (count == 0) {
+      historySync = HistorySync.done;
+      historyDoneAt = t;
+    } else if (historySync != HistorySync.receiving) {
+      historySync = HistorySync.receiving;
+    }
+  }
+
+  void onHistoryPacket(DateTime t) {
+    historyReceivedThisSync++;
+    historyLastAt = t;
+    historySync = HistorySync.receiving;
+  }
+
+  /// Koniec pobierania: wszystko, co tracker zapowiedział, albo 3 s ciszy.
+  bool historyDoneDue(DateTime t) {
+    if (historySync != HistorySync.receiving && historySync != HistorySync.requested) return false;
+    final exp = historyExpected;
+    if (exp != null && exp < 255 && historyReceivedThisSync >= exp && historyReceivedThisSync > 0) return true;
+    final last = historyLastAt ?? historySyncRequestedAt;
+    return last != null && t.difference(last).inMilliseconds >= 3000 && (historyLastAt != null || exp != null);
+  }
+
+  void onHistoryDone(DateTime t) {
+    historySync = HistorySync.done;
+    historyDoneAt = t;
+  }
+
+  /// Czy pobrano tyle, ile tracker zapowiedział (null = nie wiadomo).
+  bool? get historyComplete {
+    final e = historyExpected;
+    if (e == null || e >= 255 || historySync != HistorySync.done) return null;
+    return historyReceivedThisSync >= e;
+  }
+
   /// Liczniki firmware (narastające od uruchomienia trackera) z początku
   /// sesji testowej – do liczników „w tej sesji”.
   ValkorDiag? diagBaseline;
@@ -106,11 +184,31 @@ class ValkorSession {
   final Map<int, ValkorFixDetail> details = {};
   ValkorFixDetail? lastDetail;
   ValkorGnssStats? gnssStats;
+
+  /// Bufor historii i wysyłka BLE w trackerze (firmware 0.1.2 po 27.11).
+  ValkorTrackerLink? trackerLink;
   bool detailRequested = false;
   int detailPackets = 0;
 
   /// Tracker obsługuje pakiety FixDetail / GnssStats.
   bool get supportsDetail => ((info?.capabilities ?? 0) & ValkorCap.fixDetail) != 0;
+
+  bool get supportsTrackerLink => ((info?.capabilities ?? 0) & ValkorCap.linkStats) != 0;
+
+  /// RSSI zmierzone przez tracker w tym połączeniu (min / suma / liczba).
+  int? trackerRssiMin;
+  int _trackerRssiSum = 0, _trackerRssiN = 0;
+  int? get trackerRssiAvg => _trackerRssiN == 0 ? null : (_trackerRssiSum / _trackerRssiN).round();
+
+  void onTrackerLink(ValkorTrackerLink l) {
+    trackerLink = l;
+    final r = l.rssiNow;
+    if (r != null) {
+      _trackerRssiSum += r;
+      _trackerRssiN++;
+      if (trackerRssiMin == null || r < trackerRssiMin!) trackerRssiMin = r;
+    }
+  }
 
   void addDetail(ValkorFixDetail d) {
     detailPackets++;
@@ -161,7 +259,11 @@ class ValkorSession {
 
   void onDisconnected() {
     subscribedAt = null;
+    trackerRssiMin = null;
+    _trackerRssiSum = _trackerRssiN = 0;
     detectedThisConnectionAt = null;
+    // Pobieranie przerwane rozłączeniem – po ponownym połączeniu od nowa.
+    if (historySync == HistorySync.requested || historySync == HistorySync.receiving) historySync = HistorySync.idle;
   }
 
   void onDiag(ValkorDiag d) {
@@ -177,6 +279,8 @@ class ValkorSession {
     diagBaseline = diag;
     meshIgnored = meshFallback = 0;
     historyRecovered = historyRejected = historyDuplicates = historyBeforeLive = 0;
+    historyRejectReasons.clear();
+    historySyncs = 0;
     reinits = 0;
   }
 
@@ -231,6 +335,12 @@ class ValkorSession {
       'valkor_sesja;historia_odrzucona;$historyRejected',
       'valkor_sesja;historia_duplikaty;$historyDuplicates',
       'valkor_sesja;historia_wstawiona_przed_pozycja_na_zywo;$historyBeforeLive',
+      'valkor_sesja;historia_pobrania;$historySyncs',
+      'valkor_sesja;historia_stan;${historySync.name}',
+      'valkor_sesja;historia_zapowiedziana_ostatnio;${historyExpected ?? ''}',
+      'valkor_sesja;historia_odebrana_ostatnio;$historyReceivedThisSync',
+      'valkor_sesja;historia_kompletna;${historyComplete == null ? 'nieznane' : (historyComplete! ? 1 : 0)}',
+      'valkor_sesja;historia_odrzucona_wg_przyczyny;${historyRejectReasons.entries.map((e) => '${e.key}=${e.value}').join(',')}',
       'valkor_sesja;statusy;${stats.status}',
       'valkor_sesja;utracone_pakiety;${stats.lost}',
       'valkor_sesja;powtorzone_pakiety;${stats.duplicates}',
@@ -260,7 +370,7 @@ class ValkorSession {
         'valkor_fw_od_startu;polaczenia_ponowne;${d.reconnects}',
         'valkor_fw_od_startu;historia_w_pamieci;${d.historyStored}',
         'valkor_fw_od_startu;historia_utracona;${d.historyDropped}',
-        'valkor_fw_od_startu;rssi_tracker_dbm;${d.rssi}',
+        'valkor_fw_od_startu;rssi_tracker_dbm;${d.rssi == 0 ? 'niedostepne' : d.rssi}',
         'valkor_fw_od_startu;wolna_pamiec_kb;${d.freeHeapKb}',
         'valkor_fw_od_startu;opoznienie_sr_ms;${d.latencyAvgMs}',
         'valkor_fw_od_startu;opoznienie_max_ms;${d.latencyMaxMs}',
@@ -278,8 +388,34 @@ class ValkorSession {
         'valkor_fw_od_startu;kolejka_pelna;${p.queueFull}',
         'valkor_fw_od_startu;temperatura_c;${p.tempC ?? ''}',
       ],
+      ...trackerLinkCsv(),
       if (s != null) 'valkor;bateria_proc;${s.batteryPct ?? ''}',
       'valkor;bateria_mv;${batteryMv ?? s?.batteryMv ?? ''}',
+    ];
+  }
+
+  /// Bufor historii i wysyłka w trackerze (pakiet LinkStats). Firmware bez
+  /// tego pakietu: jeden wiersz „niedostepne”.
+  List<String> trackerLinkCsv() {
+    final l = trackerLink;
+    String dbm(int? v) => v == null ? 'niedostepne' : '$v';
+    if (l == null) return ['valkor_fw_lacze;pakiet_linkstats;niedostepne'];
+    return [
+      'valkor_fw_lacze;historia_do_wyslania;${l.historyUnsent}',
+      'valkor_fw_lacze;historia_w_drodze;${l.historyInflight}',
+      'valkor_fw_lacze;historia_pojemnosc;${l.historyCapacity}',
+      'valkor_fw_lacze;historia_trwa_wysylka;${l.syncActive ? 1 : 0}',
+      'valkor_fw_od_startu;historia_przywrocona_po_rozlaczeniu;${l.historyRestored}',
+      'valkor_fw_od_startu;na_zywo_nieprzyjete_zapisane_w_historii;${l.liveFailedStored}',
+      'valkor_fw_od_startu;historia_w_drodze_nadpisana;${l.historyLostInflight}',
+      'valkor_fw_od_startu;niewyslane_za_male_mtu;${l.mtuTooSmall}',
+      'valkor_fw_od_startu;niewyslane_kolejka_pelna;${l.queueFull}',
+      'valkor_fw_od_startu;niewyslane_blad_lacza;${l.notifyErrors}',
+      'valkor_fw_od_startu;polaczenia;${l.connects}',
+      'valkor_fw_lacze;czas_polaczenia_s;${l.connectedS}',
+      'valkor_fw_lacze;rssi_tracker_teraz_dbm;${dbm(l.rssiNow)}',
+      'valkor_fw_lacze;rssi_tracker_min_dbm;${dbm(l.rssiMin)}',
+      'valkor_fw_lacze;rssi_tracker_sr_dbm;${dbm(l.rssiAvg)}',
     ];
   }
 
@@ -316,6 +452,14 @@ class ValkorSession {
       if (d != null) (tr('Wolna pamięć trackera'), '${d.freeHeapKb} kB'),
       if (d != null && (d.notifyFailed > 0 || d.mtuTooSmall > 0))
         (tr('Błędy wysyłki / za małe MTU'), '${d.notifyFailed} / ${d.mtuTooSmall}'),
+      if (trackerLink != null) ...[
+        (tr('Historia w trackerze: do wysłania / w drodze'),
+            '${trackerLink!.historyUnsent} / ${trackerLink!.historyInflight} (${tr('z')} ${trackerLink!.historyCapacity})'),
+        (tr('Historia przywrócona po rozłączeniu'), '${trackerLink!.historyRestored}'),
+        (tr('Niewysłane: kolejka pełna / błąd łącza'), '${trackerLink!.queueFull} / ${trackerLink!.notifyErrors}'),
+        (tr('Sygnał w trackerze: teraz / min / śr.'),
+            '${[trackerLink!.rssiNow, trackerLink!.rssiMin, trackerLink!.rssiAvg].map((v) => v == null ? '–' : '$v').join(' / ')} dBm'),
+      ],
     ];
   }
 }

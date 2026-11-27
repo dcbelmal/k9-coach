@@ -5,7 +5,7 @@ import '../app_version.dart';
 
 /// Identyfikator kompilacji: numer kompilacji z pubspec (build), commit
 /// (--dart-define=VALKOR_COMMIT w GitHub Actions; „local” przy kompilacji ręcznej).
-const appBuildNumber = int.fromEnvironment('VALKOR_BUILD', defaultValue: 43);
+const appBuildNumber = int.fromEnvironment('VALKOR_BUILD', defaultValue: 44);
 const appCommit = String.fromEnvironment('VALKOR_COMMIT', defaultValue: 'local');
 String get appBuildId => '$appVersion+$appBuildNumber ($appCommit)';
 

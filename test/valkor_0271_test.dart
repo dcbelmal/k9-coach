@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/widgets.dart' show AppLifecycleState;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:k9_coach/app_version.dart';
 import 'package:k9_coach/collar/collar_link.dart';
 import 'package:k9_coach/collar/field_test.dart';
 import 'package:k9_coach/collar/mesh_proto.dart';
@@ -427,7 +428,8 @@ void main() {
       // Duplikaty historii (np. ponowna synchronizacja).
       c.handleValkor(position(north(22.0), at(11), historical: true), now: at(46.5));
       // Pomiar z poprzedniego treningu i nieprawidłowy pomiar.
-      c.handleValkor(position(north(0), at(-500), historical: true), now: at(46.6));
+      // 0.27.3: „poprzednia sesja” = ponad 30 min przed startem aplikacji.
+      c.handleValkor(position(north(0), at(-3000), historical: true), now: at(46.6));
       c.handleValkor(position(north(30), at(15.5), historical: true, sats: 2), now: at(46.7));
       await pumpEventQueue();
       await sub.cancel();
@@ -539,7 +541,7 @@ void main() {
       expect(csv, contains('test;rodzaj;postoj'));
       expect(csv, contains('test;warunki;park, słonecznie'));
       expect(csv, contains('podsumowanie_testu;swieze_pozycje;10'));
-      expect(csv, contains('aplikacja;wersja;0.27.2'));
+      expect(csv, contains('aplikacja;wersja;$appVersion'));
       // Drugi test – niezależny.
       FieldTests.instance.start(FieldTestKind.walk, now: at(40));
       live(41, 45, startM: 60);
@@ -565,7 +567,7 @@ void main() {
       expect(csv, contains('valkor_sesja;gnss_pomiary_wszystkie;10'));
       expect(csv, contains('valkor_sesja;gnss_pomiary_odrzucone;1'));
       expect(csv, isNot(contains('gnss_pomiary_odrzucone;886;')));
-      expect(csv, contains('aplikacja;kompilacja;0.27.2+43'));
+      expect(csv, contains('aplikacja;kompilacja;$appVersion+$appBuildNumber'));
     });
 
     test('stan aplikacji (pierwszy plan / tło) w dzienniku pomiarów', () {

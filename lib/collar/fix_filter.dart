@@ -1016,6 +1016,9 @@ class BleEvent {
   static const connected = 'polaczono';
   static const failed = 'blad_polaczenia';
   static const valkorReinit = 'valkor_ponowienie';
+  static const adapterOff = 'bluetooth_telefonu_wylaczony';
+  static const adapterOn = 'bluetooth_telefonu_wlaczony';
+  static const forcedReconnect = 'wymuszone_ponowne_polaczenie';
 
   final DateTime at;
   final String kind;

@@ -71,6 +71,37 @@ class _FieldTestScreenState extends State<FieldTestScreen> {
     toast(context, path == null ? tr('Nie udało się zapisać pliku. Użyj kopiowania do schowka.') : tr('Zapisano: {0}', [path]));
   }
 
+  void _mark(double m) {
+    final r = tests.mark(m);
+    if (r == null || !mounted) return;
+    setState(() {});
+    toast(context, tr('Zapisano znacznik {0} m: aplikacja pokazuje {1}', [m.toStringAsFixed(m % 1 == 0 ? 0 : 1), r.shownText]));
+  }
+
+  Future<void> _markCustom() async {
+    final ctl = TextEditingController();
+    final v = await showDialog<double>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(tr('Odległość referencyjna')),
+        content: TextField(
+          controller: ctl,
+          autofocus: true,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: InputDecoration(suffixText: 'm', labelText: tr('Zmierzona odległość')),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Anuluj'))),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, double.tryParse(ctl.text.replaceAll(',', '.'))),
+            child: Text(tr('Zapisz')),
+          ),
+        ],
+      ),
+    );
+    if (v != null && v >= 0) _mark(v);
+  }
+
   Widget _indicators() {
     final now = DateTime.now();
     final ind = c.indicators(now: now, phone: PhoneLocation.instance.snapshot(now));
@@ -117,6 +148,22 @@ class _FieldTestScreenState extends State<FieldTestScreen> {
         ),
         const SizedBox(height: 6),
         for (final r in s.rows()) _row(r.$1, r.$2),
+        for (final r in t.extraRows(c, now: now)) _row(r.$1, r.$2),
+        if (t.kind == FieldTestKind.distance) ...[
+          const SizedBox(height: 8),
+          Text(tr('Odległość referencyjna (zmierzona taśmą / dalmierzem)'),
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+          const SizedBox(height: 4),
+          Wrap(spacing: 6, runSpacing: 6, children: [
+            for (final d in ReferenceMark.presets)
+              OutlinedButton(
+                key: ValueKey('ft-ref-$d'),
+                onPressed: () => _mark(d.toDouble()),
+                child: Text('$d m'),
+              ),
+            OutlinedButton(key: const ValueKey('ft-ref-custom'), onPressed: _markCustom, child: Text(tr('Inna…'))),
+          ]),
+        ],
         const SizedBox(height: 8),
         Wrap(spacing: 8, runSpacing: 6, children: [
           FilledButton(
@@ -152,6 +199,7 @@ class _FieldTestScreenState extends State<FieldTestScreen> {
           children: [
             if (t.notes.isNotEmpty) _row(tr('Warunki'), t.notes),
             for (final r in s.rows()) _row(r.$1, r.$2),
+            for (final r in t.extraRows(c, now: t.endedAt)) _row(r.$1, r.$2),
             const SizedBox(height: 6),
             Wrap(spacing: 8, children: [
               FilledButton.tonal(onPressed: () => _export(t), child: Text(tr('Zapisz CSV'))),

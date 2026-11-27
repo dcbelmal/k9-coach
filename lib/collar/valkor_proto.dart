@@ -13,7 +13,7 @@ class ValkorBle {
   static const minMtu = 67;
 }
 
-enum ValkorType { position, status, info, diag, ack, perf, buildInfo, fixDetail, gnssStats, unknown }
+enum ValkorType { position, status, info, diag, ack, perf, buildInfo, fixDetail, gnssStats, trackerLink, unknown }
 
 /// Tryby firmware (bajt trybu w pakietach i komendzie SET_MODE).
 enum ValkorMode {
@@ -236,6 +236,10 @@ class ValkorCmd {
 class ValkorCap {
   /// Protokół 1.2: komenda SetDetail, pakiety FixDetail i GnssStats.
   static const fixDetail = 1 << 9;
+
+  /// Firmware 0.1.2 (po teście 27.11): pakiet LinkStats (typ 10), historia
+  /// trzymana do potwierdzenia dostarczenia.
+  static const linkStats = 1 << 10;
 }
 
 /// Flagi pakietu FixDetail (protokół 1.2).
@@ -330,6 +334,35 @@ class ValkorGnssStats {
       };
 }
 
+/// Stan bufora historii i wysyłki BLE w trackerze (pakiet LinkStats, typ 10,
+/// firmware 0.1.2 po teście 27.11). RSSI mierzone przez tracker; null =
+/// niedostępne (tracker przysyła 0) – aplikacja niczego nie dopowiada.
+class ValkorTrackerLink {
+  final ValkorHeader h;
+  final int historyUnsent, historyInflight, historyCapacity;
+  final int historyRestored, liveFailedStored, historyLostInflight;
+  final int mtuTooSmall, queueFull, notifyErrors;
+  final int? rssiNow, rssiMin, rssiAvg;
+  final bool syncActive;
+  final int connects, connectedS;
+  const ValkorTrackerLink(this.h,
+      {required this.historyUnsent,
+      required this.historyInflight,
+      required this.historyCapacity,
+      required this.historyRestored,
+      required this.liveFailedStored,
+      required this.historyLostInflight,
+      required this.mtuTooSmall,
+      required this.queueFull,
+      required this.notifyErrors,
+      this.rssiNow,
+      this.rssiMin,
+      this.rssiAvg,
+      required this.syncActive,
+      required this.connects,
+      required this.connectedS});
+}
+
 int valkorCrc16(List<int> data, [int? len]) {
   var crc = 0xFFFF;
   final n = len ?? data.length;
@@ -373,6 +406,7 @@ Object? decodeValkor(List<int> raw) {
     7 => ValkorType.buildInfo,
     8 => ValkorType.fixDetail,
     9 => ValkorType.gnssStats,
+    10 => ValkorType.trackerLink,
     _ => ValkorType.unknown,
   };
   final h = ValkorHeader(
@@ -529,6 +563,28 @@ Object? decodeValkor(List<int> raw) {
           historyCleared: u16(p + 40),
           maxSameRawRun: u16(p + 42),
           maxSilenceS: u16(p + 44));
+    case ValkorType.trackerLink:
+      if (n < 58) return null;
+      int? dbm(int o) {
+        final v = d.getInt8(o);
+        return v == 0 ? null : v;
+      }
+      return ValkorTrackerLink(h,
+          historyUnsent: u16(p),
+          historyInflight: u16(p + 2),
+          historyCapacity: u16(p + 4),
+          historyRestored: u32(p + 6),
+          liveFailedStored: u32(p + 10),
+          historyLostInflight: u32(p + 14),
+          mtuTooSmall: u32(p + 18),
+          queueFull: u32(p + 22),
+          notifyErrors: u32(p + 26),
+          rssiNow: dbm(p + 30),
+          rssiMin: dbm(p + 31),
+          rssiAvg: dbm(p + 32),
+          syncActive: u8(p + 33) != 0,
+          connects: u16(p + 34),
+          connectedS: u32(p + 36));
     case ValkorType.unknown:
       return ValkorUnknown(h);
   }

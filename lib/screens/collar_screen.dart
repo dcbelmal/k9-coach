@@ -63,6 +63,11 @@ String dogLinkText(CollarLink c, {DateTime? now, String? dogId}) {
     case DogLink.bluetoothOff:
       return tr('Bluetooth rozłączony');
     case DogLink.connecting:
+      if (c.recovery.adapterOff) return tr('Bluetooth w telefonie wyłączony – połączę po jego włączeniu');
+      final lost = c.recovery.current?.lostAt;
+      if (c.state == CollarState.lost && lost != null) {
+        return tr('odzyskiwanie połączenia… brak pozycji od {0} s', [(now ?? DateTime.now()).difference(lost).inSeconds]);
+      }
       return tr('łączę przez Bluetooth…');
     case DogLink.loraSilent:
       return tr('brak sygnału LoRa od psa');
@@ -254,6 +259,7 @@ class _CollarScreenState extends State<CollarScreen> {
         ...TileHealth.instance.csvLines(),
         ...c.fast.csvLines(),
         ...?c.valkor?.csvLines(),
+        ...c.recovery.csvLines(),
       ];
 
   /// Eksperyment: tracker co 5 s (odniesienie), 2 s i 1 s (test).

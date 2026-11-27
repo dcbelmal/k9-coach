@@ -89,7 +89,8 @@ class GnssAssessment {
   /// Kod przyczyny zmiany oceny (CSV) – null, gdy bez zmian.
   final String? changeReason;
 
-  /// Skąd niepewność: „gst” (odbiornik), „hdop” (HDOP × 3 m), „brak”.
+  /// Skąd niepewność: „gst” (odbiornik), „hdop” (HDOP × 3 m), „brak”,
+  /// „rozrzut_postoju” (zmierzony rozrzut pozycji na postoju był większy).
   final String sigmaSource;
   const GnssAssessment(this.state, this.sigmaM,
       {this.correction = false,
@@ -145,6 +146,33 @@ class GnssQuality {
   /// i wykrywaniem słabej jakości, bez okna odzyskania (za rzadkie pomiary).
   factory GnssQuality.mesh() => GnssQuality(needGood: 1, minStabilizeSec: 0, recoveryWindowSec: 0, recoveryGapSec: 90);
 
+  /// Postój (prędkość z odbiornika < [stillSpeedMs]): rzeczywisty rozrzut
+  /// pozycji z ostatnich [stillWindow] pomiarów. Test 27.11: dryf w budynku
+  /// na postoju większy niż deklarowana dokładność (HDOP × 3 m). Gdy rozrzut
+  /// jest większy niż niepewność z odbiornika, przyjmujemy rozrzut – nigdy
+  /// odwrotnie (rozrzut nie zmniejsza niepewności).
+  static const stillSpeedMs = 0.5;
+  static const stillWindow = 30;
+  static const stillMinPoints = 10;
+  final List<LatLng> _still = [];
+
+  /// Średni kwadratowy rozrzut pozycji na postoju (m, ~68%), null = za mało pomiarów.
+  double? get stillSpreadM {
+    if (_still.length < stillMinPoints) return null;
+    var lat = 0.0, lng = 0.0;
+    for (final p in _still) {
+      lat += p.latitude;
+      lng += p.longitude;
+    }
+    final c = LatLng(lat / _still.length, lng / _still.length);
+    var ss = 0.0;
+    for (final p in _still) {
+      final d = const Distance()(c, p);
+      ss += d * d;
+    }
+    return math.sqrt(ss / _still.length);
+  }
+
   GnssState state = GnssState.searching;
   String reason = 'pierwsze_pomiary';
   LatLng? _last;
@@ -165,6 +193,7 @@ class GnssQuality {
     _recoveryAt = null;
     _good = 0;
     sameRun = 0;
+    _still.clear();
   }
 
   /// Tracker zgłosił brak fixu (pakiet Status) albo brak pomiarów.
@@ -223,6 +252,19 @@ class GnssQuality {
       }
     }
     if (hdop != null && hdop > 2) sigma *= hdop / 2;
+    var src2 = src;
+    // Rzeczywisty rozrzut na postoju (tylko podnosi niepewność).
+    if (speedMs != null && speedMs < stillSpeedMs && !correction) {
+      _still.add(ll);
+      if (_still.length > stillWindow) _still.removeAt(0);
+      final spread = stillSpreadM;
+      if (spread != null && spread > sigma) {
+        sigma = spread;
+        src2 = 'rozrzut_postoju';
+      }
+    } else {
+      _still.clear();
+    }
     final weakNow = sigma > weakSigmaM || (hdop != null && hdop > weakHdop) || (sats != null && sats > 0 && sats < weakSats);
     final frozen = weakNow && sameRun >= frozenRun;
     if (frozen && sameRun == frozenRun) frozenEvents++;
@@ -265,7 +307,7 @@ class GnssQuality {
         jumpM: jump,
         gapSec: gap,
         changeReason: change,
-        sigmaSource: src);
+        sigmaSource: src2);
     lastAssessment = a;
     return a;
   }
