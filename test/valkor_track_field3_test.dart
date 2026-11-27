@@ -328,7 +328,7 @@ void main() {
       expect(v.state, DistanceState.lastKnown);
       expect(v.lastAgeSec, 20);
       expect(v.m, closeTo(30, 1));
-      expect(v.sentence, startsWith('Ostatnio'));
+      expect(v.sentence, startsWith('Ostatnia znana pozycja'));
     });
 
     test('prędkość psa: stara wartość nie jest pokazywana jako bieżąca', () {

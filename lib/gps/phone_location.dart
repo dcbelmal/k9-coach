@@ -78,6 +78,10 @@ class PhoneLocation extends ChangeNotifier with WidgetsBindingObserver {
   /// Pomiar z błędem większym niż tyle metrów nie służy do odległości.
   static const maxAccuracyM = 40.0;
 
+  /// Telefon podaje dokładność gorszą niż tyle (m) – „Niska dokładność
+  /// lokalizacji” zamiast liczby metrów do psa.
+  static const weakAccuracyM = 20.0;
+
   /// Strumień pozycji (podmieniany w testach).
   @visibleForTesting
   static Stream<Position> Function(LocationSettings s) streamFactory =

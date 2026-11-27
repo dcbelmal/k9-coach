@@ -15,8 +15,20 @@ enum DistanceState {
   waitingPhone,
 
   /// Pozycje są, ale jeszcze niewiarygodne (start, połączenie, wyjście
-  /// z budynku, powrót GPS po przerwie) – „Ustalanie pozycji GPS”.
+  /// z budynku, powrót GPS po przerwie) – „Stabilizacja GPS”.
   stabilizing,
+
+  /// Pozycja psa podejrzana: korekta GNSS albo sprzeczność GPS z Bluetooth
+  /// (silny sygnał BLE przy dużej odległości z GPS) – „Podejrzana pozycja GPS”.
+  suspect,
+
+  /// Słaba jakość pozycji psa lub telefonu – „Niska dokładność lokalizacji”,
+  /// bez dokładnej liczby metrów.
+  lowAccuracy,
+
+  /// Niepewność większa niż sama odległość albo bardzo duża – „Brak
+  /// wiarygodnej odległości”.
+  unreliable,
 
   /// Odległość mieści się w błędzie GPS – „Pies w pobliżu”.
   nearby,
@@ -45,16 +57,43 @@ class DistanceView {
   /// Dlaczego nie ma odległości (do diagnostyki), null = jest.
   final String? reason;
 
-  const DistanceView(this.state, {this.m, this.uncertaintyM, this.dd, this.lastAgeSec, this.reason});
+  /// Sprzeczność GPS z Bluetooth (silny sygnał BLE przy dużej odległości z GPS).
+  final bool bleConflict;
 
+  /// Bluetooth wspiera ocenę „pies w pobliżu”.
+  final bool bleNear;
+
+  const DistanceView(this.state,
+      {this.m, this.uncertaintyM, this.dd, this.lastAgeSec, this.reason, this.bleConflict = false, this.bleNear = false});
+
+  /// Odległość pokazywana jako liczba (z niepewnością).
   bool get hasDistance =>
-      m != null && state != DistanceState.waitingPhone && state != DistanceState.noDog && state != DistanceState.stabilizing;
+      m != null && (state == DistanceState.estimate || state == DistanceState.nearby || state == DistanceState.lastKnown);
+
+  /// Odległość na tyle wiarygodna, żeby uruchomić alarm oddalenia.
+  bool get alarmable => state == DistanceState.estimate;
+
+  /// Nazwa stanu do CSV.
+  String get csv => switch (state) {
+        DistanceState.noDog => 'brak_psa',
+        DistanceState.waitingPhone => 'czeka_na_telefon',
+        DistanceState.stabilizing => 'stabilizacja',
+        DistanceState.suspect => 'podejrzana',
+        DistanceState.lowAccuracy => 'niska_dokladnosc',
+        DistanceState.unreliable => 'brak_wiarygodnej',
+        DistanceState.nearby => 'w_poblizu',
+        DistanceState.estimate => 'odleglosc',
+        DistanceState.lastKnown => 'ostatnia_znana',
+      };
 
   /// Duży napis: „Pies w pobliżu”, „12 m ± 7 m”, „Oczekiwanie na lokalizację telefonu”…
   String get text => switch (state) {
         DistanceState.noDog => tr('Czekam na pozycję psa…'),
         DistanceState.waitingPhone => tr('Oczekiwanie na lokalizację telefonu'),
-        DistanceState.stabilizing => tr('Ustalanie pozycji GPS'),
+        DistanceState.stabilizing => tr('Stabilizacja GPS'),
+        DistanceState.suspect => tr('Podejrzana pozycja GPS'),
+        DistanceState.lowAccuracy => tr('Niska dokładność lokalizacji'),
+        DistanceState.unreliable => tr('Brak wiarygodnej odległości'),
         DistanceState.nearby => tr('Pies w pobliżu'),
         DistanceState.estimate => fmtDistance(m!, uncertaintyM),
         DistanceState.lastKnown => m == null ? '–' : fmtDistance(m!, uncertaintyM),
@@ -64,12 +103,15 @@ class DistanceView {
   String get sentence => switch (state) {
         DistanceState.noDog => tr('Czekam na pozycję psa…'),
         DistanceState.waitingPhone => tr('Oczekiwanie na lokalizację telefonu'),
-        DistanceState.stabilizing => tr('Ustalanie pozycji GPS'),
+        DistanceState.stabilizing => tr('Stabilizacja GPS'),
+        DistanceState.suspect => tr('Podejrzana pozycja GPS'),
+        DistanceState.lowAccuracy => tr('Niska dokładność lokalizacji'),
+        DistanceState.unreliable => tr('Brak wiarygodnej odległości'),
         DistanceState.nearby => tr('Pies w pobliżu'),
         DistanceState.estimate => tr('Pies {0} od Ciebie', [text]),
         DistanceState.lastKnown => m == null
             ? tr('Ostatnia znana pozycja psa')
-            : tr('Ostatnio {0} od Ciebie', [text]),
+            : tr('Ostatnia znana pozycja: {0} od Ciebie', [text]),
       };
 
   /// Objaśnienie: z której chwili i jak pewna jest odległość.
@@ -92,12 +134,25 @@ class DistanceView {
         return reason == null ? null : tr('Odległość wróci, gdy telefon poda aktualną pozycję ({0}).', [reason!]);
       case DistanceState.stabilizing:
         return reason == null ? null : tr('Odległość pojawi się, gdy pozycja będzie wiarygodna ({0}).', [reason!]);
+      case DistanceState.suspect:
+        return bleConflict
+            ? tr('GPS wskazuje ok. {0} m, ale sygnał Bluetooth jest bardzo silny – możliwy błąd lokalizacji.', [(m ?? 0).round()])
+            : tr('Nagła zmiana pozycji psa niewytłumaczalna ruchem – możliwa korekta GPS. Czekam na potwierdzenie.');
+      case DistanceState.lowAccuracy:
+      case DistanceState.unreliable:
+        final mm = m, u = uncertaintyM;
+        if (mm == null || u == null) return reason;
+        final lo = math.max(0.0, mm - 2 * u), hi = mm + 2 * u;
+        return tr('Możliwa odległość: {0}–{1} m ({2}).', [lo.round(), hi.round(), reason ?? '']);
       // Wiek ostatniej znanej pozycji ekrany pokazują w wierszu stanu psa.
       case DistanceState.lastKnown:
       case DistanceState.noDog:
         return null;
     }
   }
+
+  /// Największa niepewność (m), przy której pokazujemy liczbę metrów.
+  static const maxShownUncertaintyM = 25.0;
 
   /// Odległość do psa [dogId] w chwili [now].
   static DistanceView of(CollarLink c, String dogId, {required DateTime now}) {
@@ -114,12 +169,38 @@ class DistanceView {
         return DistanceView(DistanceState.waitingPhone,
             reason: DogDistance.whyNot(node?.fix, track, now: now) ?? tr('brak lokalizacji telefonu'));
       }
+      final u = dd.bestUncertaintyM ?? (DogDistance.unknownDogAccM + DogDistance.unknownPhoneAccM);
+      final rssiAt = c.diag.bleRssiAt;
+      final rssiAge = rssiAt == null ? null : now.difference(rssiAt).inMilliseconds / 1000;
+      final conflict = BleCheck.conflict(m, u, c.diag.bleRssi, rssiAge);
+      final bleNear = BleCheck.supportsNearby(m, u, c.diag.bleRssi, rssiAge);
       // Stabilizacja: pojedynczy pomiar nie wystarcza – bez liczby, która
       // może być błędna (np. 113 m tuż po wyjściu z budynku).
       final why = unstableReason(c, dogId);
-      if (why != null) return DistanceView(DistanceState.stabilizing, dd: dd, reason: why);
-      if (dd.withinError) return DistanceView(DistanceState.nearby, m: m, uncertaintyM: dd.bestUncertaintyM, dd: dd);
-      return DistanceView(DistanceState.estimate, m: m, uncertaintyM: dd.bestUncertaintyM, dd: dd);
+      if (why != null) return DistanceView(DistanceState.stabilizing, m: m, uncertaintyM: u, dd: dd, reason: why, bleConflict: conflict);
+      final dogQ = node?.fix?.gnssState;
+      // GPS przeczy Bluetooth albo korekta pozycji: obniżona pewność, bez liczby.
+      if (conflict || dogQ == GnssState.suspect) {
+        return DistanceView(DistanceState.suspect, m: m, uncertaintyM: u, dd: dd, bleConflict: conflict,
+            reason: conflict ? tr('sprzeczność GPS i Bluetooth') : tr('korekta pozycji GPS'));
+      }
+      final phoneWeak = (HandlerTrack.instance.last?.accuracyM ?? 0) > PhoneLocation.weakAccuracyM;
+      final dogWeak = dogQ == GnssState.weak || dogQ == GnssState.noSignal;
+      // Pies w pobliżu: odległość w granicach błędu obu GPS (niepewność ≤ 12 m)
+      // albo GPS mówi „blisko w granicach 2σ” i Bluetooth to potwierdza.
+      if (!dogWeak && !phoneWeak && (dd.withinError || (bleNear && u <= 2 * DogDistance.nearbyMaxUncertaintyM))) {
+        return DistanceView(DistanceState.nearby, m: m, uncertaintyM: u, dd: dd, bleNear: bleNear);
+      }
+      if (dogWeak || phoneWeak) {
+        return DistanceView(DistanceState.lowAccuracy, m: m, uncertaintyM: u, dd: dd,
+            reason: [if (dogWeak) tr('tracker: słaby sygnał GPS'), if (phoneWeak) tr('telefon: słaby sygnał GPS')].join('; '));
+      }
+      // Niepewność porównywalna z odległością – liczba byłaby myląca.
+      if (u > maxShownUncertaintyM || u > m) {
+        return DistanceView(u > m ? DistanceState.unreliable : DistanceState.lowAccuracy, m: m, uncertaintyM: u, dd: dd,
+            reason: tr('niepewność ±{0} m', [u.round()]));
+      }
+      return DistanceView(DistanceState.estimate, m: m, uncertaintyM: u, dd: dd);
     }
     // Nie na żywo: ostatnia znana pozycja i jej wiek.
     final at = last?.at ?? node?.fix?.fixAt;
@@ -150,7 +231,13 @@ String? unstableReason(CollarLink c, String dogId) {
   final dog = c.nodeOf(dogId);
   final parts = [
     if (!phone.stable) tr('telefon: {0}', [phone.why ?? '']),
-    if (dog != null && dog.fix != null && !(dog.trust.stable && dog.fix!.trusted)) tr('tracker: {0}', [dog.trust.why ?? '']),
+    if (dog != null && dog.fix != null && dog.fix!.gnssState != GnssState.suspect && !(dog.trust.stable && dog.fix!.trusted))
+      tr('tracker: {0}', [dog.trust.why ?? '']),
+    // Stabilizacja GNSS po starcie / odzyskaniu sygnału / korekcie (0.27.2):
+    // spójne, ale jeszcze niepotwierdzone pomiary (test D: 37 s stabilnie złej pozycji).
+    if (dog != null && dog.fix != null && dog.trust.stable && dog.fix!.trusted &&
+        (dog.fix!.gnssState == GnssState.stabilizing || dog.fix!.gnssState == GnssState.recovered))
+      tr('tracker: {0}', [tr('stabilizacja po odzyskaniu sygnału')]),
   ];
   return parts.isEmpty ? null : parts.join('; ');
 }

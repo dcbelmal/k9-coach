@@ -36,8 +36,19 @@ class DogSample {
 
   /// false = pozycja jeszcze niewiarygodna (stabilizacja) – przerywa odcinek.
   final bool trusted;
+
+  /// Słaba jakość GNSS: większy promień dryfu, prędkość z odbiornika pomijana.
+  final bool weak;
+
+  /// Korekta pozycji GNSS: nowy odcinek, bez łączenia ze starym punktem.
+  final bool correction;
   const DogSample(this.at, this.t, this.span, this.lat, this.lng,
-      {this.speedMs, this.accuracyM, this.source = FixSource.valkor, this.trusted = true});
+      {this.speedMs,
+      this.accuracyM,
+      this.source = FixSource.valkor,
+      this.trusted = true,
+      this.weak = false,
+      this.correction = false});
   LatLng get ll => LatLng(lat, lng);
 }
 
@@ -62,9 +73,13 @@ class DogTrackBuilder {
   /// Pomiary historyczne wstawione w środek trasy (przebudowy).
   int rebuilds = 0;
 
+  /// Odcinki rozpoczęte od nowa po korekcie / niemożliwym skoku.
+  int corrections = 0;
+
   // Stan przyrostowy (ostatni pomiar i ostatni punkt trasy).
   DogSample? _prev;
   DogSample? _anchor;
+  DogSample? _jumpCand; // pomiar po niemożliwym skoku – czeka na potwierdzenie
   bool _break = true;
 
   void clear() {
@@ -74,8 +89,10 @@ class DogTrackBuilder {
     meters = 0;
     jumps = 0;
     rebuilds = 0;
+    corrections = 0;
     _prev = null;
     _anchor = null;
+    _jumpCand = null;
     _break = true;
   }
 
@@ -105,8 +122,10 @@ class DogTrackBuilder {
     segments = [];
     meters = 0;
     jumps = 0;
+    corrections = 0;
     _prev = null;
     _anchor = null;
+    _jumpCand = null;
     _break = true;
     for (final s in samples) {
       _step(s);
@@ -119,33 +138,63 @@ class DogTrackBuilder {
     if (t == null || !s.trusted) {
       _break = true;
       _prev = null;
+      _jumpCand = null;
       return;
+    }
+    // Korekta pozycji GNSS: nigdy nie łączymy błędnej pozycji z poprawną.
+    if (s.correction) {
+      corrections++;
+      _break = true;
     }
     final p = _prev;
     final gap = p != null && s.at.difference(p.at).inMilliseconds / 1000 > gapSec;
     if (_break || p == null || gap || p.span != s.span) {
-      if (segments.isEmpty || segments.last.isNotEmpty) segments.add([]);
-      _anchor = null;
-      _break = false;
+      _newSegment(s, t);
+      return;
     }
     _prev = s;
-    final seg = segments.last;
-    final a = _anchor;
-    if (a == null) {
-      seg.add(TrackPoint(s.lat, s.lng, t, s.speedMs));
-      _anchor = s;
-      return;
-    }
+    final a = _anchor!;
     final d = _dist(a.ll, s.ll);
     final dt = s.at.difference(a.at).inMilliseconds / 1000;
-    if ((dt > 0 && d / dt > FixFilter.maxSpeedMs) || (dt <= 0 && d > 20)) {
+    if (_impossible(d, dt)) {
+      // Niemożliwy skok względem punktu trasy. Jeden pomiar – pomijamy (szum).
+      // Drugi zgodny z pierwszym – to stary punkt był błędny (korekta GNSS):
+      // nowy odcinek od potwierdzonej pozycji, bez dystansu za skok.
+      final c = _jumpCand;
+      if (c != null && !_impossible(_dist(c.ll, s.ll), s.at.difference(c.at).inMilliseconds / 1000)) {
+        corrections++;
+        _jumpCand = null;
+        _newSegment(c, c.t!);
+        _prev = s;
+        _stepWithin(s, t);
+        return;
+      }
       jumps++; // niemożliwy skok – bez punktu i dystansu
+      _jumpCand = s;
       return;
     }
+    _jumpCand = null;
+    _stepWithin(s, t);
+  }
+
+  static bool _impossible(double d, double dt) => (dt > 0 && d / dt > FixFilter.maxSpeedMs) || (dt <= 0 && d > 20);
+
+  void _newSegment(DogSample s, double t) {
+    if (segments.isEmpty || segments.last.isNotEmpty) segments.add([]);
+    _break = false;
+    _jumpCand = null;
+    _prev = s;
+    segments.last.add(TrackPoint(s.lat, s.lng, t, s.speedMs));
+    _anchor = s;
+  }
+
+  void _stepWithin(DogSample s, double t) {
+    final a = _anchor!;
+    final d = _dist(a.ll, s.ll);
     // Dryf GPS w miejscu (postój): pomiar świeży, ale bez punktu i dystansu.
-    if (FixFilter.isDrift(d, s.accuracyM, s.speedMs)) return;
+    if (FixFilter.isDrift(d, s.accuracyM, s.speedMs, weak: s.weak)) return;
     final at = t < a.t! ? a.t! : t;
-    seg.add(TrackPoint(s.lat, s.lng, at, s.speedMs));
+    segments.last.add(TrackPoint(s.lat, s.lng, at, s.speedMs));
     meters += d;
     _anchor = s;
   }

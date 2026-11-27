@@ -1,6 +1,7 @@
 // Protokół Valkor BLE v1 – firmware Valkor Track (repozytorium valkor-track-firmware,
 // docs/PROTOKOL.md). Ten plik musi zgadzać się z src/protocol/valkor_protocol.* w firmware;
 // test/valkor_proto_test.dart sprawdza go na wektorach wygenerowanych przez firmware.
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 class ValkorBle {
@@ -12,7 +13,7 @@ class ValkorBle {
   static const minMtu = 67;
 }
 
-enum ValkorType { position, status, info, diag, ack, perf, buildInfo, unknown }
+enum ValkorType { position, status, info, diag, ack, perf, buildInfo, fixDetail, gnssStats, trackerLink, unknown }
 
 /// Tryby firmware (bajt trybu w pakietach i komendzie SET_MODE).
 enum ValkorMode {
@@ -226,6 +227,140 @@ class ValkorUnknown {
 
 class ValkorCmd {
   static const getInfo = 1, setMode = 2, syncHistory = 3, clearHistory = 4, getDiag = 5, stopHistory = 6;
+
+  /// Protokół 1.2 (firmware 0.1.2+): 1 = wysyłaj FixDetail i GnssStats.
+  static const setDetail = 7;
+}
+
+/// Bity możliwości z pakietu Info.
+class ValkorCap {
+  /// Protokół 1.2: komenda SetDetail, pakiety FixDetail i GnssStats.
+  static const fixDetail = 1 << 9;
+
+  /// Firmware 0.1.2 (po teście 27.11): pakiet LinkStats (typ 10), historia
+  /// trzymana do potwierdzenia dostarczenia.
+  static const linkStats = 1 << 10;
+}
+
+/// Flagi pakietu FixDetail (protokół 1.2).
+class ValkorDetailFlags {
+  static const rawAvailable = 1, rawMatches = 2, rawSame = 4, gstValid = 8, jumpSuspect = 16;
+  static const recovering = 32, rmcVoid = 64, accFromHdop = 128, stationary = 256;
+}
+
+/// Surowe dane odbiornika GNSS dla jednej pozycji na żywo (firmware 0.1.2+,
+/// ten sam fixId co pakiet Position). Wartości sprzed jakiegokolwiek
+/// przetwarzania – firmware 0.1.x nie filtruje współrzędnych.
+class ValkorFixDetail {
+  final ValkorHeader h;
+  final int fixId, flags, sameRawRun, gapMs, jumpCm, rawSats;
+  final double? rawLat, rawLng;
+
+  /// Jakość z surowego GGA (null = brak GGA) i status RMC ('A', 'V', null).
+  final int? ggaQuality;
+  final String? rmcStatus;
+
+  /// Błąd 1σ szerokości i długości podany przez odbiornik (GST), m.
+  final double? gstLatM, gstLonM;
+
+  /// Sekundy od ostatniego odzyskania sygnału (null = brak / > 254 s).
+  final int? recoverAgeS;
+
+  /// Próg nawigacji statycznej odbiornika (dm/s) i tryb nawigacji:
+  /// null = nieznane, -1 = odbiornik nie obsługuje zapytania.
+  final int? staticThr, navMode;
+  final double? rawSpeedMs, rawHdop;
+  const ValkorFixDetail(this.h,
+      {required this.fixId,
+      required this.flags,
+      required this.sameRawRun,
+      required this.gapMs,
+      required this.jumpCm,
+      required this.rawSats,
+      this.rawLat,
+      this.rawLng,
+      this.ggaQuality,
+      this.rmcStatus,
+      this.gstLatM,
+      this.gstLonM,
+      this.recoverAgeS,
+      this.staticThr,
+      this.navMode,
+      this.rawSpeedMs,
+      this.rawHdop});
+  bool has(int f) => flags & f != 0;
+
+  /// Błąd poziomy 1σ z GST (m), null = odbiornik go nie podał.
+  double? get gstHorizontalM {
+    final a = gstLatM, b = gstLonM;
+    if (a == null || b == null) return null;
+    return math.sqrt(a * a + b * b);
+  }
+}
+
+/// Liczniki surowego strumienia NMEA w trackerze (firmware 0.1.2+, od startu).
+class ValkorGnssStats {
+  final ValkorHeader h;
+  final int nmeaSentences, epochs, epochsNoFix, epochsNotDelivered, rawNoFixRejected, sameRawEpochs;
+  final int gapsOver2s, maxGapMs, lastReason, gstSupport;
+  final int historyOverwritten, historyRecovered, historyCleared, maxSameRawRun, maxSilenceS;
+  const ValkorGnssStats(this.h,
+      {required this.nmeaSentences,
+      required this.epochs,
+      required this.epochsNoFix,
+      required this.epochsNotDelivered,
+      required this.rawNoFixRejected,
+      required this.sameRawEpochs,
+      required this.gapsOver2s,
+      required this.maxGapMs,
+      required this.lastReason,
+      required this.gstSupport,
+      required this.historyOverwritten,
+      required this.historyRecovered,
+      required this.historyCleared,
+      required this.maxSameRawRun,
+      required this.maxSilenceS});
+
+  /// Przyczyna braku ostatniego pomiaru (do CSV).
+  String get reasonCsv => switch (lastReason) {
+        0 => 'brak',
+        1 => 'brak_nmea',
+        2 => 'odbiornik_bez_fixu',
+        3 => 'brak_wspolrzednych',
+        4 => 'sterownik_pominal',
+        5 => 'odrzucony_walidacja',
+        6 => 'odrzucony_surowy_bez_fixu',
+        _ => 'nieznana_$lastReason',
+      };
+}
+
+/// Stan bufora historii i wysyłki BLE w trackerze (pakiet LinkStats, typ 10,
+/// firmware 0.1.2 po teście 27.11). RSSI mierzone przez tracker; null =
+/// niedostępne (tracker przysyła 0) – aplikacja niczego nie dopowiada.
+class ValkorTrackerLink {
+  final ValkorHeader h;
+  final int historyUnsent, historyInflight, historyCapacity;
+  final int historyRestored, liveFailedStored, historyLostInflight;
+  final int mtuTooSmall, queueFull, notifyErrors;
+  final int? rssiNow, rssiMin, rssiAvg;
+  final bool syncActive;
+  final int connects, connectedS;
+  const ValkorTrackerLink(this.h,
+      {required this.historyUnsent,
+      required this.historyInflight,
+      required this.historyCapacity,
+      required this.historyRestored,
+      required this.liveFailedStored,
+      required this.historyLostInflight,
+      required this.mtuTooSmall,
+      required this.queueFull,
+      required this.notifyErrors,
+      this.rssiNow,
+      this.rssiMin,
+      this.rssiAvg,
+      required this.syncActive,
+      required this.connects,
+      required this.connectedS});
 }
 
 int valkorCrc16(List<int> data, [int? len]) {
@@ -269,6 +404,9 @@ Object? decodeValkor(List<int> raw) {
     5 => ValkorType.ack,
     6 => ValkorType.perf,
     7 => ValkorType.buildInfo,
+    8 => ValkorType.fixDetail,
+    9 => ValkorType.gnssStats,
+    10 => ValkorType.trackerLink,
     _ => ValkorType.unknown,
   };
   final h = ValkorHeader(
@@ -383,6 +521,70 @@ Object? decodeValkor(List<int> raw) {
           features: u16(p + 18),
           blePeriodS: [u8(p + 20), u8(p + 21), u8(p + 22), u8(p + 23)],
           name: text(p + 24, 22));
+    case ValkorType.fixDetail:
+      if (n < 58) return null;
+      final lat = i32(p + 2), lon = i32(p + 6), q = u8(p + 10), rmc = u8(p + 11);
+      final gLat = u16(p + 14), gLon = u16(p + 16), rec = u8(p + 28), thr = u8(p + 29), nav = u8(p + 30);
+      final spd = u16(p + 32), hd = u16(p + 34);
+      int? cfg(int v) => v == 0xFF ? null : (v == 0xFE ? -1 : v);
+      return ValkorFixDetail(h,
+          fixId: u16(p),
+          rawLat: lat == 0x7FFFFFFF ? null : lat / 1e7,
+          rawLng: lon == 0x7FFFFFFF ? null : lon / 1e7,
+          ggaQuality: q == 0xFF ? null : q,
+          rmcStatus: rmc == 0 ? null : String.fromCharCode(rmc),
+          flags: u16(p + 12),
+          gstLatM: gLat == 0xFFFF ? null : gLat / 100,
+          gstLonM: gLon == 0xFFFF ? null : gLon / 100,
+          sameRawRun: u16(p + 18),
+          gapMs: u32(p + 20),
+          jumpCm: u32(p + 24),
+          recoverAgeS: rec == 0xFF ? null : rec,
+          staticThr: cfg(thr),
+          navMode: cfg(nav),
+          rawSats: u8(p + 31),
+          rawSpeedMs: spd == 0xFFFF ? null : spd / 100,
+          rawHdop: hd == 0 ? null : hd / 100);
+    case ValkorType.gnssStats:
+      if (n < 64) return null;
+      return ValkorGnssStats(h,
+          nmeaSentences: u32(p),
+          epochs: u32(p + 4),
+          epochsNoFix: u32(p + 8),
+          epochsNotDelivered: u32(p + 12),
+          rawNoFixRejected: u32(p + 16),
+          sameRawEpochs: u32(p + 20),
+          gapsOver2s: u16(p + 24),
+          maxGapMs: u32(p + 26),
+          lastReason: u8(p + 30),
+          gstSupport: u8(p + 31),
+          historyOverwritten: u32(p + 32),
+          historyRecovered: u32(p + 36),
+          historyCleared: u16(p + 40),
+          maxSameRawRun: u16(p + 42),
+          maxSilenceS: u16(p + 44));
+    case ValkorType.trackerLink:
+      if (n < 58) return null;
+      int? dbm(int o) {
+        final v = d.getInt8(o);
+        return v == 0 ? null : v;
+      }
+      return ValkorTrackerLink(h,
+          historyUnsent: u16(p),
+          historyInflight: u16(p + 2),
+          historyCapacity: u16(p + 4),
+          historyRestored: u32(p + 6),
+          liveFailedStored: u32(p + 10),
+          historyLostInflight: u32(p + 14),
+          mtuTooSmall: u32(p + 18),
+          queueFull: u32(p + 22),
+          notifyErrors: u32(p + 26),
+          rssiNow: dbm(p + 30),
+          rssiMin: dbm(p + 31),
+          rssiAvg: dbm(p + 32),
+          syncActive: u8(p + 33) != 0,
+          connects: u16(p + 34),
+          connectedS: u32(p + 36));
     case ValkorType.unknown:
       return ValkorUnknown(h);
   }

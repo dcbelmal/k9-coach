@@ -111,8 +111,11 @@ void main() {
         }
       }
       expect(states[5]!.state, DistanceState.stabilizing);
-      expect(states[5]!.text, 'Ustalanie pozycji GPS');
-      expect(states[10]!.state, DistanceState.stabilizing); // skok – seria od nowa
+      expect(states[5]!.text, 'Stabilizacja GPS'); // 0.27.2: tekst ze specyfikacji
+      // Skok 111 m w 5 s – seria od nowa; 0.27.2 nazywa to wprost
+      // „Podejrzana pozycja GPS” (dawniej „ustalanie”). Nadal bez liczby.
+      expect(states[10]!.state, anyOf(DistanceState.stabilizing, DistanceState.suspect));
+      expect(states[10]!.hasDistance, isFalse);
       expect(c.dog!.trust.jumps, 1);
       // Po skoku filtr Kalmana zaczął od nowa: poprawna odległość po 2. spójnym
       // pomiarze (15 s), a nie po ~25 s wleczenia się za błędną pozycją.
